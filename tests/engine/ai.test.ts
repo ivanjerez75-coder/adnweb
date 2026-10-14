@@ -90,6 +90,64 @@ describe("generateAiOutput", () => {
   });
 });
 
+describe("AiUnavailableError.kind", () => {
+  const failure = async (models: JsonModel[]) => {
+    try {
+      await generateAiOutput("p", models);
+    } catch (error) {
+      expect(error).toBeInstanceOf(AiUnavailableError);
+      return error as AiUnavailableError;
+    }
+    throw new Error("debería haber fallado");
+  };
+
+  it("unconfigured si no hay modelos", async () => {
+    expect((await failure([])).kind).toBe("unconfigured");
+  });
+
+  it("quota si todos los proveedores agotaron el cupo", async () => {
+    const gemini = model("gemini", [new Error("429 RESOURCE_EXHAUSTED")]);
+    const groq = model("groq", [new Error("Groq respondió 429")]);
+    expect((await failure([gemini, groq])).kind).toBe("quota");
+    expect(gemini.calls).toBe(1);
+    expect(groq.calls).toBe(1);
+  });
+
+  it("quota solo cuenta el último fallo de cada proveedor", async () => {
+    const gemini = model("gemini", ["mal", new Error("quota exceeded")]);
+    expect((await failure([gemini])).kind).toBe("quota");
+  });
+
+  it("invalid si las respuestas no eran JSON o no tenían la forma esperada", async () => {
+    expect((await failure([model("gemini", ["mal"]), model("groq", ['{"resumen":{}}'])])).kind).toBe("invalid");
+  });
+
+  it("unavailable si falla la red o el servicio", async () => {
+    expect((await failure([model("gemini", [new Error("fetch failed")])])).kind).toBe("unavailable");
+    expect((await failure([model("gemini", [new Error("429")]), model("groq", [new Error("ECONNRESET")])])).kind).toBe(
+      "unavailable",
+    );
+  });
+
+  it.each(["503 Service Unavailable", "UNAVAILABLE", "The model is overloaded"])(
+    "pasa al siguiente proveedor ante '%s' y lo marca como unavailable",
+    async (message) => {
+      const gemini = model("gemini", [new Error(message)]);
+      const groq = model("groq", [new Error(message)]);
+      const error = await failure([gemini, groq]);
+      expect(error.kind).toBe("unavailable");
+      expect(gemini.calls).toBe(1);
+      expect(groq.calls).toBe(1);
+    },
+  );
+
+  it("un 503 en el primer proveedor deja usar el segundo", async () => {
+    const gemini = model("gemini", [new Error("Groq respondió 503")]);
+    expect(await generateAiOutput("p", [gemini, model("groq", [VALID])])).toEqual(validAiOutput);
+    expect(gemini.calls).toBe(1);
+  });
+});
+
 describe("groqModel", () => {
   it("usa la API compatible con OpenAI en modo JSON", async () => {
     let body: Record<string, unknown> = {};
