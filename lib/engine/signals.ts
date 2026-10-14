@@ -12,7 +12,7 @@ export function extractSignals(raw: RawData, now: Date): Signal[] {
   if (site) {
     const noPrices = site.pricesFound.length === 0;
     if (noPrices) add("sin_precios_publicos", "producto", "web", "No muestra precios públicos");
-    if (noPrices && site.ctas.some((c) => /demo|ventas|sales/i.test(c))) {
+    if (noPrices && site.ctas.some((c) => /\b(demo|ventas|sales)\b/i.test(c))) {
       add("solo_demo", "producto", "web", "La conversión pasa por pedir una demo o hablar con ventas");
     }
     if (!site.hasFreePlanOrTrial) add("sin_plan_gratuito", "producto", "web", "No ofrece plan gratuito ni prueba");
@@ -56,7 +56,7 @@ export function extractSignals(raw: RawData, now: Date): Signal[] {
   }
 
   if (raw.wayback && raw.wayback.lastChange !== null && raw.wayback.changesLastYear === 0) {
-    add("web_sin_cambios_12m", "contenido", "wayback", "La web no ha cambiado en el último año");
+    add("web_sin_cambios_12m", "contenido", "wayback", "No se detectan cambios en la web en el último año");
   }
 
   const registeredAt = raw.rdap?.registeredAt;

@@ -77,6 +77,23 @@ describe("extractSignals", () => {
     expect(has(null)).toBe(false);
   });
 
+  it("describe sin exagerar la falta de cambios en Wayback", () => {
+    const raw = makeRaw({ wayback: { firstCapture: "2015-01-01", lastChange: "2025-06-01", changesLastYear: 0 } });
+    expect(extractSignals(raw, NOW).find((s) => s.id === "web_sin_cambios_12m")?.label).toBe(
+      "No se detectan cambios en la web en el último año",
+    );
+  });
+
+  it("solo_demo exige la palabra completa demo, ventas o sales", () => {
+    const demoIds = (ctas: string[]) => ids(makeRaw({ site: makeSite({ pricesFound: [], ctas }) }));
+    expect(demoIds(["Pide una demo"])).toContain("solo_demo");
+    expect(demoIds(["Habla con ventas"])).toContain("solo_demo");
+    expect(demoIds(["Contact Sales"])).toContain("solo_demo");
+    expect(demoIds(["Ver demostración"])).not.toContain("solo_demo");
+    expect(demoIds(["Integración con Salesforce"])).not.toContain("solo_demo");
+    expect(demoIds(["Preventas"])).not.toContain("solo_demo");
+  });
+
   it("detecta tráfico en caída", () => {
     expect(ids(makeRaw({ tranco: { rank: 60000, trend: "baja" } }))).toEqual(["trafico_en_caida"]);
   });
