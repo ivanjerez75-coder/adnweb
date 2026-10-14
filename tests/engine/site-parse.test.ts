@@ -48,6 +48,22 @@ describe("parsePage", () => {
     expect(parsePage(fixture("shop-home.html"), "https://zapas.example/").prices).toEqual(["€59,99", "€79,99"]);
   });
 
+  it.each([
+    ["Plan Pro: 1.299 € al año", ["1.299 €"]],
+    ["Enterprise $1,299.00 per year", ["$1,299.00"]],
+    ["Desde 12.000 € por proyecto", ["12.000 €"]],
+    ["Básico 29,99 € o 1299 EUR", ["29,99 €", "1299 EUR"]],
+    ["Antes 1.299,00 € ahora", ["1.299,00 €"]],
+  ])("detecta precios con separador de miles: %s", (text, prices) => {
+    expect(parsePage(`<html><body><p>${text}</p></body></html>`, HOME).prices).toEqual(prices);
+  });
+
+  it("no corta un precio con miles por la mitad", () => {
+    const prices = parsePage("<html><body><p>Total 1.299 € y 12.000 €</p></body></html>", HOME).prices;
+    expect(prices).not.toContain("299 €");
+    expect(prices).not.toContain("000 €");
+  });
+
   it("devuelve texto casi vacío para webs hechas solo con JavaScript", () => {
     const js = parsePage(fixture("js-only.html"), "https://app.example/");
     expect(js.textLength).toBeLessThan(50);
@@ -121,5 +137,23 @@ describe("buildSiteData", () => {
     const site = buildSiteData(HOME, [home], []);
     expect(site.hasPricingPage).toBe(false);
     expect(site.hasBlog).toBe(false);
+  });
+
+  it("acepta blog y precios en subdominios del propio sitio", () => {
+    const home = parsePage(
+      '<html><body><a href="https://blog.facturo.example/">B</a><a href="https://app.facturo.example/pricing">P</a></body></html>',
+      "https://www.facturo.example/",
+    );
+    const site = buildSiteData("https://www.facturo.example/", [home], []);
+    expect(site.hasBlog).toBe(true);
+    expect(site.hasPricingPage).toBe(true);
+  });
+
+  it("no confunde un dominio que solo termina igual con un subdominio", () => {
+    const home = parsePage(
+      '<html><body><a href="https://blog.notfacturo.example/">B</a><a href="https://blog.otra.example/">B</a></body></html>',
+      HOME,
+    );
+    expect(buildSiteData(HOME, [home], []).hasBlog).toBe(false);
   });
 });

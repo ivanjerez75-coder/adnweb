@@ -29,13 +29,17 @@ const SOCIAL_HOSTS: Record<string, string> = {
 
 const CTA_RE =
   /\b(empieza|empezar|comienza|prueba|probar|regístrate|registrarse|sign up|get started|start|try|comprar|buy|añadir al carrito|add to cart|suscríbete|subscribe|demo|contact sales|habla con ventas|descargar|download|reservar|book)\b/i;
-const PRICE_RE = /[$€£]\s?\d{1,4}(?:[.,]\d{2})?|\d{1,4}(?:[.,]\d{2})?\s?(?:€|EUR|USD|\$)/g;
+// Importe con separador de miles (1.299 / 1,299 / 12 000) o sin él, y decimales opcionales.
+// El lookbehind evita cortar "1.299 €" en "299 €".
+const PRICE_RE =
+  /[$€£]\s?(?:\d{1,3}(?:[.,\s]\d{3})+|\d{1,6})(?:[.,]\d{2})?(?!\d)|(?<![\d.,])(?:\d{1,3}(?:[.,\s]\d{3})+|\d{1,6})(?:[.,]\d{2})?\s?(?:€|EUR|USD|\$)/g;
 const TESTIMONIALS_RE =
   /(testimonios|testimonials|reseñas|reviews|opiniones|casos de éxito|case studies|trusted by|confían en)/i;
 const FREE_RE =
   /\b(plan gratuito|prueba gratuita|prueba gratis|empieza gratis|gratis para siempre|free plan|free trial|try (it )?(for )?free|start for free|free forever|get started for free)\b/i;
 const PRICING_PATH_RE = /\/(pricing|precios|tarifas|planes|plans)(\/|$)/i;
 const BLOG_PATH_RE = /\/(blog|noticias|news|articulos|recursos)(\/|$)/i;
+const BLOG_SUBDOMAIN_RE = /^(blog|noticias|news|articulos|recursos)\./i;
 
 const KEY_PAGE_KINDS: [string, RegExp][] = [
   ["precios", PRICING_PATH_RE],
@@ -157,10 +161,13 @@ export function pickKeyPages(links: string[], homeUrl: string, max = 5): string[
 export function buildSiteData(finalUrl: string, pages: ParsedPage[], technologies: Technology[]): SiteData {
   const allLinks = pages.flatMap((p) => p.links);
   const homeHost = bareHost(new URL(finalUrl).hostname);
-  const sameHostPaths = [...pages.map((p) => p.page.url), ...allLinks]
+  const isOwnHost = (host: string) => host === homeHost || host.endsWith(`.${homeHost}`);
+  const ownUrls = [...pages.map((p) => p.page.url), ...allLinks]
     .map((u) => new URL(u))
-    .filter((u) => bareHost(u.hostname) === homeHost)
-    .map((u) => u.pathname);
+    .filter((u) => isOwnHost(bareHost(u.hostname)));
+  const sameHostPaths = ownUrls.map((u) => u.pathname);
+  // Subdominio propio dedicado al blog (blog.<dominio>/, noticias.<dominio>/…).
+  const hasBlogSubdomain = ownUrls.some((u) => BLOG_SUBDOMAIN_RE.test(bareHost(u.hostname)));
   const socialLinks: Record<string, string> = {};
   for (const p of pages) {
     for (const [network, url] of Object.entries(p.socialLinks)) socialLinks[network] ??= url;
@@ -176,7 +183,7 @@ export function buildSiteData(finalUrl: string, pages: ParsedPage[], technologie
     ctas: Array.from(new Set(pages.flatMap((p) => p.ctas))).slice(0, 20),
     hasPricingPage: sameHostPaths.some((path) => PRICING_PATH_RE.test(path)),
     pricesFound: Array.from(new Set(pages.flatMap((p) => p.prices))).slice(0, 20),
-    hasBlog: sameHostPaths.some((path) => BLOG_PATH_RE.test(path)),
+    hasBlog: hasBlogSubdomain || sameHostPaths.some((path) => BLOG_PATH_RE.test(path)),
     hasTestimonials: pages.some((p) => p.mentionsTestimonials),
     hasFreePlanOrTrial: pages.some((p) => p.mentionsFreeOrTrial),
     hasAppLinks: pages.some((p) => p.hasAppLinks),
