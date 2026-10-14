@@ -1,3 +1,4 @@
+import * as cheerio from "cheerio";
 import type { Technology, TechCategory } from "../types";
 
 interface TechRule {
@@ -40,9 +41,20 @@ const RULES: TechRule[] = [
   { name: "Next.js", category: "framework", pattern: /\/_next\/static|__NEXT_DATA__|Next\.js/ },
 ];
 
+function technicalHaystack(html: string, headers: Record<string, string>): string {
+  const $ = cheerio.load(html);
+  const parts: string[] = [];
+  $("script").each((_, el) => {
+    parts.push($(el).attr("src") ?? "", $(el).text());
+  });
+  $("link[href]").each((_, el) => void parts.push($(el).attr("href") ?? ""));
+  $("iframe[src]").each((_, el) => void parts.push($(el).attr("src") ?? ""));
+  $("meta").each((_, el) => void parts.push($(el).attr("name") ?? "", $(el).attr("content") ?? ""));
+  for (const [k, v] of Object.entries(headers)) parts.push(`${k}: ${v}`);
+  return parts.join("\n");
+}
+
 export function detectTech(html: string, headers: Record<string, string>): Technology[] {
-  const haystack = `${html}\n${Object.entries(headers)
-    .map(([k, v]) => `${k}: ${v}`)
-    .join("\n")}`;
+  const haystack = technicalHaystack(html, headers);
   return RULES.filter((rule) => rule.pattern.test(haystack)).map(({ name, category }) => ({ name, category }));
 }

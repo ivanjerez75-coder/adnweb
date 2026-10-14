@@ -24,4 +24,8 @@ describe("detectTech", () => {
   it("no repite tecnologías ni inventa ninguna en una web vacía", () => {
     expect(names("<html></html>")).toEqual([]);
   });
+
+  it("no atribuye tecnologías que solo se mencionan en el texto visible", () => {
+    expect(names("<html><body><p>Usamos Klaviyo, Mixpanel y Next.js</p></body></html>")).toEqual([]);
+  });
 });

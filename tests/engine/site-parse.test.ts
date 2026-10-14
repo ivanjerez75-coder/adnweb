@@ -55,6 +55,19 @@ describe("parsePage", () => {
   });
 });
 
+describe("parsePage: falsos positivos", () => {
+  const page = (body: string) => parsePage(`<html><body>${body}</body></html>`, HOME);
+
+  it("no confunde freelance ni envío gratis con plan gratuito", () => {
+    expect(page("<p>Somos freelance. Envío gratis y free shipping.</p>").mentionsFreeOrTrial).toBe(false);
+  });
+
+  it("no toma palabras que contienen un verbo de acción como CTA", () => {
+    const p = page('<a href="/a">Facebook</a><button>Industry</button><a href="/b">Startups</a>');
+    expect(p.ctas).toEqual([]);
+  });
+});
+
 describe("pickKeyPages", () => {
   it("elige páginas clave del mismo dominio, una por tipo", () => {
     const links = [
@@ -98,5 +111,15 @@ describe("buildSiteData", () => {
     expect(site.hasAppLinks).toBe(true);
     expect(site.technologies).toEqual([{ name: "Stripe", category: "pagos" }]);
     expect(site.textLength).toBe(home.textLength + pricing.textLength);
+  });
+
+  it("no cuenta enlaces externos como página de precios o blog", () => {
+    const home = parsePage(
+      '<html><body><a href="https://otra.example/precios">P</a><a href="https://otra.example/blog/">B</a></body></html>',
+      HOME,
+    );
+    const site = buildSiteData(HOME, [home], []);
+    expect(site.hasPricingPage).toBe(false);
+    expect(site.hasBlog).toBe(false);
   });
 });
