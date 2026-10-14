@@ -77,6 +77,30 @@ describe("collect", () => {
     expect(raw.radar).toEqual({ bucket: null, rank: 321 });
   });
 
+  it("consulta Tranco, Radar y RDAP con el dominio registrable y el resto con el host completo", async () => {
+    const urls: string[] = [];
+    const base = fakeFetcher();
+    const fetcher = async (url: string, init?: RequestInit) => {
+      urls.push(url);
+      return base(url, init);
+    };
+    const pages: string[] = [];
+    const getPage = async (url: string) => {
+      pages.push(url);
+      return { url, status: 200, headers: {}, text: "<html><body>Hola</body></html>" };
+    };
+    const raw = await collect({ url: "https://app.hubspot.com/", domain: "app.hubspot.com" }, { ...baseDeps, fetcher, getPage });
+
+    expect(raw.domain).toBe("app.hubspot.com");
+    expect(urls).toContain("https://tranco-list.eu/api/ranks/domain/hubspot.com");
+    expect(urls.some((u) => u.startsWith("https://api.cloudflare.com/client/v4/radar/ranking/domain/hubspot.com?"))).toBe(true);
+    expect(urls).toContain("https://rdap.org/domain/hubspot.com");
+    const wayback = urls.filter((u) => u.includes("web.archive.org"));
+    expect(wayback.length).toBeGreaterThan(0);
+    expect(wayback.every((u) => u.includes("app.hubspot.com"))).toBe(true);
+    expect(pages[0]).toBe("https://app.hubspot.com/");
+  });
+
   it("propaga BlockedUrlError", async () => {
     const getPage = async () => {
       throw new BlockedUrlError("interna");

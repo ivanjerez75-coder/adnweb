@@ -1,3 +1,4 @@
+import { getDomain } from "tldts";
 import type { NormalizedUrl } from "./url";
 import { BlockedUrlError, type PageGetter } from "./safe-fetch";
 import type { Fetcher, RadarData, RawData, SourceId } from "./types";
@@ -43,12 +44,15 @@ export async function collect(
 
   // Todas las fuentes arrancan en paralelo; los pasos solo marcan el progreso.
   const site = settle(fetchSite(input.url, deps.getPage));
-  const tranco = settle(fetchTranco(input.domain, deps.fetcher));
+  // Rankings y registro van por dominio registrable (app.hubspot.com → hubspot.com);
+  // la web y Wayback usan el host analizado.
+  const rootDomain = getDomain(input.domain) ?? input.domain;
+  const tranco = settle(fetchTranco(rootDomain, deps.fetcher));
   const radar = deps.radarToken
-    ? settle(fetchRadar(input.domain, deps.fetcher, deps.radarToken))
+    ? settle(fetchRadar(rootDomain, deps.fetcher, deps.radarToken))
     : settle<RadarData>(Promise.reject(new Error("Sin token de Cloudflare Radar")));
   const pagespeed = settle(fetchPageSpeed(input.url, deps.fetcher, deps.pagespeedKey));
-  const rdap = settle(fetchRdap(input.domain, deps.fetcher));
+  const rdap = settle(fetchRdap(rootDomain, deps.fetcher));
   const wayback = settle(fetchWayback(input.domain, deps.fetcher, now));
 
   await onStep("Leyendo la web…");
