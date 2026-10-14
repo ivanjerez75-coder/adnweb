@@ -76,7 +76,10 @@ export interface TrancoData {
 }
 
 export interface RadarData {
+  /** Franja de popularidad (top N). */
   bucket: number | null;
+  /** Posición exacta, solo para los dominios más populares. */
+  rank: number | null;
 }
 
 export interface PageSpeedData {

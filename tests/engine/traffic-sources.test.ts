@@ -40,12 +40,12 @@ describe("Tranco", () => {
 
 describe("Cloudflare Radar", () => {
   it("lee la franja de popularidad", () => {
-    expect(parseRadar({ success: true, result: { details_0: { bucket: "100000", categories: [] } } })).toEqual({ bucket: 100000 });
+    expect(parseRadar({ success: true, result: { details_0: { bucket: "100000", categories: [] } } })).toEqual({ bucket: 100000, rank: null });
   });
 
   it("devuelve null si no hay franja numérica", () => {
-    expect(parseRadar({ result: { details_0: { bucket: ">200000" } } })).toEqual({ bucket: null });
-    expect(parseRadar({})).toEqual({ bucket: null });
+    expect(parseRadar({ result: { details_0: { bucket: ">200000" } } })).toEqual({ bucket: null, rank: null });
+    expect(parseRadar({})).toEqual({ bucket: null, rank: null });
   });
 
   it("envía el token y trata 404 como sin ranking", async () => {
@@ -55,6 +55,20 @@ describe("Cloudflare Radar", () => {
       return new Response("", { status: 404 });
     }, "tok");
     expect(auth).toBe("Bearer tok");
-    expect(data).toEqual({ bucket: null });
+    expect(data).toEqual({ bucket: null, rank: null });
+  });
+
+  it.each([[null], [""], [0], [-5], ["abc"], [true]])("descarta una franja no válida (%o)", (bucket) => {
+    expect(parseRadar({ result: { details_0: { bucket } } })).toEqual({ bucket: null, rank: null });
+  });
+
+  it("lee el rango exacto cuando viene, aunque no haya franja", () => {
+    expect(parseRadar({ result: { details_0: { rank: 42 } } })).toEqual({ bucket: null, rank: 42 });
+    expect(parseRadar({ result: { details_0: { rank: "1500", bucket: "2000" } } })).toEqual({ bucket: 2000, rank: 1500 });
+    expect(parseRadar({ result: { details_0: { rank: null, bucket: "" } } })).toEqual({ bucket: null, rank: null });
+  });
+
+  it.each([401, 500])("lanza error si Radar responde %i", async (status) => {
+    await expect(fetchRadar("x.example", async () => new Response("", { status }), "tok")).rejects.toThrow();
   });
 });

@@ -31,7 +31,7 @@ export function makeRaw(overrides: Partial<RawData> = {}): RawData {
     collectedAt: "2026-10-14T00:00:00.000Z",
     site: makeSite(),
     tranco: { rank: 5000, trend: "estable" },
-    radar: { bucket: 10000 },
+    radar: { bucket: 10000, rank: null },
     pagespeed: { mobile: 90, desktop: 95 },
     rdap: { registeredAt: "2015-03-02" },
     wayback: { firstCapture: "2015-04-01", lastChange: "2026-08-01", changesLastYear: 6 },

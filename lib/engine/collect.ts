@@ -7,6 +7,7 @@ import { fetchRadar } from "./sources/radar";
 import { fetchPageSpeed } from "./sources/pagespeed";
 import { fetchRdap } from "./sources/rdap";
 import { fetchWayback } from "./sources/wayback";
+import { radarRank, validRank } from "./anchors";
 
 export class InsufficientDataError extends Error {
   constructor(message = "No hemos podido reunir datos suficientes sobre esta web.") {
@@ -77,7 +78,7 @@ export async function collect(
     unavailable,
   };
 
-  const hasTraffic = (raw.tranco?.rank ?? null) !== null || (raw.radar?.bucket ?? null) !== null;
+  const hasTraffic = validRank(raw.tranco?.rank) !== null || radarRank(raw.radar) !== null;
   if (!raw.site && !hasTraffic) throw new InsufficientDataError();
 
   return raw;

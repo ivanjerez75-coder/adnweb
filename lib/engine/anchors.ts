@@ -18,6 +18,16 @@ export function visitsFromRank(rank: number): Range {
   return { min: 0, max: 50_000 };
 }
 
+/** Un ranking solo es utilizable si es un número finito y positivo. */
+export function validRank(x: number | null | undefined): number | null {
+  return typeof x === "number" && Number.isFinite(x) && x > 0 ? x : null;
+}
+
+/** Ranking de Radar utilizable: el rango exacto si existe, si no la franja. */
+export function radarRank(radar: RawData["radar"]): number | null {
+  return validRank(radar?.rank) ?? validRank(radar?.bucket);
+}
+
 export interface Anchors {
   visitasMes: Range | null;
   confianzaTrafico: Confidence;
@@ -25,9 +35,9 @@ export interface Anchors {
 }
 
 export function computeAnchors(raw: RawData, now: Date): Anchors {
-  const trancoRank = raw.tranco?.rank ?? null;
-  const radarBucket = raw.radar?.bucket ?? null;
-  const rank = trancoRank ?? radarBucket;
+  const trancoRank = validRank(raw.tranco?.rank);
+  const radarValue = radarRank(raw.radar);
+  const rank = trancoRank ?? radarValue;
 
   let visitasMes: Range | null = null;
   if (rank !== null) visitasMes = visitsFromRank(rank);
@@ -37,7 +47,7 @@ export function computeAnchors(raw: RawData, now: Date): Anchors {
 
   return {
     visitasMes,
-    confianzaTrafico: trancoRank !== null && radarBucket !== null ? "media" : "baja",
+    confianzaTrafico: trancoRank !== null && radarValue !== null ? "media" : "baja",
     antiguedadAnios: born ? Math.floor((now.getTime() - Date.parse(born)) / YEAR_MS) : null,
   };
 }

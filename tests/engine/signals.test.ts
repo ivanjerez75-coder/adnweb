@@ -50,7 +50,7 @@ describe("extractSignals", () => {
     const raw = makeRaw({
       pagespeed: { mobile: 34, desktop: 45 },
       tranco: { rank: null, trend: null },
-      radar: { bucket: null },
+      radar: { bucket: null, rank: null },
       wayback: { firstCapture: "2025-01-01", lastChange: "2025-06-01", changesLastYear: 0 },
       rdap: { registeredAt: "2025-01-01" },
     });
@@ -62,6 +62,19 @@ describe("extractSignals", () => {
       "web_sin_cambios_12m",
       "dominio_reciente",
     ]);
+  });
+
+  it("popularidad_baja solo si Radar respondió sin rango ni franja válida", () => {
+    const has = (radar: { bucket: number | null; rank: number | null } | null) =>
+      ids(makeRaw({ radar })).includes("popularidad_baja");
+    expect(has({ bucket: null, rank: null })).toBe(true);
+    expect(has({ bucket: 500_000, rank: null })).toBe(true);
+    expect(has({ bucket: 0, rank: null })).toBe(true);
+    expect(has({ bucket: null, rank: 1234 })).toBe(false);
+    expect(has({ bucket: 500_000, rank: 1234 })).toBe(false);
+    expect(has({ bucket: 200_000, rank: null })).toBe(false);
+    expect(has({ bucket: 1000, rank: null })).toBe(false);
+    expect(has(null)).toBe(false);
   });
 
   it("detecta tráfico en caída", () => {

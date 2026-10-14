@@ -1,4 +1,5 @@
 import type { RawData, Signal, SignalFamily, SourceId } from "./types";
+import { validRank } from "./anchors";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -49,7 +50,8 @@ export function extractSignals(raw: RawData, now: Date): Signal[] {
   if (raw.tranco && raw.tranco.rank === null) {
     add("fuera_top_1m", "traccion", "tranco", "Fuera del top 1 millón de webs más visitadas");
   }
-  if (raw.radar && (raw.radar.bucket === null || raw.radar.bucket > 200_000)) {
+  const radarBucket = validRank(raw.radar?.bucket);
+  if (raw.radar && validRank(raw.radar.rank) === null && (radarBucket === null || radarBucket > 200_000)) {
     add("popularidad_baja", "traccion", "radar", "Popularidad baja según Cloudflare Radar");
   }
 

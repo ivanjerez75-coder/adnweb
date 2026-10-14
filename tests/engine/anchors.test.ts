@@ -26,9 +26,29 @@ describe("computeAnchors", () => {
   });
 
   it("usa Radar si Tranco no tiene rango, con confianza baja", () => {
-    const a = computeAnchors(makeRaw({ tranco: null, radar: { bucket: 100000 } }), NOW);
+    const a = computeAnchors(makeRaw({ tranco: null, radar: { bucket: 100000, rank: null } }), NOW);
     expect(a.visitasMes).toEqual({ min: 500_000, max: 5_000_000 });
     expect(a.confianzaTrafico).toBe("baja");
+  });
+
+  it("prefiere el rango exacto de Radar a la franja", () => {
+    const a = computeAnchors(makeRaw({ tranco: null, radar: { bucket: 100000, rank: 800 } }), NOW);
+    expect(a.visitasMes).toEqual({ min: 50_000_000, max: 500_000_000 });
+  });
+
+  it("no trata una franja o rango no válidos como top 100", () => {
+    for (const bad of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const a = computeAnchors(makeRaw({ tranco: null, radar: { bucket: bad, rank: bad } }), NOW);
+      expect(a.visitasMes).toEqual({ min: 0, max: 50_000 });
+      expect(a.confianzaTrafico).toBe("baja");
+    }
+    const t = computeAnchors(makeRaw({ tranco: { rank: 0, trend: null }, radar: null }), NOW);
+    expect(t.visitasMes).toEqual({ min: 0, max: 50_000 });
+  });
+
+  it("da confianza media con Tranco y solo el rango de Radar", () => {
+    const a = computeAnchors(makeRaw({ radar: { bucket: null, rank: 4000 } }), NOW);
+    expect(a.confianzaTrafico).toBe("media");
   });
 
   it("interpreta 'fuera de Tranco' como menos de 50.000 visitas", () => {
