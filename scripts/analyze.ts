@@ -6,8 +6,13 @@ async function main() {
     console.error("Uso: npm run analyze -- <url>");
     process.exit(1);
   }
+  const deps = depsFromEnv();
+  if (deps.models.length === 0) {
+    console.error("✗ Configura GEMINI_API_KEY o GROQ_API_KEY en .env.local");
+    process.exit(1);
+  }
   const started = Date.now();
-  const { report } = await analyze(input, depsFromEnv(), (step) => console.error(`→ ${step}`));
+  const { report } = await analyze(input, deps, (step) => console.error(`→ ${step}`));
   console.log(JSON.stringify(report, null, 2));
   console.error(`✓ Listo en ${((Date.now() - started) / 1000).toFixed(1)} s`);
 }
