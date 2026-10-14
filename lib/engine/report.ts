@@ -1,4 +1,4 @@
-import { computeAnchors } from "./anchors";
+import { computeAnchors, type Anchors } from "./anchors";
 import { extractSignals } from "./signals";
 import { validateOpportunities, type Opportunity } from "./opportunities";
 import { buildPrompt } from "./ai/prompt";
@@ -38,6 +38,34 @@ export interface Report {
   };
   senales: Signal[];
   fuentesNoDisponibles: SourceId[];
+}
+
+const CONFIDENCE_ORDER: Confidence[] = ["baja", "media", "alta"];
+
+const nonNegative = (n: number | null): number | null => (n !== null && Number.isFinite(n) && n >= 0 ? n : null);
+
+function orderedPair(min: number | null, max: number | null): [number | null, number | null] {
+  const a = nonNegative(min);
+  const b = nonNegative(max);
+  return a !== null && b !== null && a > b ? [b, a] : [a, b];
+}
+
+/**
+ * Límites de honestidad sobre los ingresos que propone la IA: sin tráfico estimado no hay
+ * cifras, nada negativo, rangos ordenados y nunca más confianza que la del tráfico.
+ */
+export function clampIngresos(
+  ingresos: AiOutput["ingresos"],
+  anchors: Pick<Anchors, "visitasMes" | "confianzaTrafico">,
+): AiOutput["ingresos"] {
+  if (anchors.visitasMes === null) {
+    return { ...ingresos, anualMin: null, anualMax: null, valoracionMin: null, valoracionMax: null, confianza: "baja" };
+  }
+  const [anualMin, anualMax] = orderedPair(ingresos.anualMin, ingresos.anualMax);
+  const [valoracionMin, valoracionMax] = orderedPair(ingresos.valoracionMin, ingresos.valoracionMax);
+  const cap = CONFIDENCE_ORDER.indexOf(anchors.confianzaTrafico);
+  const confianza = CONFIDENCE_ORDER[Math.min(CONFIDENCE_ORDER.indexOf(ingresos.confianza), cap)];
+  return { ...ingresos, anualMin, anualMax, valoracionMin, valoracionMax, confianza };
 }
 
 const SUBSCORE_KEYS: SubscoreKey[] = ["mercado", "traccion", "monetizacion", "diferenciacion"];
@@ -90,7 +118,7 @@ export async function buildReport(
       tecnologias: raw.site?.technologies ?? [],
       comentario: ai.trafico.comentario,
     },
-    ingresos: ai.ingresos,
+    ingresos: clampIngresos(ai.ingresos, anchors),
     oportunidades,
     pistas,
     veredicto: {

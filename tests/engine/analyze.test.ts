@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { analyze, depsFromEnv } from "../../lib/engine/analyze";
-import { buildReport } from "../../lib/engine/report";
+import { buildReport, clampIngresos } from "../../lib/engine/report";
 import { InvalidUrlError } from "../../lib/engine/url";
 import { fakeFetcher, fakeGetPage, NOW } from "./fake-network";
 import { validAiOutput } from "./ai-fixture";
@@ -57,6 +57,56 @@ describe("buildReport", () => {
       steps.push(s);
     });
     expect(steps).toEqual(["Detectando señales…", "Generando informe…"]);
+  });
+});
+
+describe("clampIngresos", () => {
+  const base = validAiOutput.ingresos;
+  const traffic = { visitasMes: { min: 500_000, max: 5_000_000 }, confianzaTrafico: "media" as const };
+
+  it("deja intactos unos ingresos coherentes", () => {
+    expect(clampIngresos(base, traffic)).toEqual(base);
+  });
+
+  it("anula las cifras y baja la confianza si no hay tráfico estimado", () => {
+    const out = clampIngresos({ ...base, confianza: "alta" }, { visitasMes: null, confianzaTrafico: "baja" });
+    expect(out).toEqual({
+      ...base,
+      anualMin: null,
+      anualMax: null,
+      valoracionMin: null,
+      valoracionMax: null,
+      confianza: "baja",
+    });
+  });
+
+  it("descarta valores negativos", () => {
+    const out = clampIngresos({ ...base, anualMin: -10, valoracionMax: -1 }, traffic);
+    expect(out.anualMin).toBeNull();
+    expect(out.anualMax).toBe(base.anualMax);
+    expect(out.valoracionMin).toBe(base.valoracionMin);
+    expect(out.valoracionMax).toBeNull();
+  });
+
+  it("intercambia mínimo y máximo si vienen al revés", () => {
+    const out = clampIngresos({ ...base, anualMin: 900, anualMax: 100, valoracionMin: 50, valoracionMax: 10 }, traffic);
+    expect(out).toMatchObject({ anualMin: 100, anualMax: 900, valoracionMin: 10, valoracionMax: 50 });
+  });
+
+  it("limita la confianza a la del tráfico", () => {
+    expect(clampIngresos({ ...base, confianza: "alta" }, traffic).confianza).toBe("media");
+    expect(clampIngresos({ ...base, confianza: "alta" }, { ...traffic, confianzaTrafico: "baja" }).confianza).toBe("baja");
+    expect(clampIngresos({ ...base, confianza: "baja" }, traffic).confianza).toBe("baja");
+    expect(clampIngresos({ ...base, confianza: "media" }, { ...traffic, confianzaTrafico: "alta" }).confianza).toBe("media");
+  });
+
+  it("se aplica en buildReport", async () => {
+    const ai = { ...validAiOutput, ingresos: { ...validAiOutput.ingresos, confianza: "alta" as const, anualMin: 5, anualMax: -3 } };
+    const model: JsonModel = { name: "fake", generate: async () => JSON.stringify(ai) };
+    const report = await buildReport(makeRaw({ tranco: null, radar: null }), { models: [model], now: () => NOW });
+    expect(report.ingresos).toMatchObject({ anualMin: null, anualMax: null, valoracionMin: null, valoracionMax: null, confianza: "baja" });
+    const withTraffic = await buildReport(makeRaw({ radar: null }), { models: [model], now: () => NOW });
+    expect(withTraffic.ingresos).toMatchObject({ anualMin: 5, anualMax: null, confianza: "baja" });
   });
 });
 
