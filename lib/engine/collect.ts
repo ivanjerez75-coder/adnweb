@@ -44,9 +44,9 @@ export async function collect(
 
   // Todas las fuentes arrancan en paralelo; los pasos solo marcan el progreso.
   const site = settle(fetchSite(input.url, deps.getPage));
-  // Rankings y registro van por dominio registrable (app.hubspot.com → hubspot.com);
+  // Rankings y registro van por dominio registrable (app.hubspot.com → hubspot.com; tienda.myshopify.com se queda tal cual);
   // la web y Wayback usan el host analizado.
-  const rootDomain = getDomain(input.domain) ?? input.domain;
+  const rootDomain = getDomain(input.domain, { allowPrivateDomains: true }) ?? input.domain;
   const tranco = settle(fetchTranco(rootDomain, deps.fetcher));
   const radar = deps.radarToken
     ? settle(fetchRadar(rootDomain, deps.fetcher, deps.radarToken))

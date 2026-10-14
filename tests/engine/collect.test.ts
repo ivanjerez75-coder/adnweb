@@ -101,6 +101,24 @@ describe("collect", () => {
     expect(pages[0]).toBe("https://app.hubspot.com/");
   });
 
+  it.each(["tienda.myshopify.com", "miapp.vercel.app"])(
+    "no colapsa el subdominio alojado %s al dominio de la plataforma",
+    async (domain) => {
+      const urls: string[] = [];
+      const base = fakeFetcher();
+      const fetcher = async (url: string, init?: RequestInit) => {
+        urls.push(url);
+        return base(url, init);
+      };
+      const getPage = async (url: string) => ({ url, status: 200, headers: {}, text: "<html><body>Hola</body></html>" });
+      await collect({ url: `https://${domain}/`, domain }, { ...baseDeps, fetcher, getPage });
+
+      expect(urls).toContain(`https://tranco-list.eu/api/ranks/domain/${domain}`);
+      expect(urls.some((u) => u.startsWith(`https://api.cloudflare.com/client/v4/radar/ranking/domain/${domain}?`))).toBe(true);
+      expect(urls).toContain(`https://rdap.org/domain/${domain}`);
+    },
+  );
+
   it("propaga BlockedUrlError", async () => {
     const getPage = async () => {
       throw new BlockedUrlError("interna");
