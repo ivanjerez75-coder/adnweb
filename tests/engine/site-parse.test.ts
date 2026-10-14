@@ -1,0 +1,102 @@
+import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { parsePage, pickKeyPages, buildSiteData } from "../../lib/engine/sources/site-parse";
+
+const fixture = (name: string) => readFileSync(`tests/fixtures/${name}`, "utf8");
+const HOME = "https://facturo.example/";
+
+describe("parsePage", () => {
+  const parsed = parsePage(fixture("saas-home.html"), HOME);
+
+  it("extrae título, descripción y encabezados", () => {
+    expect(parsed.page.title).toBe("Facturo — Facturación online para autónomos");
+    expect(parsed.page.description).toBe("Crea y envía facturas en segundos.");
+    expect(parsed.page.headings).toContain("Empieza gratis, sin tarjeta");
+  });
+
+  it("detecta idiomas sin incluir x-default", () => {
+    expect(parsed.lang).toBe("es");
+    expect(parsed.hreflangs).toEqual(["es", "en"]);
+  });
+
+  it("detecta redes, apps, CTAs y datos estructurados", () => {
+    expect(parsed.socialLinks).toEqual({
+      x: "https://twitter.com/facturo",
+      linkedin: "https://www.linkedin.com/company/facturo",
+    });
+    expect(parsed.hasAppLinks).toBe(true);
+    expect(parsed.ctas).toEqual(expect.arrayContaining(["Empieza gratis", "Pide una demo"]));
+    expect(parsed.jsonLdTypes).toEqual(["SoftwareApplication"]);
+  });
+
+  it("detecta testimonios y plan gratuito en el texto", () => {
+    expect(parsed.mentionsTestimonials).toBe(true);
+    expect(parsed.mentionsFreeOrTrial).toBe(true);
+  });
+
+  it("convierte los enlaces en absolutos e ignora mailto", () => {
+    expect(parsed.links).toContain("https://facturo.example/precios");
+    expect(parsed.links.some((l) => l.startsWith("mailto:"))).toBe(false);
+  });
+
+  it("no incluye el contenido de los scripts en el texto", () => {
+    expect(parsed.page.text).not.toContain("intercomSettings");
+  });
+
+  it("detecta precios", () => {
+    expect(parsePage(fixture("saas-pricing.html"), `${HOME}precios`).prices).toEqual(["9 €", "29 €"]);
+    expect(parsePage(fixture("shop-home.html"), "https://zapas.example/").prices).toEqual(["€59,99", "€79,99"]);
+  });
+
+  it("devuelve texto casi vacío para webs hechas solo con JavaScript", () => {
+    const js = parsePage(fixture("js-only.html"), "https://app.example/");
+    expect(js.textLength).toBeLessThan(50);
+    expect(js.lang).toBeNull();
+  });
+});
+
+describe("pickKeyPages", () => {
+  it("elige páginas clave del mismo dominio, una por tipo", () => {
+    const links = [
+      "https://facturo.example/precios",
+      "https://facturo.example/blog/",
+      "https://facturo.example/blog/post-1",
+      "https://facturo.example/sobre-nosotros",
+      "https://otra-web.example/precios",
+      "https://facturo.example/registro",
+      "https://www.facturo.example/pricing",
+    ];
+    expect(pickKeyPages(links, HOME)).toEqual([
+      "https://facturo.example/precios",
+      "https://facturo.example/blog/",
+      "https://facturo.example/sobre-nosotros",
+    ]);
+  });
+
+  it("respeta el máximo", () => {
+    const links = ["/precios", "/blog", "/about", "/producto", "/features", "/empresa"].map(
+      (p) => `https://facturo.example${p}`,
+    );
+    expect(pickKeyPages(links, HOME, 2)).toHaveLength(2);
+  });
+});
+
+describe("buildSiteData", () => {
+  it("agrega la información de varias páginas", () => {
+    const home = parsePage(fixture("saas-home.html"), HOME);
+    const pricing = parsePage(fixture("saas-pricing.html"), `${HOME}precios`);
+    const site = buildSiteData(HOME, [home, pricing], [{ name: "Stripe", category: "pagos" }]);
+
+    expect(site.finalUrl).toBe(HOME);
+    expect(site.pages).toHaveLength(2);
+    expect(site.pricesFound).toEqual(["9 €", "29 €"]);
+    expect(site.hasPricingPage).toBe(true);
+    expect(site.hasBlog).toBe(true);
+    expect(site.languages).toEqual(["es", "en"]);
+    expect(site.hasFreePlanOrTrial).toBe(true);
+    expect(site.hasTestimonials).toBe(true);
+    expect(site.hasAppLinks).toBe(true);
+    expect(site.technologies).toEqual([{ name: "Stripe", category: "pagos" }]);
+    expect(site.textLength).toBe(home.textLength + pricing.textLength);
+  });
+});
