@@ -1,4 +1,10 @@
-import type { Fetcher, JobBoardRef, JobPlatform, JobsData, SiteData } from "../types";
+import type {
+  Fetcher,
+  JobBoardRef,
+  JobPlatform,
+  JobsData,
+  SiteData,
+} from "../types";
 
 export interface JobCandidate extends JobBoardRef {
   linkedFromSite: boolean;
@@ -11,25 +17,62 @@ export interface JobCount {
 
 const PLATFORMS: JobPlatform[] = ["greenhouse", "lever", "ashby"];
 
+/** Etiquetas de dominio demasiado genéricas para adivinar un tablero de empleo. */
+const GENERIC_LABELS = new Set([
+  "app",
+  "get",
+  "try",
+  "use",
+  "the",
+  "web",
+  "www",
+  "home",
+  "shop",
+  "store",
+  "blog",
+  "news",
+  "mail",
+  "data",
+  "cloud",
+  "online",
+]);
+
 const ENDPOINTS: Record<JobPlatform, (token: string) => string> = {
-  greenhouse: (t) => `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(t)}/departments`,
-  lever: (t) => `https://api.lever.co/v0/postings/${encodeURIComponent(t)}?mode=json`,
-  ashby: (t) => `https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(t)}`,
+  greenhouse: (t) =>
+    `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(t)}/departments`,
+  lever: (t) =>
+    `https://api.lever.co/v0/postings/${encodeURIComponent(t)}?mode=json`,
+  ashby: (t) =>
+    `https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(t)}`,
 };
 
-export function jobCandidates(site: SiteData | null, rootDomain: string): JobCandidate[] {
+export function jobCandidates(
+  site: SiteData | null,
+  rootDomain: string,
+): JobCandidate[] {
   const out: JobCandidate[] = [];
   const add = (c: JobCandidate) => {
-    if (!out.some((o) => o.platform === c.platform && o.token.toLowerCase() === c.token.toLowerCase())) out.push(c);
+    if (
+      !out.some(
+        (o) =>
+          o.platform === c.platform &&
+          o.token.toLowerCase() === c.token.toLowerCase(),
+      )
+    )
+      out.push(c);
   };
   for (const b of site?.jobBoards ?? []) add({ ...b, linkedFromSite: true });
-  const label = rootDomain.split(".")[0];
-  if (label) for (const platform of PLATFORMS) add({ platform, token: label, linkedFromSite: false });
+  const label = rootDomain.split(".")[0].toLowerCase();
+  if (label.length >= 4 && !GENERIC_LABELS.has(label))
+    for (const platform of PLATFORMS)
+      add({ platform, token: label, linkedFromSite: false });
   return out.slice(0, 6);
 }
 
 const area = (...names: unknown[]) => {
-  const n = names.find((x): x is string => typeof x === "string" && x.trim().length > 0);
+  const n = names.find(
+    (x): x is string => typeof x === "string" && x.trim().length > 0,
+  );
   return n ? n.trim() : "Otros";
 };
 
@@ -40,7 +83,11 @@ function tally(areas: string[]): JobCount {
 }
 
 export function parseGreenhouse(json: unknown): JobCount | null {
-  const departments = (json as { departments?: { name?: unknown; jobs?: { id?: unknown }[] }[] } | null)?.departments;
+  const departments = (
+    json as {
+      departments?: { name?: unknown; jobs?: { id?: unknown }[] }[];
+    } | null
+  )?.departments;
   if (!Array.isArray(departments)) return null;
   const ids = new Set<unknown>();
   const byArea: Record<string, number> = {};
@@ -57,16 +104,26 @@ export function parseLever(json: unknown): JobCount | null {
   if (!Array.isArray(json)) return null;
   return tally(
     json.map((p) => {
-      const c = (p as { categories?: { department?: unknown; team?: unknown } }).categories ?? {};
+      const c =
+        (p as { categories?: { department?: unknown; team?: unknown } })
+          .categories ?? {};
       return area(c.department, c.team);
     }),
   );
 }
 
 export function parseAshby(json: unknown): JobCount | null {
-  const jobs = (json as { jobs?: { department?: unknown; team?: unknown; isListed?: unknown }[] } | null)?.jobs;
+  const jobs = (
+    json as {
+      jobs?: { department?: unknown; team?: unknown; isListed?: unknown }[];
+    } | null
+  )?.jobs;
   if (!Array.isArray(jobs)) return null;
-  return tally(jobs.filter((j) => j.isListed !== false).map((j) => area(j.department, j.team)));
+  return tally(
+    jobs
+      .filter((j) => j.isListed !== false)
+      .map((j) => area(j.department, j.team)),
+  );
 }
 
 const PARSERS: Record<JobPlatform, (json: unknown) => JobCount | null> = {
@@ -75,14 +132,19 @@ const PARSERS: Record<JobPlatform, (json: unknown) => JobCount | null> = {
   ashby: parseAshby,
 };
 
-export async function fetchJobs(candidates: JobCandidate[], fetcher: Fetcher): Promise<JobsData | null> {
+export async function fetchJobs(
+  candidates: JobCandidate[],
+  fetcher: Fetcher,
+): Promise<JobsData | null> {
   const results = await Promise.allSettled(
     candidates.map(async (c) => {
       const res = await fetcher(ENDPOINTS[c.platform](c.token), {
         headers: { accept: "application/json" },
         signal: AbortSignal.timeout(10_000),
       });
-      if (!res.ok) return null;
+      if (res.status === 404) return null;
+      if (!res.ok)
+        throw new Error(`Plataforma de empleo respondió ${res.status}`);
       return PARSERS[c.platform](await res.json().catch(() => null));
     }),
   );
@@ -91,12 +153,27 @@ export async function fetchJobs(candidates: JobCandidate[], fetcher: Fetcher): P
     throw new Error("Las plataformas de empleo no responden");
   }
 
+  // Un tablero enlazado que falla no puede ceder el paso a uno adivinado: podría ser de otra empresa.
+  if (
+    results.some(
+      (r, i) => r.status === "rejected" && candidates[i].linkedFromSite,
+    )
+  ) {
+    throw new Error("El tablero de empleo enlazado no responde");
+  }
+
   for (let i = 0; i < candidates.length; i++) {
     const r = results[i];
     if (r.status !== "fulfilled" || !r.value) continue;
     const c = candidates[i];
     if (r.value.openings > 0 || c.linkedFromSite) {
-      return { platform: c.platform, token: c.token, openings: r.value.openings, byArea: r.value.byArea, linkedFromSite: c.linkedFromSite };
+      return {
+        platform: c.platform,
+        token: c.token,
+        openings: r.value.openings,
+        byArea: r.value.byArea,
+        linkedFromSite: c.linkedFromSite,
+      };
     }
   }
   return null;

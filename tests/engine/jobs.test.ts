@@ -88,3 +88,51 @@ describe("fetchJobs", () => {
     await expect(fetchJobs([{ platform: "lever", token: "x", linkedFromSite: false }], fetcher)).rejects.toThrow();
   });
 });
+
+describe("fetchJobs con tableros enlazados que fallan", () => {
+  const lever = [{ categories: { department: "Engineering" } }];
+  const linked = { platform: "greenhouse" as const, token: "a", linkedFromSite: true };
+  const guessed = { platform: "lever" as const, token: "b", linkedFromSite: false };
+  const isGreenhouse = (url: string) => url.includes("boards-api.greenhouse.io");
+
+  it("(a) lanza si el tablero enlazado falla aunque un adivinado tenga ofertas", async () => {
+    await expect(
+      fetchJobs([linked, guessed], async (url) => {
+        if (isGreenhouse(url)) throw new Error("red caída");
+        return Response.json(lever);
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("(b) lanza si el tablero enlazado responde 503 aunque un adivinado tenga ofertas", async () => {
+    await expect(
+      fetchJobs([linked, guessed], async (url) => (isGreenhouse(url) ? new Response("", { status: 503 }) : Response.json(lever))),
+    ).rejects.toThrow();
+  });
+
+  it("(c) ignora un tablero enlazado 404 y devuelve el adivinado con ofertas", async () => {
+    const data = await fetchJobs([linked, guessed], async (url) =>
+      isGreenhouse(url) ? new Response("", { status: 404 }) : Response.json(lever),
+    );
+    expect(data).toEqual({ platform: "lever", token: "b", openings: 1, byArea: { Engineering: 1 }, linkedFromSite: false });
+  });
+
+  it("(d) lanza si todas las peticiones responden 500", async () => {
+    await expect(fetchJobs([linked, guessed], async () => new Response("", { status: 500 }))).rejects.toThrow();
+  });
+});
+
+describe("jobCandidates con etiquetas genéricas o cortas", () => {
+  it("(e) no adivina con etiquetas genéricas o de menos de 4 caracteres", () => {
+    expect(jobCandidates(null, "app.example")).toEqual([]);
+    expect(jobCandidates(null, "store.example")).toEqual([]);
+  });
+
+  it("(e) pasa a minúsculas la etiqueta del dominio al adivinar", () => {
+    expect(jobCandidates(null, "Facturo.example")).toEqual([
+      { platform: "greenhouse", token: "facturo", linkedFromSite: false },
+      { platform: "lever", token: "facturo", linkedFromSite: false },
+      { platform: "ashby", token: "facturo", linkedFromSite: false },
+    ]);
+  });
+});
