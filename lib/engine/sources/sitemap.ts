@@ -19,6 +19,9 @@ const LANGUAGE_CODES = new Set([
   "tr", "ar", "ca", "eu", "gl", "cs", "ro", "hu", "el", "he", "id", "th", "vi", "uk",
 ]);
 
+/** Segmento completo de idioma: "es", "en-us", "pt-br". Rechaza "no-te-pierdas", "it-services", "id-card". */
+const LANGUAGE_SEGMENT_RE = /^([a-z]{2})(?:-[a-z]{2})?$/i;
+
 export interface SitemapUrl {
   loc: string;
   lastmod: string | null;
@@ -31,21 +34,52 @@ export interface ParsedSitemap {
   urls: SitemapUrl[];
 }
 
-const decode = (s: string) => s.replace(/&amp;/g, "&").trim();
+const NS = "(?:[\\w-]+:)?";
 
-export function parseSitemapXml(xml: string): ParsedSitemap {
-  if (/<sitemapindex[\s>]/i.test(xml)) {
-    const children = [...xml.matchAll(/<sitemap>[\s\S]*?<loc>\s*([^<]+?)\s*<\/loc>[\s\S]*?<\/sitemap>/gi)].map((m) => decode(m[1]));
+/** Elemento XML con o sin prefijo de espacio de nombres y con atributos opcionales. */
+const tagRe = (name: string, flags: string) =>
+  new RegExp(`<${NS}${name}\\b[^>]*>([\\s\\S]*?)<\\/${NS}${name}\\s*>`, flags);
+
+const ENTITIES: Record<string, string> = { amp: "&", apos: "'", quot: '"', lt: "<", gt: ">" };
+
+function decodeXml(s: string): string {
+  return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (match, body: string) => {
+    if (body[0] === "#") {
+      const hex = body[1] === "x" || body[1] === "X";
+      const code = hex ? parseInt(body.slice(2), 16) : parseInt(body.slice(1), 10);
+      return Number.isFinite(code) && code >= 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match;
+    }
+    return ENTITIES[body.toLowerCase()] ?? match;
+  });
+}
+
+/** Texto de un elemento hijo: admite CDATA (sin decodificar) y entidades XML. */
+function readTag(block: string, name: string): string | null {
+  const raw = block.match(tagRe(name, "i"))?.[1];
+  if (raw === undefined) return null;
+  const cdata = raw.match(/^\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*$/);
+  const text = (cdata ? cdata[1] : decodeXml(raw)).trim();
+  return text || null;
+}
+
+export function parseSitemapXml(xml: string, maxUrls = MAX_URLS): ParsedSitemap {
+  if (new RegExp(`<${NS}sitemapindex\\b`, "i").test(xml)) {
+    const children: string[] = [];
+    for (const m of xml.matchAll(tagRe("sitemap", "gi"))) {
+      const loc = readTag(m[1], "loc");
+      if (loc) children.push(loc);
+    }
     return { kind: "index", children, urls: [] };
   }
   const urls: SitemapUrl[] = [];
-  for (const m of xml.matchAll(/<url>([\s\S]*?)<\/url>/gi)) {
+  for (const m of xml.matchAll(tagRe("url", "gi"))) {
+    if (urls.length >= maxUrls) break;
     const block = m[1];
-    const loc = block.match(/<loc>\s*([^<]+?)\s*<\/loc>/i)?.[1];
+    const loc = readTag(block, "loc");
     if (!loc) continue;
     urls.push({
-      loc: decode(loc),
-      lastmod: block.match(/<lastmod>\s*([^<]+?)\s*<\/lastmod>/i)?.[1] ?? null,
+      loc,
+      lastmod: readTag(block, "lastmod"),
       hreflangs: [...block.matchAll(/hreflang=["']([a-zA-Z-]+)["']/g)].map((h) => h[1].toLowerCase()),
     });
   }
@@ -83,7 +117,8 @@ export function summarizeSitemap(urls: SitemapUrl[], now: Date): SitemapData {
     const urlSections = SECTION_RES.filter(([, re]) => re.test(path)).map(([s]) => s);
     urlSections.forEach((s) => sections.add(s));
 
-    const first = path.split("/").filter(Boolean)[0]?.toLowerCase().split("-")[0];
+    const segment = LANGUAGE_SEGMENT_RE.exec(path.split("/").filter(Boolean)[0] ?? "");
+    const first = segment?.[1].toLowerCase();
     if (first && LANGUAGE_CODES.has(first)) languages.add(first);
     for (const h of u.hreflangs) {
       const l = h.split("-")[0];
@@ -105,6 +140,23 @@ export function summarizeSitemap(urls: SitemapUrl[], now: Date): SitemapData {
     recentBlogPosts,
   };
 }
+
+const isHttpUrl = (u: string): boolean => {
+  try {
+    const p = new URL(u).protocol;
+    return p === "http:" || p === "https:";
+  } catch {
+    return false;
+  }
+};
+
+const pathnameOf = (u: string): string => {
+  try {
+    return new URL(u).pathname;
+  } catch {
+    return u;
+  }
+};
 
 export async function fetchSitemap(siteUrl: string, get: PageGetter, now: Date): Promise<SitemapData | null> {
   const origin = new URL(siteUrl).origin;
@@ -136,15 +188,16 @@ export async function fetchSitemap(siteUrl: string, get: PageGetter, now: Date):
     if (seen.has(next)) continue;
     seen.add(next);
     const file = await tryGet(next);
-    if (!file || file.status >= 400 || /\.gz$/i.test(next)) continue;
+    if (!file || file.status >= 400 || /\.gz$/i.test(pathnameOf(next))) continue;
+    if (bytes + file.text.length > MAX_TOTAL_BYTES) break;
     bytes += file.text.length;
-    const parsed = parseSitemapXml(file.text);
+    const parsed = parseSitemapXml(file.text, MAX_URLS - urls.length);
     if (parsed.kind === "index") {
       parsedAny = true;
-      queue.push(...parsed.children.filter((c) => /^https?:\/\//i.test(c)));
+      queue.push(...parsed.children.filter(isHttpUrl));
     } else if (parsed.urls.length > 0) {
       parsedAny = true;
-      urls.push(...parsed.urls.slice(0, MAX_URLS - urls.length));
+      for (const u of parsed.urls) urls.push(u);
     }
   }
 
