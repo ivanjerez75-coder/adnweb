@@ -190,5 +190,8 @@ export function buildSiteData(finalUrl: string, pages: ParsedPage[], technologie
     jsonLdTypes: Array.from(new Set(pages.flatMap((p) => p.jsonLdTypes))),
     textLength: pages.reduce((sum, p) => sum + p.textLength, 0),
     technologies,
+    companyName: null,
+    jobBoards: [],
+    appStoreIds: [],
   };
 }

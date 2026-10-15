@@ -20,6 +20,9 @@ export function makeSite(overrides: Partial<SiteData> = {}): SiteData {
       { name: "Intercom", category: "chat" },
       { name: "Mailchimp", category: "email" },
     ],
+    companyName: "Facturo",
+    jobBoards: [],
+    appStoreIds: [],
     ...overrides,
   };
 }

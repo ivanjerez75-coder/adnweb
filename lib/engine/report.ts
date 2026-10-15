@@ -89,6 +89,7 @@ export async function buildReport(
     family: "mercado",
     source: "mercado",
     label: m.etiqueta,
+    polarity: "negativa",
   }));
   const signals = [...baseSignals, ...marketSignals.filter((m) => !baseSignals.some((b) => b.id === m.id))];
   const knownIds = new Set(signals.map((s) => s.id));

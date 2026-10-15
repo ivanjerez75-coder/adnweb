@@ -37,7 +37,7 @@ describe("buildPrompt", () => {
   it("incluye dominio, anclas y señales con sus ids", () => {
     const raw = makeRaw({ pagespeed: { mobile: 30, desktop: 90 } });
     const prompt = buildPrompt(raw, computeAnchors(raw, NOW), [
-      { id: "pagespeed_movil_bajo", family: "tecnica", source: "pagespeed", label: "Rendimiento móvil bajo: 30/100" },
+      { id: "pagespeed_movil_bajo", family: "tecnica", source: "pagespeed", label: "Rendimiento móvil bajo: 30/100", polarity: "negativa" },
     ]);
     expect(prompt).toContain("facturo.example");
     expect(prompt).toContain("pagespeed_movil_bajo");

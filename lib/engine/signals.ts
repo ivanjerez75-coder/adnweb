@@ -1,12 +1,12 @@
-import type { RawData, Signal, SignalFamily, SourceId } from "./types";
+import type { RawData, Signal, SignalFamily, SignalPolarity, SourceId } from "./types";
 import { validRank } from "./anchors";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function extractSignals(raw: RawData, now: Date): Signal[] {
   const signals: Signal[] = [];
-  const add = (id: string, family: SignalFamily, source: SourceId, label: string) =>
-    signals.push({ id, family, source, label });
+  const add = (id: string, family: SignalFamily, source: SourceId, label: string, polarity: SignalPolarity = "negativa") =>
+    signals.push({ id, family, source, label, polarity });
 
   const site = raw.site;
   if (site) {

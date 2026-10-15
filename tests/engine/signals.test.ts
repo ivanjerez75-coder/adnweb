@@ -42,7 +42,7 @@ describe("extractSignals", () => {
   it("asigna familia y fuente a cada señal", () => {
     const signals = extractSignals(makeRaw({ site: makeSite({ technologies: [{ name: "Intercom", category: "chat" }, { name: "Mailchimp", category: "email" }] }) }), NOW);
     expect(signals).toEqual([
-      { id: "sin_analitica", family: "tecnica", source: "tecnologias", label: "No se detecta ninguna herramienta de analítica" },
+      { id: "sin_analitica", family: "tecnica", source: "tecnologias", label: "No se detecta ninguna herramienta de analítica", polarity: "negativa" },
     ]);
   });
 
@@ -100,5 +100,14 @@ describe("extractSignals", () => {
 
   it("no inventa señales de fuentes no disponibles", () => {
     expect(ids(makeRaw({ site: null, pagespeed: null, tranco: null, radar: null, wayback: null, rdap: null }))).toEqual([]);
+  });
+});
+
+describe("polaridad", () => {
+  it("todas las señales actuales son negativas", () => {
+    const raw = makeRaw({ site: makeSite({ hasBlog: false, pricesFound: [], technologies: [] }), pagespeed: { mobile: 20, desktop: 20 } });
+    const signals = extractSignals(raw, NOW);
+    expect(signals.length).toBeGreaterThan(0);
+    expect(signals.every((s) => s.polarity === "negativa")).toBe(true);
   });
 });
