@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import type { SiteData, SitePage, Technology } from "../types";
+import type { JobBoardRef, JobPlatform, SiteData, SitePage, Technology } from "../types";
 
 export interface ParsedPage {
   page: SitePage;
@@ -14,6 +14,9 @@ export interface ParsedPage {
   mentionsTestimonials: boolean;
   mentionsFreeOrTrial: boolean;
   textLength: number;
+  companyName: string | null;
+  jobBoards: JobBoardRef[];
+  appStoreIds: string[];
 }
 
 const SOCIAL_HOSTS: Record<string, string> = {
@@ -51,28 +54,62 @@ const KEY_PAGE_KINDS: [string, RegExp][] = [
 const clean = (s: string) => s.replace(/\s+/g, " ").trim();
 const bareHost = (host: string) => host.toLowerCase().replace(/^www\./, "");
 
-function collectTypes(node: unknown, out: string[]): void {
+interface JsonLdInfo {
+  types: string[];
+  orgNames: string[];
+  sameAs: string[];
+}
+
+const ORG_TYPES = new Set(["Organization", "Corporation", "Company", "OnlineStore", "OnlineBusiness", "LocalBusiness", "NGO"]);
+
+function walkJsonLd(node: unknown, out: JsonLdInfo): void {
   if (Array.isArray(node)) {
-    node.forEach((n) => collectTypes(n, out));
-  } else if (node && typeof node === "object") {
-    const obj = node as Record<string, unknown>;
-    const type = obj["@type"];
-    if (typeof type === "string" && !out.includes(type)) out.push(type);
-    if (Array.isArray(obj["@graph"])) collectTypes(obj["@graph"], out);
+    node.forEach((n) => walkJsonLd(n, out));
+    return;
   }
+  if (!node || typeof node !== "object") return;
+  const obj = node as Record<string, unknown>;
+  const rawType = obj["@type"];
+  const types = Array.isArray(rawType)
+    ? rawType.filter((t): t is string => typeof t === "string")
+    : typeof rawType === "string"
+      ? [rawType]
+      : [];
+  for (const t of types) if (!out.types.includes(t)) out.types.push(t);
+  if (types.some((t) => ORG_TYPES.has(t))) {
+    if (typeof obj.name === "string" && obj.name.trim()) out.orgNames.push(obj.name.trim());
+    const sameAs = Array.isArray(obj.sameAs) ? obj.sameAs : [obj.sameAs];
+    for (const s of sameAs) if (typeof s === "string") out.sameAs.push(s);
+  }
+  if (Array.isArray(obj["@graph"])) walkJsonLd(obj["@graph"], out);
+}
+
+const JOB_HOSTS: Record<string, JobPlatform> = {
+  "boards.greenhouse.io": "greenhouse",
+  "job-boards.greenhouse.io": "greenhouse",
+  "jobs.lever.co": "lever",
+  "jobs.ashbyhq.com": "ashby",
+};
+const GREENHOUSE_EMBED_RE = /greenhouse\.io\/embed\/job_board(?:\/js)?\?for=([a-z0-9_-]+)/gi;
+const TITLE_SEPARATOR_RE = /\s+[—–|\-:·]\s+/;
+
+function titlePrefix(title: string): string | null {
+  const first = title.split(TITLE_SEPARATOR_RE)[0]?.trim();
+  return first ? first.slice(0, 60) : null;
 }
 
 export function parsePage(html: string, pageUrl: string): ParsedPage {
   const $ = cheerio.load(html);
 
-  const jsonLdTypes: string[] = [];
+  const jsonLd: JsonLdInfo = { types: [], orgNames: [], sameAs: [] };
   $('script[type="application/ld+json"]').each((_, el) => {
     try {
-      collectTypes(JSON.parse($(el).text()), jsonLdTypes);
+      walkJsonLd(JSON.parse($(el).text()), jsonLd);
     } catch {
       // JSON-LD mal formado: se ignora
     }
   });
+  const ogSiteName = clean($('meta[property="og:site_name"]').attr("content") ?? "");
 
   $("script, style, noscript, svg").remove();
 
@@ -90,6 +127,13 @@ export function parsePage(html: string, pageUrl: string): ParsedPage {
   const links: string[] = [];
   const socialLinks: Record<string, string> = {};
   let hasAppLinks = false;
+  const jobBoards: JobBoardRef[] = [];
+  const appStoreIds: string[] = [];
+  const addJobBoard = (platform: JobPlatform, token: string) => {
+    if (/^[a-z0-9_.-]+$/i.test(token) && token !== "embed" && !jobBoards.some((j) => j.platform === platform && j.token === token)) {
+      jobBoards.push({ platform, token });
+    }
+  };
   $("a[href]").each((_, el) => {
     let abs: URL;
     try {
@@ -102,10 +146,27 @@ export function parsePage(html: string, pageUrl: string): ParsedPage {
     const network = SOCIAL_HOSTS[host];
     if (network && !socialLinks[network]) socialLinks[network] = abs.toString();
     if (host === "apps.apple.com" || host === "play.google.com") hasAppLinks = true;
+    const jobPlatform = JOB_HOSTS[abs.hostname.toLowerCase()];
+    const firstSegment = abs.pathname.split("/").filter(Boolean)[0];
+    if (jobPlatform && firstSegment) addJobBoard(jobPlatform, firstSegment);
+    if (host === "apps.apple.com") {
+      const id = abs.pathname.match(/\/id(\d+)/)?.[1];
+      if (id && !appStoreIds.includes(id)) appStoreIds.push(id);
+    }
     abs.hash = "";
     const href = abs.toString();
     if (!links.includes(href)) links.push(href);
   });
+  for (const m of html.matchAll(GREENHOUSE_EMBED_RE)) addJobBoard("greenhouse", m[1]);
+  for (const s of jsonLd.sameAs) {
+    try {
+      const u = new URL(s);
+      const network = SOCIAL_HOSTS[bareHost(u.hostname)];
+      if (network && !socialLinks[network]) socialLinks[network] = u.toString();
+    } catch {
+      // URL de sameAs inválida: se ignora
+    }
+  }
 
   const ctas = Array.from(
     new Set(
@@ -133,12 +194,15 @@ export function parsePage(html: string, pageUrl: string): ParsedPage {
     hreflangs,
     socialLinks,
     ctas,
-    jsonLdTypes,
+    jsonLdTypes: jsonLd.types,
     prices: Array.from(new Set(text.match(PRICE_RE) ?? [])).slice(0, 20),
     hasAppLinks,
     mentionsTestimonials: TESTIMONIALS_RE.test(text),
     mentionsFreeOrTrial: FREE_RE.test(text),
     textLength: text.length,
+    companyName: jsonLd.orgNames[0] ?? (ogSiteName || null) ?? titlePrefix(title),
+    jobBoards,
+    appStoreIds,
   };
 }
 
@@ -190,8 +254,10 @@ export function buildSiteData(finalUrl: string, pages: ParsedPage[], technologie
     jsonLdTypes: Array.from(new Set(pages.flatMap((p) => p.jsonLdTypes))),
     textLength: pages.reduce((sum, p) => sum + p.textLength, 0),
     technologies,
-    companyName: null,
-    jobBoards: [],
-    appStoreIds: [],
+    companyName: pages[0]?.companyName ?? null,
+    jobBoards: pages
+      .flatMap((p) => p.jobBoards)
+      .filter((j, i, all) => all.findIndex((o) => o.platform === j.platform && o.token === j.token) === i),
+    appStoreIds: Array.from(new Set(pages.flatMap((p) => p.appStoreIds))),
   };
 }
