@@ -1,6 +1,7 @@
 import type { RawData, Signal, SignalFamily, SignalPolarity, SourceId, Technology } from "./types";
 import { radarRank, validRank } from "./anchors";
 import { computeFacts } from "./facts";
+import { isSectionPath } from "./sources/sections";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const YEAR_MS = 365 * DAY_MS;
@@ -32,16 +33,27 @@ export function extractSignals(raw: RawData, now: Date): Signal[] {
 
   // ---------- Negativas ----------
   if (site) {
-    const noPrices = site.pricesFound.length === 0;
+    // Ausencias que solo la web puede ver: exigen una home legible (una home fina no prueba nada).
+    const noPrices = readable && site.pricesFound.length === 0 && facts.paginaPrecios !== "si";
     if (noPrices) add("sin_precios_publicos", "producto", "web", "No muestra precios públicos");
     if (noPrices && site.ctas.some((c) => /\b(demo|ventas|sales)\b/i.test(c))) {
       add("solo_demo", "producto", "web", "La conversión pasa por pedir una demo o hablar con ventas");
     }
-    if (!site.hasFreePlanOrTrial) add("sin_plan_gratuito", "producto", "web", "No ofrece plan gratuito ni prueba");
+    // El plan gratuito se anuncia en la página de precios: sin leerla no se puede afirmar que no exista.
+    const pricingPageRead = site.pages.some((p) => {
+      try {
+        return isSectionPath(new URL(p.url).pathname, "precios");
+      } catch {
+        return false;
+      }
+    });
+    if (readable && pricingPageRead && !site.hasFreePlanOrTrial) {
+      add("sin_plan_gratuito", "producto", "web", "No ofrece plan gratuito ni prueba");
+    }
     if (site.textLength < READABLE_TEXT && !(raw.sitemap && raw.sitemap.urlCount >= 50)) {
       add("contenido_escaso", "contenido", "web", "Muy poco texto indexable en la web");
     }
-    if (!site.hasTestimonials) add("sin_testimonios", "confianza", "web", "Sin testimonios, reseñas ni casos de éxito visibles");
+    if (readable && !site.hasTestimonials) add("sin_testimonios", "confianza", "web", "Sin testimonios, reseñas ni casos de éxito visibles");
     if (readable && !site.technologies.some((t) => t.category === "analitica")) {
       add("sin_analitica", "tecnica", "tecnologias", "No se detecta ninguna herramienta de analítica");
     }

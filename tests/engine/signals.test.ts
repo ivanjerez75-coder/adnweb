@@ -28,9 +28,45 @@ describe("extractSignals — negocio sano", () => {
 });
 
 describe("extractSignals — negativas", () => {
-  it("huecos de producto y confianza en la web", () => {
-    const site = makeSite({ pricesFound: [], ctas: ["Pide una demo"], hasFreePlanOrTrial: false, hasTestimonials: false });
-    expect(ids(makeRaw({ site }), "negativa")).toEqual(["sin_precios_publicos", "solo_demo", "sin_plan_gratuito", "sin_testimonios"]);
+  it("huecos de producto y confianza en la web (sin página de precios)", () => {
+    const site = makeSite({ pricesFound: [], hasPricingPage: false, ctas: ["Pide una demo"], hasFreePlanOrTrial: false, hasTestimonials: false });
+    // Sin página de precios leída no se puede afirmar que no haya plan gratuito.
+    expect(ids(makeRaw({ site }), "negativa")).toEqual(["sin_precios_publicos", "solo_demo", "sin_testimonios"]);
+  });
+
+  it("sin_plan_gratuito solo si se leyó una página de precios", () => {
+    const home = { url: "https://facturo.example/", title: "Facturo", description: "", headings: [], text: "x".repeat(1500) };
+    const pricing = { ...home, url: "https://facturo.example/es/precios" };
+    const withPricing = makeSite({ pages: [home, pricing], hasFreePlanOrTrial: false });
+    const homeOnly = makeSite({ pages: [home], hasFreePlanOrTrial: false });
+    const blogTip = makeSite({ pages: [home, { ...home, url: "https://facturo.example/blog/pricing-tips" }], hasFreePlanOrTrial: false });
+    expect(ids(makeRaw({ site: withPricing }))).toContain("sin_plan_gratuito");
+    expect(ids(makeRaw({ site: homeOnly }))).not.toContain("sin_plan_gratuito");
+    expect(ids(makeRaw({ site: blogTip }))).not.toContain("sin_plan_gratuito");
+  });
+
+  it("una home fina no dispara ninguna negativa de producto ni de testimonios", () => {
+    const pricing = { url: "https://facturo.example/pricing", title: "", description: "", headings: [], text: "" };
+    const site = makeSite({
+      textLength: 800,
+      pages: [pricing],
+      pricesFound: [],
+      hasPricingPage: false,
+      ctas: ["Request a demo"],
+      hasFreePlanOrTrial: false,
+      hasTestimonials: false,
+    });
+    const negatives = ids(makeRaw({ site }), "negativa");
+    for (const id of ["sin_precios_publicos", "solo_demo", "sin_plan_gratuito", "sin_testimonios"]) expect(negatives).not.toContain(id);
+  });
+
+  it("con paginaPrecios = si no salta sin_precios_publicos ni solo_demo", () => {
+    const site = makeSite({ pricesFound: [], hasPricingPage: false, ctas: ["Pide una demo"] });
+    const raw = makeRaw({ site, sitemap: sitemap({ sections: ["precios"] }) });
+    const negatives = ids(raw, "negativa");
+    expect(negatives).not.toContain("sin_precios_publicos");
+    expect(negatives).not.toContain("solo_demo");
+    expect(ids(makeRaw({ site: makeSite({ pricesFound: [] }) }), "negativa")).not.toContain("sin_precios_publicos");
   });
 
   it("caso Notion: home leída a medias pero con blog en el sitemap → sin señales falsas", () => {
