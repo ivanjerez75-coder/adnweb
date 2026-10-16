@@ -1,52 +1,69 @@
 import { describe, it, expect } from "vitest";
-import { extractSignals } from "../../lib/engine/signals";
+import { extractSignals, allTechnologies } from "../../lib/engine/signals";
 import { makeRaw, makeSite } from "./raw-fixture";
 import { NOW } from "./fake-network";
+import type { RawData } from "../../lib/engine/types";
 
-const ids = (raw: Parameters<typeof extractSignals>[0]) => extractSignals(raw, NOW).map((s) => s.id);
+const ids = (raw: RawData, polarity?: "positiva" | "negativa") =>
+  extractSignals(raw, NOW)
+    .filter((s) => !polarity || s.polarity === polarity)
+    .map((s) => s.id);
 
-describe("extractSignals", () => {
-  it("no produce señales para un negocio sin huecos", () => {
-    expect(ids(makeRaw())).toEqual([]);
+const verified = { found: [], checked: ["blog", "precios", "empleo", "about"] } as RawData["rutas"];
+const sitemap = (over: Partial<NonNullable<RawData["sitemap"]>> = {}) => ({
+  urlCount: 100,
+  sections: [] as NonNullable<RawData["sitemap"]>["sections"],
+  languages: [],
+  lastModified: "2026-10-01",
+  recentBlogPosts: 0,
+  ...over,
+});
+
+describe("extractSignals — negocio sano", () => {
+  it("no tiene señales negativas y sí las positivas que apoyan los datos", () => {
+    expect(ids(makeRaw(), "negativa")).toEqual([]);
+    expect(ids(makeRaw(), "positiva")).toEqual(["trafico_alto", "empresa_consolidada", "web_rapida"]);
+  });
+});
+
+describe("extractSignals — negativas", () => {
+  it("huecos de producto y confianza en la web", () => {
+    const site = makeSite({ pricesFound: [], ctas: ["Pide una demo"], hasFreePlanOrTrial: false, hasTestimonials: false });
+    expect(ids(makeRaw({ site }), "negativa")).toEqual(["sin_precios_publicos", "solo_demo", "sin_plan_gratuito", "sin_testimonios"]);
   });
 
-  it("detecta huecos de producto, contenido, alcance y confianza en la web", () => {
-    const site = makeSite({
-      pricesFound: [],
-      ctas: ["Pide una demo"],
-      hasFreePlanOrTrial: false,
-      hasBlog: false,
-      textLength: 800,
-      languages: ["es"],
-      hasAppLinks: false,
-      socialLinks: {},
-      hasTestimonials: false,
-      technologies: [],
-    });
-    expect(ids(makeRaw({ site }))).toEqual([
-      "sin_precios_publicos",
-      "solo_demo",
-      "sin_plan_gratuito",
+  it("caso Notion: home leída a medias pero con blog en el sitemap → sin señales falsas", () => {
+    const site = makeSite({ hasBlog: false, socialLinks: { youtube: "y" }, textLength: 800, hasAppLinks: false, technologies: [] });
+    const raw = makeRaw({ site, sitemap: sitemap({ sections: ["blog"], urlCount: 900 }) });
+    raw.fuentes.appstore = "fallo";
+    const negatives = ids(raw, "negativa");
+    expect(negatives).not.toContain("sin_blog");
+    expect(negatives).not.toContain("pocas_redes");
+    expect(negatives).not.toContain("sin_app_movil");
+    expect(negatives).not.toContain("sin_analitica");
+    expect(negatives).not.toContain("contenido_escaso");
+  });
+
+  it("señales de presencia cuando dos fuentes lo confirman", () => {
+    const site = makeSite({ hasBlog: false, hasAppLinks: false, technologies: [], socialLinks: {}, languages: ["es"] });
+    const raw = makeRaw({ site, rutas: verified, sitemap: sitemap(), dns: { emailProvider: "Google Workspace", tools: [] } });
+    expect(ids(raw, "negativa")).toEqual([
+      "sin_analitica",
       "sin_blog",
-      "contenido_escaso",
       "un_solo_idioma",
       "sin_app_movil",
       "pocas_redes",
-      "sin_testimonios",
-      "sin_analitica",
-      "sin_chat_soporte",
       "sin_captacion_email",
+      "sin_empleo",
     ]);
   });
 
-  it("asigna familia y fuente a cada señal", () => {
-    const signals = extractSignals(makeRaw({ site: makeSite({ technologies: [{ name: "Intercom", category: "chat" }, { name: "Mailchimp", category: "email" }] }) }), NOW);
-    expect(signals).toEqual([
-      { id: "sin_analitica", family: "tecnica", source: "tecnologias", label: "No se detecta ninguna herramienta de analítica", polarity: "negativa" },
-    ]);
+  it("pocas_redes usa un texto claro", () => {
+    const raw = makeRaw({ site: makeSite({ socialLinks: {} }) });
+    expect(extractSignals(raw, NOW).find((s) => s.id === "pocas_redes")?.label).toBe("No enlaza a ninguna red social");
   });
 
-  it("detecta señales de rendimiento, tracción y antigüedad", () => {
+  it("rendimiento, tracción y antigüedad", () => {
     const raw = makeRaw({
       pagespeed: { mobile: 34, desktop: 45 },
       tranco: { rank: null, trend: null },
@@ -54,7 +71,7 @@ describe("extractSignals", () => {
       wayback: { firstCapture: "2025-01-01", lastChange: "2025-06-01", changesLastYear: 0 },
       rdap: { registeredAt: "2025-01-01" },
     });
-    expect(ids(raw)).toEqual([
+    expect(ids(raw, "negativa")).toEqual([
       "pagespeed_movil_bajo",
       "pagespeed_escritorio_bajo",
       "fuera_top_1m",
@@ -64,38 +81,55 @@ describe("extractSignals", () => {
     ]);
   });
 
-  it("popularidad_baja solo si Radar respondió sin rango ni franja válida", () => {
-    const has = (radar: { bucket: number | null; rank: number | null } | null) =>
-      ids(makeRaw({ radar })).includes("popularidad_baja");
-    expect(has({ bucket: null, rank: null })).toBe(true);
-    expect(has({ bucket: 500_000, rank: null })).toBe(true);
-    expect(has({ bucket: 0, rank: null })).toBe(true);
-    expect(has({ bucket: null, rank: 1234 })).toBe(false);
-    expect(has({ bucket: 500_000, rank: 1234 })).toBe(false);
-    expect(has({ bucket: 200_000, rank: null })).toBe(false);
-    expect(has({ bucket: 1000, rank: null })).toBe(false);
-    expect(has(null)).toBe(false);
+  it("web inactiva, app mal valorada y sin email corporativo", () => {
+    const raw = makeRaw({
+      sitemap: sitemap({ lastModified: "2024-01-01" }),
+      appstore: { name: "F", rating: 2.9, ratingCount: 500, url: "u", linkedFromSite: true },
+      dns: { emailProvider: "Ninguno", tools: [] },
+    });
+    expect(ids(raw, "negativa")).toEqual(["web_inactiva", "app_mal_valorada", "sin_email_corporativo"]);
+  });
+});
+
+describe("extractSignals — positivas", () => {
+  it("contratación, app, blog, idiomas, web amplia, plantilla, notoriedad y stack", () => {
+    const raw = makeRaw({
+      tranco: { rank: 50_000, trend: "sube" },
+      radar: null,
+      pagespeed: { mobile: 70, desktop: 80 },
+      rdap: { registeredAt: "2025-01-01" },
+      empleo: { platform: "greenhouse", token: "f", openings: 35, byArea: {}, linkedFromSite: true },
+      appstore: { name: "F", rating: 4.6, ratingCount: 12000, url: "u", linkedFromSite: true },
+      sitemap: sitemap({ urlCount: 800, recentBlogPosts: 6, languages: ["fr", "de"] }),
+      wikidata: { id: "Q1", description: null, inception: 2016, founders: [], headquarters: null, employees: 450, revenue: null },
+      hackernews: { total: 40, lastYear: 3, top: null },
+      dns: { emailProvider: "Google Workspace", tools: [{ name: "Salesforce", category: "ventas" }] },
+    });
+    expect(ids(raw, "positiva")).toEqual([
+      "contratacion_fuerte",
+      "app_valorada",
+      "blog_activo",
+      "multi_idioma",
+      "web_amplia",
+      "trafico_en_subida",
+      "empresa_consolidada",
+      "plantilla_grande",
+      "notoriedad_tech",
+      "stack_crecimiento",
+    ]);
+    const consolidated = extractSignals(raw, NOW).find((s) => s.id === "empresa_consolidada");
+    expect(consolidated).toMatchObject({ source: "wikidata", label: "Empresa fundada en 2016", polarity: "positiva" });
   });
 
-  it("describe sin exagerar la falta de cambios en Wayback", () => {
-    const raw = makeRaw({ wayback: { firstCapture: "2015-01-01", lastChange: "2025-06-01", changesLastYear: 0 } });
-    expect(extractSignals(raw, NOW).find((s) => s.id === "web_sin_cambios_12m")?.label).toBe(
-      "No se detectan cambios en la web en el último año",
-    );
+  it("contratando con 5-29 ofertas", () => {
+    const raw = makeRaw({ empleo: { platform: "lever", token: "f", openings: 5, byArea: {}, linkedFromSite: false } });
+    expect(ids(raw, "positiva")).toContain("contratando");
+    expect(ids(raw, "positiva")).not.toContain("contratacion_fuerte");
   });
 
-  it("solo_demo exige la palabra completa demo, ventas o sales", () => {
-    const demoIds = (ctas: string[]) => ids(makeRaw({ site: makeSite({ pricesFound: [], ctas }) }));
-    expect(demoIds(["Pide una demo"])).toContain("solo_demo");
-    expect(demoIds(["Habla con ventas"])).toContain("solo_demo");
-    expect(demoIds(["Contact Sales"])).toContain("solo_demo");
-    expect(demoIds(["Ver demostración"])).not.toContain("solo_demo");
-    expect(demoIds(["Integración con Salesforce"])).not.toContain("solo_demo");
-    expect(demoIds(["Preventas"])).not.toContain("solo_demo");
-  });
-
-  it("detecta tráfico en caída", () => {
-    expect(ids(makeRaw({ tranco: { rank: 60000, trend: "baja" } }))).toEqual(["trafico_en_caida"]);
+  it("trafico_alto por Radar si Tranco no tiene rango", () => {
+    const raw = makeRaw({ tranco: { rank: null, trend: null }, radar: { bucket: 5000, rank: null } });
+    expect(extractSignals(raw, NOW).find((s) => s.id === "trafico_alto")?.source).toBe("radar");
   });
 
   it("no inventa señales de fuentes no disponibles", () => {
@@ -103,11 +137,9 @@ describe("extractSignals", () => {
   });
 });
 
-describe("polaridad", () => {
-  it("todas las señales actuales son negativas", () => {
-    const raw = makeRaw({ site: makeSite({ hasBlog: false, pricesFound: [], technologies: [] }), pagespeed: { mobile: 20, desktop: 20 } });
-    const signals = extractSignals(raw, NOW);
-    expect(signals.length).toBeGreaterThan(0);
-    expect(signals.every((s) => s.polarity === "negativa")).toBe(true);
+describe("allTechnologies", () => {
+  it("une web y DNS sin duplicar por nombre", () => {
+    const raw = makeRaw({ dns: { emailProvider: "Otro", tools: [{ name: "Mailchimp", category: "email" }, { name: "Salesforce", category: "ventas" }] } });
+    expect(allTechnologies(raw).map((t) => t.name)).toEqual(["Google Analytics", "Intercom", "Mailchimp", "Salesforce"]);
   });
 });
