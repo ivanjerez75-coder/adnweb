@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import type { JobBoardRef, JobPlatform, SiteData, SitePage, Technology } from "../types";
+import { isSectionPath, sectionOf } from "./sections";
 
 export interface ParsedPage {
   page: SitePage;
@@ -37,18 +38,47 @@ const CTA_RE =
 const PRICE_RE =
   /[$€£]\s?(?:\d{1,3}(?:[.,\s]\d{3})+|\d{1,6})(?:[.,]\d{2})?(?!\d)|(?<![\d.,])(?:\d{1,3}(?:[.,\s]\d{3})+|\d{1,6})(?:[.,]\d{2})?\s?(?:€|EUR|USD|\$)/g;
 const TESTIMONIALS_RE =
-  /(testimonios|testimonials|reseñas|reviews|opiniones|casos de éxito|case studies|trusted by|confían en)/i;
-const FREE_RE =
-  /\b(plan gratuito|prueba gratuita|prueba gratis|empieza gratis|gratis para siempre|free plan|free trial|try (it )?(for )?free|start for free|free forever|get started for free)\b/i;
-const PRICING_PATH_RE = /\/(pricing|precios|tarifas|planes|plans)(\/|$)/i;
-const BLOG_PATH_RE = /\/(blog|noticias|news|articulos|recursos)(\/|$)/i;
-const BLOG_SUBDOMAIN_RE = /^(blog|noticias|news|articulos|recursos)\./i;
+  /(testimonios|testimonials|reseñas|reviews|opiniones|casos de éxito|case studies|trusted by|confían en|loved by|what our customers say|customer stories|wall of love|lo que dicen|clientes satisfechos)/i;
+/**
+ * Gratis en contexto de precios ("free plan", "it's free", "gratuito", "$0", "0 €"…).
+ * No cuenta "free shipping", "freelance", "envío gratis" ni importes como "$0.99" o "10 €".
+ */
+const FREE_RE = new RegExp(
+  [
+    String.raw`\b(?:plan gratuito|prueba gratuita|prueba gratis|empieza gratis|gratis para siempre|free plan|free trial|try (?:it )?(?:for )?free|start for free|free forever|get started for free|free tier|is free|it[’']s free|for free)\b`,
+    String.raw`(?<!\b(?:env[ií]os?|entregas?|devoluci[oó]n(?:es)?|shipping)\s)\b(?:gratis|gratuit[oa]s?)\b`,
+    String.raw`\$\s?0(?![.,]?\d)`,
+    String.raw`€\s?0(?![.,]?\d)`,
+    String.raw`(?<![\d.,])0(?:[.,]00)?\s?€`,
+  ].join("|"),
+  "i",
+);
+const BLOG_SUBDOMAIN_RE = /^(blog|blogs|noticias|news|articulos|recursos)\./i;
 
-const KEY_PAGE_KINDS: [string, RegExp][] = [
-  ["precios", PRICING_PATH_RE],
-  ["blog", /^\/(blog|noticias|news|articulos|recursos)\/?$/i],
-  ["about", /\/(about|about-us|nosotros|sobre-nosotros|quienes-somos|empresa|company)(\/|$)/i],
-  ["producto", /\/(product|producto|productos|features|funcionalidades)(\/|$)/i],
+/**
+ * Código de idioma saneado ("pt-BR" → "pt"). Descarta lo que no sea un código de 2-3 letras
+ * ("x-default", "es; ignora las reglas…"): este valor llega al prompt.
+ */
+function languageCode(value: string | undefined): string | null {
+  const code = (value ?? "").trim().toLowerCase().split(/[-_]/)[0];
+  return /^[a-z]{2,3}$/.test(code) ? code : null;
+}
+
+/** Ruta de una página de precios ("/pricing", "/es/precios"; no "/blog/pricing-tips" ni "/help/pricing"). */
+export const isPricingPath = (pathname: string) => isSectionPath(pathname, "precios");
+
+const KEY_PAGE_KINDS: [string, (pathname: string) => boolean][] = [
+  ["precios", isPricingPath],
+  [
+    "blog",
+    (path) => {
+      // Solo el índice del blog ("/blog", "/es/blog"); en Shopify, "/blogs/<nombre>".
+      const s = sectionOf(path);
+      return s?.section === "blog" && (s.rest.length === 0 || (path.toLowerCase().includes("/blogs/") && s.rest.length === 1));
+    },
+  ],
+  ["about", (path) => isSectionPath(path, "about")],
+  ["producto", (path) => isSectionPath(path, "producto")],
 ];
 
 const clean = (s: string) => s.replace(/\s+/g, " ").trim();
@@ -177,13 +207,13 @@ export function parsePage(html: string, pageUrl: string): ParsedPage {
     ),
   );
 
-  const lang = $("html").attr("lang")?.toLowerCase().split("-")[0] || null;
+  const lang = languageCode($("html").attr("lang"));
   const hreflangs = Array.from(
     new Set(
       $('link[rel="alternate"][hreflang]')
-        .map((_, el) => ($(el).attr("hreflang") ?? "").toLowerCase().split("-")[0])
+        .map((_, el) => languageCode($(el).attr("hreflang")))
         .get()
-        .filter((h) => h && h !== "x"),
+        .filter((h): h is string => h !== null),
     ),
   );
 
@@ -214,7 +244,7 @@ export function pickKeyPages(links: string[], homeUrl: string, max = 5): string[
     if (picked.length >= max) break;
     const url = new URL(link);
     if (bareHost(url.hostname) !== homeHost || url.pathname === "/") continue;
-    const kind = KEY_PAGE_KINDS.find(([, re]) => re.test(url.pathname))?.[0];
+    const kind = KEY_PAGE_KINDS.find(([, test]) => test(url.pathname))?.[0];
     if (!kind || usedKinds.has(kind)) continue;
     usedKinds.add(kind);
     picked.push(link);
@@ -245,9 +275,9 @@ export function buildSiteData(finalUrl: string, pages: ParsedPage[], technologie
     ),
     socialLinks,
     ctas: Array.from(new Set(pages.flatMap((p) => p.ctas))).slice(0, 20),
-    hasPricingPage: sameHostPaths.some((path) => PRICING_PATH_RE.test(path)),
+    hasPricingPage: sameHostPaths.some(isPricingPath),
     pricesFound: Array.from(new Set(pages.flatMap((p) => p.prices))).slice(0, 20),
-    hasBlog: hasBlogSubdomain || sameHostPaths.some((path) => BLOG_PATH_RE.test(path)),
+    hasBlog: hasBlogSubdomain || sameHostPaths.some((path) => isSectionPath(path, "blog")),
     hasTestimonials: pages.some((p) => p.mentionsTestimonials),
     hasFreePlanOrTrial: pages.some((p) => p.mentionsFreeOrTrial),
     hasAppLinks: pages.some((p) => p.hasAppLinks),
