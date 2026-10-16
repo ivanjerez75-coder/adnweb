@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 const confidence = z.enum(["baja", "media", "alta"]);
+const claim = z.object({ texto: z.string(), senales: z.array(z.string()) });
 const subscore = z.object({ valor: z.number().min(0).max(100), senales: z.array(z.string()) });
 
 export const aiOutputSchema = z.object({
@@ -31,8 +32,8 @@ export const aiOutputSchema = z.object({
       monetizacion: subscore,
       diferenciacion: subscore,
     }),
-    fortalezas: z.array(z.string()),
-    debilidades: z.array(z.string()),
+    fortalezas: z.array(claim),
+    debilidades: z.array(claim),
     competidores: z.array(z.object({ nombre: z.string(), dominio: z.string().nullable() })),
     conclusion: z.string(),
   }),

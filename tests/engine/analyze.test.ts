@@ -39,11 +39,21 @@ describe("buildReport", () => {
     expect(report.senales.map((s) => s.id)).toContain("mercado_competidores_con_app");
   });
 
-  it("calcula la puntuación global y limpia señales inexistentes del veredicto", async () => {
+  it("calcula la puntuación global y valida fortalezas y debilidades contra señales reales", async () => {
     const report = await buildReport(raw, { models: [fakeModel], now: () => NOW });
-    expect(report.veredicto.puntuacion).toBe(60); // (70 + 50 + 80 + 41) / 4 = 60,25
+    expect(report.veredicto.puntuacion).toBe(60);
     expect(report.veredicto.puntuaciones.traccion.senales).toEqual(["trafico_en_caida"]);
-    expect(report.veredicto.fortalezas).toHaveLength(3);
+    expect(report.veredicto.fortalezas.map((f) => [f.texto, f.evidencias.map((e) => e.id)])).toEqual([
+      ["Marca consolidada", ["empresa_consolidada"]],
+    ]);
+    expect(report.veredicto.debilidades.map((d) => d.texto)).toEqual(["Web lenta en móvil", "Sin app", "Tráfico en caída"]);
+  });
+
+  it("incluye ficha de empresa, hechos y estado de fuentes", async () => {
+    const report = await buildReport(raw, { models: [fakeModel], now: () => NOW });
+    expect(report.empresa.nombre).toEqual({ valor: "Facturo", fuente: "web" });
+    expect(report.hechos.app).toBe("no");
+    expect(report.fuentes.appstore).toBe("no_aplica");
   });
 
   it("marca el análisis como limitado si apenas hay texto", async () => {

@@ -1,5 +1,8 @@
 import { computeAnchors, employeeRevenueAnchor, type Anchors, type RevenueAnchor } from "./anchors";
-import { extractSignals } from "./signals";
+import { validateClaims, type Claim } from "./claims";
+import { buildEmpresa, type EmpresaFicha } from "./empresa";
+import { computeFacts, type Facts } from "./facts";
+import { allTechnologies, extractSignals } from "./signals";
 import { validateOpportunities, type Opportunity } from "./opportunities";
 import { buildPrompt } from "./ai/prompt";
 import { generateAiOutput, type JsonModel } from "./ai/providers";
@@ -14,6 +17,9 @@ export interface Report {
   dominio: string;
   generadoEn: string;
   analisisLimitado: boolean;
+  empresa: EmpresaFicha;
+  hechos: Facts;
+  fuentes: RawData["fuentes"];
   resumen: AiOutput["resumen"];
   trafico: {
     visitasMes: Range | null;
@@ -31,8 +37,8 @@ export interface Report {
   veredicto: {
     puntuacion: number;
     puntuaciones: Record<SubscoreKey, Subscore>;
-    fortalezas: string[];
-    debilidades: string[];
+    fortalezas: Claim[];
+    debilidades: Claim[];
     competidores: AiOutput["veredicto"]["competidores"];
     conclusion: string;
   };
@@ -126,7 +132,10 @@ export async function buildReport(
   const signals = [...baseSignals, ...marketSignals.filter((m) => !baseSignals.some((b) => b.id === m.id))];
   const knownIds = new Set(signals.map((s) => s.id));
 
-  const { oportunidades, pistas } = validateOpportunities(ai.oportunidades, signals);
+  const { oportunidades, pistas } = validateOpportunities(
+    ai.oportunidades,
+    signals.filter((s) => s.polarity === "negativa"),
+  );
 
   const puntuaciones = Object.fromEntries(
     SUBSCORE_KEYS.map((key) => {
@@ -144,6 +153,9 @@ export async function buildReport(
     dominio: raw.domain,
     generadoEn: now.toISOString(),
     analisisLimitado: !raw.site || raw.site.textLength < 500,
+    empresa: buildEmpresa(raw),
+    hechos: computeFacts(raw),
+    fuentes: raw.fuentes,
     resumen: ai.resumen,
     trafico: {
       visitasMes: anchors.visitasMes,
@@ -152,7 +164,7 @@ export async function buildReport(
       redes: raw.site?.socialLinks ?? {},
       pagespeed: raw.pagespeed,
       antiguedadAnios: anchors.antiguedadAnios,
-      tecnologias: raw.site?.technologies ?? [],
+      tecnologias: allTechnologies(raw),
       comentario: ai.trafico.comentario,
     },
     ingresos,
@@ -161,8 +173,8 @@ export async function buildReport(
     veredicto: {
       puntuacion,
       puntuaciones,
-      fortalezas: ai.veredicto.fortalezas.slice(0, 3),
-      debilidades: ai.veredicto.debilidades.slice(0, 3),
+      fortalezas: validateClaims(ai.veredicto.fortalezas, signals, "positiva"),
+      debilidades: validateClaims(ai.veredicto.debilidades, signals, "negativa"),
       competidores: ai.veredicto.competidores.slice(0, 5),
       conclusion: ai.veredicto.conclusion,
     },
