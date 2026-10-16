@@ -26,7 +26,7 @@ describe("buildReport", () => {
       visitasMes: { min: 500_000, max: 5_000_000 },
       confianza: "media",
       tendencia: "baja",
-      antiguedadAnios: 11,
+      antiguedadDominioAnios: 11,
     });
     expect(report.ingresos.anualMin).toBe(300000);
   });
@@ -39,11 +39,29 @@ describe("buildReport", () => {
     expect(report.senales.map((s) => s.id)).toContain("mercado_competidores_con_app");
   });
 
-  it("calcula la puntuación global y limpia señales inexistentes del veredicto", async () => {
+  it("calcula la puntuación global y valida fortalezas y debilidades contra señales reales", async () => {
     const report = await buildReport(raw, { models: [fakeModel], now: () => NOW });
-    expect(report.veredicto.puntuacion).toBe(60); // (70 + 50 + 80 + 41) / 4 = 60,25
+    expect(report.veredicto.puntuacion).toBe(60);
     expect(report.veredicto.puntuaciones.traccion.senales).toEqual(["trafico_en_caida"]);
-    expect(report.veredicto.fortalezas).toHaveLength(3);
+    expect(report.veredicto.fortalezas.map((f) => [f.texto, f.evidencias.map((e) => e.id)])).toEqual([
+      ["Marca consolidada", ["empresa_consolidada"]],
+    ]);
+    expect(report.veredicto.debilidades.map((d) => d.texto)).toEqual(["Web lenta en móvil", "Sin app", "Tráfico en caída"]);
+  });
+
+  it("incluye ficha de empresa, hechos y estado de fuentes", async () => {
+    const report = await buildReport(raw, { models: [fakeModel], now: () => NOW });
+    expect(report.empresa.nombre).toEqual({ valor: "Facturo", fuente: "web" });
+    expect(report.hechos.app).toBe("no");
+    expect(report.fuentes.appstore).toBe("no_aplica");
+  });
+
+  it("informa de la redirección y de si se adoptó el dominio final", async () => {
+    expect((await buildReport(raw, { models: [fakeModel], now: () => NOW })).redireccion).toBeNull();
+    const foreign = makeRaw({ finalDomain: "instagram.com", companyNameFromPage: false });
+    expect((await buildReport(foreign, { models: [fakeModel], now: () => NOW })).redireccion).toEqual({ a: "instagram.com", adoptada: false });
+    const adopted = makeRaw({ domain: "notion.so", rootDomain: "notion.com", finalDomain: "notion.com" });
+    expect((await buildReport(adopted, { models: [fakeModel], now: () => NOW })).redireccion).toEqual({ a: "notion.com", adoptada: true });
   });
 
   it("marca el análisis como limitado si apenas hay texto", async () => {
@@ -138,7 +156,7 @@ describe("analyze", () => {
 describe("depsFromEnv", () => {
   it("configura Gemini y Groq según las variables disponibles", () => {
     const deps = depsFromEnv({ GEMINI_API_KEY: "g", GROQ_API_KEY: "q", GROQ_MODEL: "m" } as unknown as NodeJS.ProcessEnv);
-    expect(deps.models.map((m) => m.name)).toEqual(["gemini:gemini-2.5-flash", "groq:m"]);
+    expect(deps.models.map((m) => m.name)).toEqual(["gemini:gemini-3.5-flash", "gemini:gemini-flash-lite-latest", "groq:m"]);
     expect(deps.radarToken).toBeUndefined();
   });
 });

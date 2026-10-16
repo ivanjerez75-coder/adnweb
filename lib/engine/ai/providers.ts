@@ -4,7 +4,8 @@ import { aiOutputSchema, type AiOutput } from "./schema";
 
 export interface JsonModel {
   name: string;
-  generate: (prompt: string) => Promise<string>;
+  /** timeoutMs: plazo máximo de esta llamada (se recorta a 60 s). */
+  generate: (prompt: string, opts?: { timeoutMs?: number }) => Promise<string>;
 }
 
 export type AiFailureKind = "quota" | "invalid" | "unconfigured" | "unavailable";
@@ -20,19 +21,37 @@ export class AiUnavailableError extends Error {
 }
 
 const AI_TIMEOUT_MS = 60_000;
+/** Presupuesto total por defecto de la generación (el informe debe caber en el límite de Vercel). */
+export const AI_BUDGET_MS = 45_000;
+/** Margen mínimo para que merezca la pena un intento más. */
+const MIN_ATTEMPT_MS = 3000;
 
-export function geminiModel(apiKey: string, model = "gemini-2.5-flash"): JsonModel {
+const callTimeout = (opts?: { timeoutMs?: number }) => Math.min(AI_TIMEOUT_MS, opts?.timeoutMs ?? AI_TIMEOUT_MS);
+
+export const DEFAULT_GEMINI_MODELS = ["gemini-3.5-flash", "gemini-flash-lite-latest"];
+export const OVERLOAD_BACKOFF_MS = [2000, 5000];
+
+const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+export function geminiModelNames(env: { GEMINI_MODELS?: string; GEMINI_MODEL?: string }): string[] {
+  const listed = (env.GEMINI_MODELS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const chain = listed.length > 0 ? listed : [...DEFAULT_GEMINI_MODELS];
+  const legacy = env.GEMINI_MODEL?.trim();
+  return legacy ? [legacy, ...chain.filter((m) => m !== legacy)] : chain;
+}
+
+export function geminiModel(apiKey: string, model = DEFAULT_GEMINI_MODELS[0]): JsonModel {
   const ai = new GoogleGenAI({ apiKey });
   return {
     name: `gemini:${model}`,
-    generate: async (prompt) => {
+    generate: async (prompt, opts) => {
       const response = await ai.models.generateContent({
         model,
         contents: prompt,
         config: {
           responseMimeType: "application/json",
           temperature: 0.3,
-          abortSignal: AbortSignal.timeout(AI_TIMEOUT_MS),
+          abortSignal: AbortSignal.timeout(callTimeout(opts)),
         },
       });
       return response.text ?? "";
@@ -43,7 +62,7 @@ export function geminiModel(apiKey: string, model = "gemini-2.5-flash"): JsonMod
 export function groqModel(apiKey: string, model = "llama-3.3-70b-versatile", fetcher: Fetcher = fetch): JsonModel {
   return {
     name: `groq:${model}`,
-    generate: async (prompt) => {
+    generate: async (prompt, opts) => {
       const res = await fetcher("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
@@ -53,7 +72,7 @@ export function groqModel(apiKey: string, model = "llama-3.3-70b-versatile", fet
           response_format: { type: "json_object" },
           messages: [{ role: "user", content: prompt }],
         }),
-        signal: AbortSignal.timeout(AI_TIMEOUT_MS),
+        signal: AbortSignal.timeout(callTimeout(opts)),
       });
       if (!res.ok) throw new Error(`Groq respondió ${res.status}`);
       const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
@@ -83,16 +102,27 @@ export async function generateAiOutput(
   prompt: string,
   models: JsonModel[],
   attemptsPerModel = 3,
+  sleep: (ms: number) => Promise<void> = defaultSleep,
+  budgetMs = AI_BUDGET_MS,
+  now: () => number = () => Date.now(),
 ): Promise<AiOutput> {
   const errors: string[] = [];
   const lastReasons: FailureReason[] = [];
+  const started = now();
+  const remaining = () => budgetMs - (now() - started);
+  let outOfTime = false;
 
-  for (const model of models) {
+  models: for (const model of models) {
     let lastReason: FailureReason = "unavailable";
+    let overloadRetries = 0;
     for (let attempt = 0; attempt < attemptsPerModel; attempt++) {
+      if (remaining() < MIN_ATTEMPT_MS) {
+        outOfTime = true;
+        break models;
+      }
       let text: string;
       try {
-        text = await model.generate(prompt);
+        text = await model.generate(prompt, { timeoutMs: remaining() });
       } catch (error) {
         errors.push(`${model.name}: ${errorMessage(error)}`);
         if (isQuotaError(error)) {
@@ -100,7 +130,22 @@ export async function generateAiOutput(
           break; // cupo agotado: pasar al siguiente proveedor
         }
         lastReason = "unavailable";
-        if (isOverloadedError(error)) break; // servicio saturado: pasar al siguiente proveedor
+        if (isOverloadedError(error)) {
+          // Saturación pasajera: esperar y reintentar el mismo modelo sin gastar un intento.
+          if (overloadRetries < OVERLOAD_BACKOFF_MS.length) {
+            const wait = OVERLOAD_BACKOFF_MS[overloadRetries++];
+            if (remaining() < MIN_ATTEMPT_MS) {
+              outOfTime = true;
+              break models;
+            }
+            // Una espera que no deja margen para otro intento se salta: se pasa al siguiente modelo.
+            if (wait + MIN_ATTEMPT_MS > remaining()) break;
+            await sleep(wait);
+            attempt--;
+            continue;
+          }
+          break; // sigue saturado: pasar al siguiente modelo
+        }
         continue;
       }
       lastReason = "invalid";
@@ -113,6 +158,13 @@ export async function generateAiOutput(
       }
     }
     lastReasons.push(lastReason);
+  }
+
+  if (outOfTime) {
+    throw new AiUnavailableError(
+      `Se agotó el tiempo para generar el informe con IA (${Math.round(budgetMs / 1000)} s).${errors.length > 0 ? ` ${errors.join(" | ")}` : ""}`,
+      "unavailable",
+    );
   }
 
   const kind = failureKind(lastReasons);

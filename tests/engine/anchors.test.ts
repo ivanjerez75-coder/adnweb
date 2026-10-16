@@ -21,7 +21,9 @@ describe("computeAnchors", () => {
     expect(computeAnchors(makeRaw(), NOW)).toEqual({
       visitasMes: { min: 5_000_000, max: 50_000_000 },
       confianzaTrafico: "media",
-      antiguedadAnios: 11,
+      antiguedadDominioAnios: 11,
+      ingresosPublicos: null,
+      empleados: null,
     });
   });
 
@@ -59,6 +61,6 @@ describe("computeAnchors", () => {
   it("no estima tráfico sin fuentes y usa Wayback si no hay RDAP", () => {
     const a = computeAnchors(makeRaw({ tranco: null, radar: null, rdap: null }), NOW);
     expect(a.visitasMes).toBeNull();
-    expect(a.antiguedadAnios).toBe(11);
+    expect(a.antiguedadDominioAnios).toBe(11);
   });
 });

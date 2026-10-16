@@ -2,7 +2,7 @@ import { normalizeUrl } from "./url";
 import { createSafeGetter } from "./safe-fetch";
 import { collect, type CollectDeps, type StepReporter } from "./collect";
 import { buildReport, type Report } from "./report";
-import { geminiModel, groqModel, type JsonModel } from "./ai/providers";
+import { geminiModel, geminiModelNames, groqModel, type JsonModel } from "./ai/providers";
 import type { RawData } from "./types";
 
 export interface AnalyzeDeps extends CollectDeps {
@@ -22,7 +22,9 @@ export async function analyze(
 
 export function depsFromEnv(env: NodeJS.ProcessEnv = process.env): AnalyzeDeps {
   const models: JsonModel[] = [];
-  if (env.GEMINI_API_KEY) models.push(geminiModel(env.GEMINI_API_KEY, env.GEMINI_MODEL || undefined));
+  if (env.GEMINI_API_KEY) {
+    for (const name of geminiModelNames({ GEMINI_MODELS: env.GEMINI_MODELS, GEMINI_MODEL: env.GEMINI_MODEL })) models.push(geminiModel(env.GEMINI_API_KEY, name));
+  }
   if (env.GROQ_API_KEY) models.push(groqModel(env.GROQ_API_KEY, env.GROQ_MODEL || undefined));
 
   return {

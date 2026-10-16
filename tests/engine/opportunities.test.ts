@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { confidenceFor, validateOpportunities } from "../../lib/engine/opportunities";
 import type { Signal, SourceId } from "../../lib/engine/types";
 
-const sig = (id: string, source: SourceId): Signal => ({ id, family: "producto", source, label: id });
+const sig = (id: string, source: SourceId): Signal => ({ id, family: "producto", source, label: id, polarity: "negativa" });
 
 const SIGNALS: Signal[] = [
   sig("a_web", "web"),

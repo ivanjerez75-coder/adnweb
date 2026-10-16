@@ -24,6 +24,16 @@ export function fakeFetcher(overrides: Record<string, Route> = {}): Fetcher {
       url.includes("collapse=digest")
         ? Response.json([["timestamp", "digest"], ["20251101000000", "A"]])
         : Response.json([["timestamp"], ["20150401000000"]]),
+    "cloudflare-dns.com": (url) =>
+      url.includes("type=MX")
+        ? Response.json({ Status: 0, Answer: [{ type: 15, data: "1 aspmx.l.google.com." }] })
+        : Response.json({ Status: 0, Answer: [{ type: 16, data: '"v=spf1 include:_spf.google.com include:servers.mcsv.net ~all"' }] }),
+    "hn.algolia.com": () => Response.json({ nbHits: 3, hits: [{ title: "Show HN: Facturo", points: 42 }] }),
+    "itunes.apple.com": () => Response.json({ resultCount: 0, results: [] }),
+    "wikidata.org": () => Response.json({ search: [] }),
+    "greenhouse.io": () => new Response("", { status: 404 }),
+    "api.lever.co": () => new Response("", { status: 404 }),
+    "ashbyhq.com": () => new Response("", { status: 404 }),
     ...overrides,
   };
   return async (url) => {

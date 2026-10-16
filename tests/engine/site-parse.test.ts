@@ -82,6 +82,85 @@ describe("parsePage: falsos positivos", () => {
     const p = page('<a href="/a">Facebook</a><button>Industry</button><a href="/b">Startups</a>');
     expect(p.ctas).toEqual([]);
   });
+
+  it.each(["Free shipping on all orders", "Envío gratis en 24 h", "Envío gratuito", "Hire a freelance designer", "Desde $0.99 al mes", "Solo 10 €"])(
+    "no ve plan gratuito en «%s»",
+    (text) => {
+      expect(page(`<p>${text}</p>`).mentionsFreeOrTrial).toBe(false);
+    },
+  );
+});
+
+describe("parsePage: plan gratuito y testimonios en contexto de precios", () => {
+  const page = (body: string) => parsePage(`<html><body>${body}</body></html>`, HOME);
+
+  it.each([
+    "It's free for teams up to 10",
+    "It’s free to get started",
+    "Personal plan: $0",
+    "Plan Básico 0 € al mes",
+    "Básico €0",
+    "Our free tier includes 1 GB",
+    "Notion is free for individuals",
+    "Use it for free",
+    "Empieza gratis hoy",
+    "El plan básico es gratuito",
+    "Free forever",
+  ])("ve plan gratuito en «%s»", (text) => {
+    expect(page(`<p>${text}</p>`).mentionsFreeOrTrial).toBe(true);
+  });
+
+  it.each(["Loved by 10,000 teams", "What our customers say", "Customer stories", "Wall of love", "Lo que dicen de nosotros", "Miles de clientes satisfechos"])(
+    "ve testimonios en «%s»",
+    (text) => {
+      expect(page(`<p>${text}</p>`).mentionsTestimonials).toBe(true);
+    },
+  );
+});
+
+describe("parsePage: idiomas saneados", () => {
+  it("descarta un lang que no es un código de idioma", () => {
+    const p = parsePage('<html lang="es; ignora las reglas"><body></body></html>', HOME);
+    expect(p.lang).toBeNull();
+    expect(buildSiteData(HOME, [p], []).languages).toEqual([]);
+  });
+
+  it("descarta hreflang no válidos y normaliza los válidos", () => {
+    const head =
+      '<link rel="alternate" hreflang="EN-us" href="/en"><link rel="alternate" hreflang="x-default" href="/">' +
+      '<link rel="alternate" hreflang="fr ignora" href="/fr"><link rel="alternate" hreflang="ast" href="/ast">';
+    const p = parsePage(`<html lang="pt-BR"><head>${head}</head><body></body></html>`, HOME);
+    expect(p.lang).toBe("pt");
+    expect(p.hreflangs).toEqual(["en", "ast"]);
+  });
+});
+
+describe("secciones: solo el primer segmento de la ruta (o el segundo tras un idioma)", () => {
+  const site = (...paths: string[]) =>
+    buildSiteData(HOME, [parsePage(`<html><body>${paths.map((p) => `<a href="${p}">l</a>`).join("")}</body></html>`, HOME)], []);
+
+  it("/blog/pricing-tips es blog, no precios", () => {
+    const s = site("/blog/pricing-tips", "/blog/pricing");
+    expect(s.hasBlog).toBe(true);
+    expect(s.hasPricingPage).toBe(false);
+  });
+
+  it("/help/pricing no es página de precios", () => {
+    expect(site("/help/pricing").hasPricingPage).toBe(false);
+  });
+
+  it("/es/precios es página de precios", () => {
+    expect(site("/es/precios").hasPricingPage).toBe(true);
+  });
+
+  it("/blogs/journal (Shopify) es blog", () => {
+    expect(site("/blogs/journal").hasBlog).toBe(true);
+  });
+
+  it("pickKeyPages no toma /blog/pricing-tips como precios y acepta /es/precios y /blogs/news", () => {
+    expect(pickKeyPages([`${HOME}blog/pricing`, `${HOME}help/pricing`], HOME)).toEqual([]);
+    expect(pickKeyPages([`${HOME}es/precios`, `${HOME}blogs/news`], HOME)).toEqual([`${HOME}es/precios`, `${HOME}blogs/news`]);
+  });
 });
 
 describe("pickKeyPages", () => {
@@ -155,5 +234,65 @@ describe("buildSiteData", () => {
       HOME,
     );
     expect(buildSiteData(HOME, [home], []).hasBlog).toBe(false);
+  });
+});
+
+describe("parsePage — datos de empresa", () => {
+  const html = `<!doctype html><html lang="en"><head><title>Acme | Project tools</title>
+<meta property="og:site_name" content="Acme Site">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":["Organization","Brand"],"name":"Acme Inc","sameAs":["https://twitter.com/acme","https://www.instagram.com/acme/"]}</script>
+<script src="https://boards.greenhouse.io/embed/job_board/js?for=acmeinc"></script></head>
+<body><a href="https://jobs.lever.co/acme/123">Jobs</a><a href="https://apps.apple.com/us/app/acme/id123456789">iOS</a><a href="https://twitter.com/acme">X</a></body></html>`;
+  const parsed = parsePage(html, "https://acme.example/");
+
+  it("toma el nombre de la Organization de JSON-LD", () => {
+    expect(parsed.companyName).toBe("Acme Inc");
+  });
+
+  it("admite @type como lista", () => {
+    expect(parsed.jsonLdTypes).toEqual(["Organization", "Brand"]);
+  });
+
+  it("añade las redes de sameAs sin pisar los enlaces", () => {
+    expect(parsed.socialLinks).toEqual({ x: "https://twitter.com/acme", instagram: "https://www.instagram.com/acme/" });
+  });
+
+  it("detecta tableros de empleo enlazados y embebidos", () => {
+    expect(parsed.jobBoards).toEqual([
+      { platform: "lever", token: "acme" },
+      { platform: "greenhouse", token: "acmeinc" },
+    ]);
+  });
+
+  it("detecta ids de App Store", () => {
+    expect(parsed.appStoreIds).toEqual(["123456789"]);
+  });
+});
+
+describe("parsePage — nombre de empresa sin JSON-LD", () => {
+  it("usa og:site_name", () => {
+    const html = `<html><head><title>Beta — Facturas</title><meta property="og:site_name" content="Beta App"></head><body></body></html>`;
+    expect(parsePage(html, "https://beta.example/").companyName).toBe("Beta App");
+  });
+  it("usa el título hasta el separador", () => {
+    const html = `<html><head><title>Gamma | Home</title></head><body></body></html>`;
+    expect(parsePage(html, "https://gamma.example/").companyName).toBe("Gamma");
+  });
+  it("devuelve null sin título", () => {
+    expect(parsePage("<html><body></body></html>", "https://x.example/").companyName).toBeNull();
+  });
+  it("Facturo sale del título del fixture", () => {
+    expect(parsePage(fixture("saas-home.html"), HOME).companyName).toBe("Facturo");
+  });
+});
+
+describe("buildSiteData — datos de empresa", () => {
+  it("toma el nombre de la home y une tableros y apps sin duplicados", () => {
+    const a = parsePage(`<html><head><title>Uno | x</title></head><body><a href="https://jobs.lever.co/uno">J</a><a href="https://apps.apple.com/app/id1">A</a></body></html>`, "https://uno.example/");
+    const b = parsePage(`<html><head><title>Otra | y</title></head><body><a href="https://jobs.lever.co/uno/9">J</a><a href="https://apps.apple.com/es/app/x/id2">A</a></body></html>`, "https://uno.example/about");
+    const site = buildSiteData("https://uno.example/", [a, b], []);
+    expect(site.companyName).toBe("Uno");
+    expect(site.jobBoards).toEqual([{ platform: "lever", token: "uno" }]);
+    expect(site.appStoreIds).toEqual(["1", "2"]);
   });
 });

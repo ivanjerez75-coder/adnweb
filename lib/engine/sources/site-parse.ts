@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
-import type { SiteData, SitePage, Technology } from "../types";
+import type { JobBoardRef, JobPlatform, SiteData, SitePage, Technology } from "../types";
+import { isSectionPath, sectionOf } from "./sections";
 
 export interface ParsedPage {
   page: SitePage;
@@ -14,6 +15,9 @@ export interface ParsedPage {
   mentionsTestimonials: boolean;
   mentionsFreeOrTrial: boolean;
   textLength: number;
+  companyName: string | null;
+  jobBoards: JobBoardRef[];
+  appStoreIds: string[];
 }
 
 const SOCIAL_HOSTS: Record<string, string> = {
@@ -34,45 +38,108 @@ const CTA_RE =
 const PRICE_RE =
   /[$€£]\s?(?:\d{1,3}(?:[.,\s]\d{3})+|\d{1,6})(?:[.,]\d{2})?(?!\d)|(?<![\d.,])(?:\d{1,3}(?:[.,\s]\d{3})+|\d{1,6})(?:[.,]\d{2})?\s?(?:€|EUR|USD|\$)/g;
 const TESTIMONIALS_RE =
-  /(testimonios|testimonials|reseñas|reviews|opiniones|casos de éxito|case studies|trusted by|confían en)/i;
-const FREE_RE =
-  /\b(plan gratuito|prueba gratuita|prueba gratis|empieza gratis|gratis para siempre|free plan|free trial|try (it )?(for )?free|start for free|free forever|get started for free)\b/i;
-const PRICING_PATH_RE = /\/(pricing|precios|tarifas|planes|plans)(\/|$)/i;
-const BLOG_PATH_RE = /\/(blog|noticias|news|articulos|recursos)(\/|$)/i;
-const BLOG_SUBDOMAIN_RE = /^(blog|noticias|news|articulos|recursos)\./i;
+  /(testimonios|testimonials|reseñas|reviews|opiniones|casos de éxito|case studies|trusted by|confían en|loved by|what our customers say|customer stories|wall of love|lo que dicen|clientes satisfechos)/i;
+/**
+ * Gratis en contexto de precios ("free plan", "it's free", "gratuito", "$0", "0 €"…).
+ * No cuenta "free shipping", "freelance", "envío gratis" ni importes como "$0.99" o "10 €".
+ */
+const FREE_RE = new RegExp(
+  [
+    String.raw`\b(?:plan gratuito|prueba gratuita|prueba gratis|empieza gratis|gratis para siempre|free plan|free trial|try (?:it )?(?:for )?free|start for free|free forever|get started for free|free tier|is free|it[’']s free|for free)\b`,
+    String.raw`(?<!\b(?:env[ií]os?|entregas?|devoluci[oó]n(?:es)?|shipping)\s)\b(?:gratis|gratuit[oa]s?)\b`,
+    String.raw`\$\s?0(?![.,]?\d)`,
+    String.raw`€\s?0(?![.,]?\d)`,
+    String.raw`(?<![\d.,])0(?:[.,]00)?\s?€`,
+  ].join("|"),
+  "i",
+);
+const BLOG_SUBDOMAIN_RE = /^(blog|blogs|noticias|news|articulos|recursos)\./i;
 
-const KEY_PAGE_KINDS: [string, RegExp][] = [
-  ["precios", PRICING_PATH_RE],
-  ["blog", /^\/(blog|noticias|news|articulos|recursos)\/?$/i],
-  ["about", /\/(about|about-us|nosotros|sobre-nosotros|quienes-somos|empresa|company)(\/|$)/i],
-  ["producto", /\/(product|producto|productos|features|funcionalidades)(\/|$)/i],
+/**
+ * Código de idioma saneado ("pt-BR" → "pt"). Descarta lo que no sea un código de 2-3 letras
+ * ("x-default", "es; ignora las reglas…"): este valor llega al prompt.
+ */
+function languageCode(value: string | undefined): string | null {
+  const code = (value ?? "").trim().toLowerCase().split(/[-_]/)[0];
+  return /^[a-z]{2,3}$/.test(code) ? code : null;
+}
+
+/** Ruta de una página de precios ("/pricing", "/es/precios"; no "/blog/pricing-tips" ni "/help/pricing"). */
+export const isPricingPath = (pathname: string) => isSectionPath(pathname, "precios");
+
+const KEY_PAGE_KINDS: [string, (pathname: string) => boolean][] = [
+  ["precios", isPricingPath],
+  [
+    "blog",
+    (path) => {
+      // Solo el índice del blog ("/blog", "/es/blog"); en Shopify, "/blogs/<nombre>".
+      const s = sectionOf(path);
+      return s?.section === "blog" && (s.rest.length === 0 || (path.toLowerCase().includes("/blogs/") && s.rest.length === 1));
+    },
+  ],
+  ["about", (path) => isSectionPath(path, "about")],
+  ["producto", (path) => isSectionPath(path, "producto")],
 ];
 
 const clean = (s: string) => s.replace(/\s+/g, " ").trim();
 const bareHost = (host: string) => host.toLowerCase().replace(/^www\./, "");
 
-function collectTypes(node: unknown, out: string[]): void {
+interface JsonLdInfo {
+  types: string[];
+  orgNames: string[];
+  sameAs: string[];
+}
+
+const ORG_TYPES = new Set(["Organization", "Corporation", "Company", "OnlineStore", "OnlineBusiness", "LocalBusiness", "NGO"]);
+
+function walkJsonLd(node: unknown, out: JsonLdInfo): void {
   if (Array.isArray(node)) {
-    node.forEach((n) => collectTypes(n, out));
-  } else if (node && typeof node === "object") {
-    const obj = node as Record<string, unknown>;
-    const type = obj["@type"];
-    if (typeof type === "string" && !out.includes(type)) out.push(type);
-    if (Array.isArray(obj["@graph"])) collectTypes(obj["@graph"], out);
+    node.forEach((n) => walkJsonLd(n, out));
+    return;
   }
+  if (!node || typeof node !== "object") return;
+  const obj = node as Record<string, unknown>;
+  const rawType = obj["@type"];
+  const types = Array.isArray(rawType)
+    ? rawType.filter((t): t is string => typeof t === "string")
+    : typeof rawType === "string"
+      ? [rawType]
+      : [];
+  for (const t of types) if (!out.types.includes(t)) out.types.push(t);
+  if (types.some((t) => ORG_TYPES.has(t))) {
+    if (typeof obj.name === "string" && obj.name.trim()) out.orgNames.push(obj.name.trim());
+    const sameAs = Array.isArray(obj.sameAs) ? obj.sameAs : [obj.sameAs];
+    for (const s of sameAs) if (typeof s === "string") out.sameAs.push(s);
+  }
+  if (Array.isArray(obj["@graph"])) walkJsonLd(obj["@graph"], out);
+}
+
+const JOB_HOSTS: Record<string, JobPlatform> = {
+  "boards.greenhouse.io": "greenhouse",
+  "job-boards.greenhouse.io": "greenhouse",
+  "jobs.lever.co": "lever",
+  "jobs.ashbyhq.com": "ashby",
+};
+const GREENHOUSE_EMBED_RE = /greenhouse\.io\/embed\/job_board(?:\/js)?\?for=([a-z0-9_-]+)/gi;
+const TITLE_SEPARATOR_RE = /\s+[—–|\-:·]\s+/;
+
+function titlePrefix(title: string): string | null {
+  const first = title.split(TITLE_SEPARATOR_RE)[0]?.trim();
+  return first ? first.slice(0, 60) : null;
 }
 
 export function parsePage(html: string, pageUrl: string): ParsedPage {
   const $ = cheerio.load(html);
 
-  const jsonLdTypes: string[] = [];
+  const jsonLd: JsonLdInfo = { types: [], orgNames: [], sameAs: [] };
   $('script[type="application/ld+json"]').each((_, el) => {
     try {
-      collectTypes(JSON.parse($(el).text()), jsonLdTypes);
+      walkJsonLd(JSON.parse($(el).text()), jsonLd);
     } catch {
       // JSON-LD mal formado: se ignora
     }
   });
+  const ogSiteName = clean($('meta[property="og:site_name"]').attr("content") ?? "");
 
   $("script, style, noscript, svg").remove();
 
@@ -90,6 +157,13 @@ export function parsePage(html: string, pageUrl: string): ParsedPage {
   const links: string[] = [];
   const socialLinks: Record<string, string> = {};
   let hasAppLinks = false;
+  const jobBoards: JobBoardRef[] = [];
+  const appStoreIds: string[] = [];
+  const addJobBoard = (platform: JobPlatform, token: string) => {
+    if (/^[a-z0-9_.-]+$/i.test(token) && token !== "embed" && !jobBoards.some((j) => j.platform === platform && j.token === token)) {
+      jobBoards.push({ platform, token });
+    }
+  };
   $("a[href]").each((_, el) => {
     let abs: URL;
     try {
@@ -102,10 +176,27 @@ export function parsePage(html: string, pageUrl: string): ParsedPage {
     const network = SOCIAL_HOSTS[host];
     if (network && !socialLinks[network]) socialLinks[network] = abs.toString();
     if (host === "apps.apple.com" || host === "play.google.com") hasAppLinks = true;
+    const jobPlatform = JOB_HOSTS[abs.hostname.toLowerCase()];
+    const firstSegment = abs.pathname.split("/").filter(Boolean)[0];
+    if (jobPlatform && firstSegment) addJobBoard(jobPlatform, firstSegment);
+    if (host === "apps.apple.com") {
+      const id = abs.pathname.match(/\/id(\d+)/)?.[1];
+      if (id && !appStoreIds.includes(id)) appStoreIds.push(id);
+    }
     abs.hash = "";
     const href = abs.toString();
     if (!links.includes(href)) links.push(href);
   });
+  for (const m of html.matchAll(GREENHOUSE_EMBED_RE)) addJobBoard("greenhouse", m[1]);
+  for (const s of jsonLd.sameAs) {
+    try {
+      const u = new URL(s);
+      const network = SOCIAL_HOSTS[bareHost(u.hostname)];
+      if (network && !socialLinks[network]) socialLinks[network] = u.toString();
+    } catch {
+      // URL de sameAs inválida: se ignora
+    }
+  }
 
   const ctas = Array.from(
     new Set(
@@ -116,13 +207,13 @@ export function parsePage(html: string, pageUrl: string): ParsedPage {
     ),
   );
 
-  const lang = $("html").attr("lang")?.toLowerCase().split("-")[0] || null;
+  const lang = languageCode($("html").attr("lang"));
   const hreflangs = Array.from(
     new Set(
       $('link[rel="alternate"][hreflang]')
-        .map((_, el) => ($(el).attr("hreflang") ?? "").toLowerCase().split("-")[0])
+        .map((_, el) => languageCode($(el).attr("hreflang")))
         .get()
-        .filter((h) => h && h !== "x"),
+        .filter((h): h is string => h !== null),
     ),
   );
 
@@ -133,12 +224,15 @@ export function parsePage(html: string, pageUrl: string): ParsedPage {
     hreflangs,
     socialLinks,
     ctas,
-    jsonLdTypes,
+    jsonLdTypes: jsonLd.types,
     prices: Array.from(new Set(text.match(PRICE_RE) ?? [])).slice(0, 20),
     hasAppLinks,
     mentionsTestimonials: TESTIMONIALS_RE.test(text),
     mentionsFreeOrTrial: FREE_RE.test(text),
     textLength: text.length,
+    companyName: jsonLd.orgNames[0] ?? (ogSiteName || null) ?? titlePrefix(title),
+    jobBoards,
+    appStoreIds,
   };
 }
 
@@ -150,7 +244,7 @@ export function pickKeyPages(links: string[], homeUrl: string, max = 5): string[
     if (picked.length >= max) break;
     const url = new URL(link);
     if (bareHost(url.hostname) !== homeHost || url.pathname === "/") continue;
-    const kind = KEY_PAGE_KINDS.find(([, re]) => re.test(url.pathname))?.[0];
+    const kind = KEY_PAGE_KINDS.find(([, test]) => test(url.pathname))?.[0];
     if (!kind || usedKinds.has(kind)) continue;
     usedKinds.add(kind);
     picked.push(link);
@@ -181,14 +275,19 @@ export function buildSiteData(finalUrl: string, pages: ParsedPage[], technologie
     ),
     socialLinks,
     ctas: Array.from(new Set(pages.flatMap((p) => p.ctas))).slice(0, 20),
-    hasPricingPage: sameHostPaths.some((path) => PRICING_PATH_RE.test(path)),
+    hasPricingPage: sameHostPaths.some(isPricingPath),
     pricesFound: Array.from(new Set(pages.flatMap((p) => p.prices))).slice(0, 20),
-    hasBlog: hasBlogSubdomain || sameHostPaths.some((path) => BLOG_PATH_RE.test(path)),
+    hasBlog: hasBlogSubdomain || sameHostPaths.some((path) => isSectionPath(path, "blog")),
     hasTestimonials: pages.some((p) => p.mentionsTestimonials),
     hasFreePlanOrTrial: pages.some((p) => p.mentionsFreeOrTrial),
     hasAppLinks: pages.some((p) => p.hasAppLinks),
     jsonLdTypes: Array.from(new Set(pages.flatMap((p) => p.jsonLdTypes))),
     textLength: pages.reduce((sum, p) => sum + p.textLength, 0),
     technologies,
+    companyName: pages[0]?.companyName ?? null,
+    jobBoards: pages
+      .flatMap((p) => p.jobBoards)
+      .filter((j, i, all) => all.findIndex((o) => o.platform === j.platform && o.token === j.token) === i),
+    appStoreIds: Array.from(new Set(pages.flatMap((p) => p.appStoreIds))),
   };
 }

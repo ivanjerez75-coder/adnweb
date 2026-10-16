@@ -32,6 +32,16 @@ describe("RDAP", () => {
     expect(parseRdap({})).toEqual({ registeredAt: null });
   });
 
+  it("envía User-Agent y Accept de RDAP (sin ellos rdap.org responde 403)", async () => {
+    let headers = new Headers();
+    await fetchRdap("x.example", async (_url, init) => {
+      headers = new Headers(init?.headers);
+      return Response.json({ events: [] });
+    });
+    expect(headers.get("user-agent")).toBe("DNAweb/0.1 (analizador de negocios digitales)");
+    expect(headers.get("accept")).toBe("application/rdap+json");
+  });
+
   it("trata 404 como desconocido", async () => {
     expect(await fetchRdap("x.example", async () => new Response("", { status: 404 }))).toEqual({ registeredAt: null });
   });

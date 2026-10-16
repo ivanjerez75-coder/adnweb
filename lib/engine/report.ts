@@ -1,7 +1,11 @@
-import { computeAnchors, type Anchors } from "./anchors";
-import { extractSignals } from "./signals";
+import { computeAnchors, employeeRevenueAnchor, type Anchors, type RevenueAnchor } from "./anchors";
+import { validateClaims, type Claim } from "./claims";
+import { buildEmpresa, type EmpresaFicha } from "./empresa";
+import { computeFacts, type Facts } from "./facts";
+import { allTechnologies, extractSignals } from "./signals";
 import { validateOpportunities, type Opportunity } from "./opportunities";
 import { buildPrompt } from "./ai/prompt";
+import { redirectionOf } from "./redirect";
 import { generateAiOutput, type JsonModel } from "./ai/providers";
 import type { AiOutput } from "./ai/schema";
 import type { StepReporter } from "./collect";
@@ -14,6 +18,11 @@ export interface Report {
   dominio: string;
   generadoEn: string;
   analisisLimitado: boolean;
+  empresa: EmpresaFicha;
+  hechos: Facts;
+  fuentes: RawData["fuentes"];
+  /** Redirección a otro dominio: a dónde y si se tomó como la misma empresa (adoptada). */
+  redireccion: { a: string; adoptada: boolean } | null;
   resumen: AiOutput["resumen"];
   trafico: {
     visitasMes: Range | null;
@@ -21,7 +30,7 @@ export interface Report {
     tendencia: Trend | "no estimable";
     redes: Record<string, string>;
     pagespeed: PageSpeedData | null;
-    antiguedadAnios: number | null;
+    antiguedadDominioAnios: number | null;
     tecnologias: Technology[];
     comentario: string;
   };
@@ -31,8 +40,8 @@ export interface Report {
   veredicto: {
     puntuacion: number;
     puntuaciones: Record<SubscoreKey, Subscore>;
-    fortalezas: string[];
-    debilidades: string[];
+    fortalezas: Claim[];
+    debilidades: Claim[];
     competidores: AiOutput["veredicto"]["competidores"];
     conclusion: string;
   };
@@ -57,12 +66,44 @@ function orderedPair(min: number | null, max: number | null): [number | null, nu
 export function clampIngresos(
   ingresos: AiOutput["ingresos"],
   anchors: Pick<Anchors, "visitasMes" | "confianzaTrafico">,
+  revenueAnchor: RevenueAnchor | null = null,
 ): AiOutput["ingresos"] {
-  if (anchors.visitasMes === null) {
+  if (anchors.visitasMes === null && revenueAnchor === null) {
     return { ...ingresos, anualMin: null, anualMax: null, valoracionMin: null, valoracionMax: null, confianza: "baja" };
   }
-  const [anualMin, anualMax] = orderedPair(ingresos.anualMin, ingresos.anualMax);
+  let [anualMin, anualMax] = orderedPair(ingresos.anualMin, ingresos.anualMax);
   const [valoracionMin, valoracionMax] = orderedPair(ingresos.valoracionMin, ingresos.valoracionMax);
+
+  if (revenueAnchor) {
+    const { min, max } = revenueAnchor.range;
+    if (anualMin !== null && anualMax !== null && anualMin <= max && anualMax >= min) {
+      anualMin = Math.max(anualMin, min);
+      anualMax = Math.min(anualMax, max);
+      // La confianza nunca supera la de la IA ni la del ancla.
+      const confianza =
+        CONFIDENCE_ORDER[Math.min(CONFIDENCE_ORDER.indexOf(ingresos.confianza), CONFIDENCE_ORDER.indexOf(revenueAnchor.confianza))];
+      // Una valoración por debajo de los ingresos ya acotados es incoherente: se descarta.
+      const incoherente = valoracionMax !== null && valoracionMax < anualMin;
+      return {
+        ...ingresos,
+        anualMin,
+        anualMax,
+        valoracionMin: incoherente ? null : valoracionMin,
+        valoracionMax: incoherente ? null : valoracionMax,
+        confianza,
+      };
+    }
+    // Sin solape: gana el ancla y la valoración de la IA (ligada a los ingresos descartados) se descarta.
+    return {
+      ...ingresos,
+      anualMin: min,
+      anualMax: max,
+      valoracionMin: null,
+      valoracionMax: null,
+      confianza: revenueAnchor.confianza,
+    };
+  }
+
   const cap = CONFIDENCE_ORDER.indexOf(anchors.confianzaTrafico);
   const confianza = CONFIDENCE_ORDER[Math.min(CONFIDENCE_ORDER.indexOf(ingresos.confianza), cap)];
   return { ...ingresos, anualMin, anualMax, valoracionMin, valoracionMax, confianza };
@@ -89,11 +130,15 @@ export async function buildReport(
     family: "mercado",
     source: "mercado",
     label: m.etiqueta,
+    polarity: "negativa",
   }));
   const signals = [...baseSignals, ...marketSignals.filter((m) => !baseSignals.some((b) => b.id === m.id))];
   const knownIds = new Set(signals.map((s) => s.id));
 
-  const { oportunidades, pistas } = validateOpportunities(ai.oportunidades, signals);
+  const { oportunidades, pistas } = validateOpportunities(
+    ai.oportunidades,
+    signals.filter((s) => s.polarity === "negativa"),
+  );
 
   const puntuaciones = Object.fromEntries(
     SUBSCORE_KEYS.map((key) => {
@@ -103,10 +148,18 @@ export async function buildReport(
   ) as Record<SubscoreKey, Subscore>;
   const puntuacion = Math.round(SUBSCORE_KEYS.reduce((sum, k) => sum + puntuaciones[k].valor, 0) / SUBSCORE_KEYS.length);
 
+  const revenueAnchor = anchors.ingresosPublicos ?? employeeRevenueAnchor(anchors.empleados, ai.resumen.tipoNegocio);
+  const ingresos = clampIngresos(ai.ingresos, anchors, revenueAnchor);
+  if (revenueAnchor) ingresos.suposiciones = [revenueAnchor.base, ...ingresos.suposiciones];
+
   return {
     dominio: raw.domain,
     generadoEn: now.toISOString(),
     analisisLimitado: !raw.site || raw.site.textLength < 500,
+    empresa: buildEmpresa(raw),
+    hechos: computeFacts(raw),
+    fuentes: raw.fuentes,
+    redireccion: redirectionOf(raw),
     resumen: ai.resumen,
     trafico: {
       visitasMes: anchors.visitasMes,
@@ -114,18 +167,18 @@ export async function buildReport(
       tendencia: raw.tranco?.trend ?? "no estimable",
       redes: raw.site?.socialLinks ?? {},
       pagespeed: raw.pagespeed,
-      antiguedadAnios: anchors.antiguedadAnios,
-      tecnologias: raw.site?.technologies ?? [],
+      antiguedadDominioAnios: anchors.antiguedadDominioAnios,
+      tecnologias: allTechnologies(raw),
       comentario: ai.trafico.comentario,
     },
-    ingresos: clampIngresos(ai.ingresos, anchors),
+    ingresos,
     oportunidades,
     pistas,
     veredicto: {
       puntuacion,
       puntuaciones,
-      fortalezas: ai.veredicto.fortalezas.slice(0, 3),
-      debilidades: ai.veredicto.debilidades.slice(0, 3),
+      fortalezas: validateClaims(ai.veredicto.fortalezas, signals, "positiva"),
+      debilidades: validateClaims(ai.veredicto.debilidades, signals, "negativa"),
       competidores: ai.veredicto.competidores.slice(0, 5),
       conclusion: ai.veredicto.conclusion,
     },
