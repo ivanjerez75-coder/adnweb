@@ -33,9 +33,8 @@ export function computeFacts(raw: RawData): Facts {
     return null;
   };
   const webTech = (c: TechCategory) => webSees((s) => s.technologies.some((t) => t.category === c));
-  const dnsTech = (c: TechCategory) => (raw.dns ? raw.dns.tools.some((t) => t.category === c) : null);
-  /** El DNS solo puede confirmar presencia de chat; su ausencia no prueba nada. */
-  const dnsSeesChat = raw.dns && raw.dns.tools.some((t) => t.category === "chat") ? true : null;
+  /** El DNS solo puede confirmar presencia (email, chat); su ausencia no prueba nada. */
+  const dnsSees = (c: TechCategory) => (raw.dns && raw.dns.tools.some((t) => t.category === c) ? true : null);
 
   return {
     blog: presence([webSees((s) => s.hasBlog), sitemapHas("blog"), routeHas("blog")]),
@@ -55,8 +54,8 @@ export function computeFacts(raw: RawData): Facts {
       webSees((s) => s.hasAppLinks),
       raw.appstore ? true : raw.fuentes.appstore === "no_aplica" ? false : null,
     ]),
-    emailMarketing: presence([webTech("email"), dnsTech("email")]),
-    chatSoporte: presence([webTech("chat"), dnsSeesChat]),
+    emailMarketing: presence([webTech("email"), dnsSees("email")]),
+    chatSoporte: presence([webTech("chat"), dnsSees("chat")]),
     redes: Object.keys(site?.socialLinks ?? {}),
   };
 }

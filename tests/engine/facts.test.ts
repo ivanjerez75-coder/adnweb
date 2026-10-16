@@ -53,9 +53,9 @@ describe("computeFacts", () => {
     expect(computeFacts(raw).emailMarketing).toBe("si");
   });
 
-  it("email marketing = no si web y DNS lo comprueban sin verlo", () => {
+  it("email marketing = desconocido si web y DNS no lo ven (el DNS no prueba ausencia)", () => {
     const raw = makeRaw({ site: makeSite({ technologies: [] }), dns: { emailProvider: "Otro", tools: [] } });
-    expect(computeFacts(raw).emailMarketing).toBe("no");
+    expect(computeFacts(raw).emailMarketing).toBe("desconocido");
   });
 
   it("empleo: la ausencia en la web no cuenta; sitemap + rutas sí", () => {

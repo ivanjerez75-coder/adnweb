@@ -53,7 +53,6 @@ describe("extractSignals — negativas", () => {
       "un_solo_idioma",
       "sin_app_movil",
       "pocas_redes",
-      "sin_captacion_email",
       "sin_empleo",
     ]);
   });
