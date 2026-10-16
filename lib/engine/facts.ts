@@ -25,7 +25,12 @@ export function computeFacts(raw: RawData): Facts {
   const readable = !!site && site.textLength >= READABLE_TEXT;
   /** Web: true si la ve; false solo si la home es legible y no la ve; null si no se puede afirmar. */
   const webSees = (seen: (s: SiteData) => boolean) => (site ? (seen(site) ? true : readable ? false : null) : null);
-  const sitemapHas = (s: "blog" | "precios" | "empleo") => (raw.sitemap ? raw.sitemap.sections.includes(s) : null);
+  /** Sitemap: true si tiene la sección (aunque esté incompleto); false solo si se leyó entero; null si no. */
+  const sitemapHas = (s: "blog" | "precios" | "empleo") => {
+    if (!raw.sitemap) return null;
+    if (raw.sitemap.sections.includes(s)) return true;
+    return raw.sitemap.complete ? false : null;
+  };
   const routeHas = (k: "blog" | "precios" | "empleo") => {
     if (!raw.rutas) return null;
     if (raw.rutas.found.includes(k)) return true;

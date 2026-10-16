@@ -10,7 +10,7 @@ describe("buildEmpresa", () => {
       wikidata: { id: "Q1", description: null, inception: 2016, founders: ["Ana"], headquarters: "Madrid", employees: 80, revenue: null },
       empleo: { platform: "lever", token: "f", openings: 7, byArea: { Ventas: 7 }, linkedFromSite: true },
       dns: { emailProvider: "Google Workspace", tools: [] },
-      sitemap: { urlCount: 120, sections: [], languages: ["fr"], lastModified: "2026-10-01", recentBlogPosts: 0 },
+      sitemap: { urlCount: 120, sections: [], languages: ["fr"], lastModified: "2026-10-01", recentBlogPosts: 0, complete: true },
       hackernews: { total: 2, lastYear: 1, top: { title: "Show HN", points: 10 } },
     });
     const e = buildEmpresa(raw);
@@ -23,8 +23,13 @@ describe("buildEmpresa", () => {
     expect(e.app).toBeNull();
     expect(e.emailCorporativo).toEqual({ valor: "Google Workspace", fuente: "dns" });
     expect(e.herramientas).toBeNull();
-    expect(e.web).toEqual({ valor: { paginas: 120, ultimaActualizacion: "2026-10-01", idiomas: ["es", "en", "fr"] }, fuente: "sitemap" });
+    expect(e.web).toEqual({ valor: { paginas: 120, ultimaActualizacion: "2026-10-01", idiomas: ["es", "en", "fr"], completo: true }, fuente: "sitemap" });
     expect(e.menciones).toEqual({ valor: { total: 2, ultimoAnio: 1, destacada: { titulo: "Show HN", puntos: 10 } }, fuente: "hackernews" });
+  });
+
+  it("web: completo false si el sitemap no se leyó entero (la UI muestra «≥ N»)", () => {
+    const raw = makeRaw({ sitemap: { urlCount: 1500, sections: [], languages: [], lastModified: null, recentBlogPosts: 0, complete: false } });
+    expect(buildEmpresa(raw).web?.valor).toMatchObject({ paginas: 1500, completo: false });
   });
 
   it("empleo: confianza alta si la web enlaza el tablero, media si se adivinó", () => {

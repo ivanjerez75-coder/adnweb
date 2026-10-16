@@ -16,7 +16,7 @@ describe("presence", () => {
   });
 });
 
-const sitemap = (sections: ("blog" | "precios" | "empleo")[]) => ({ urlCount: 100, sections, languages: [], lastModified: null, recentBlogPosts: 0 });
+const sitemap = (sections: ("blog" | "precios" | "empleo")[], complete = true) => ({ urlCount: 100, sections, languages: [], lastModified: null, recentBlogPosts: 0, complete });
 
 describe("computeFacts", () => {
   it("caso Notion: la home no enlaza el blog pero el sitemap sí → blog = si", () => {
@@ -101,6 +101,16 @@ describe("computeFacts", () => {
     expect(f.emailMarketing).toBe("desconocido");
     expect(f.chatSoporte).toBe("desconocido");
     expect(f.redes).toEqual([]);
+  });
+
+  it("un sitemap incompleto sin blog no prueba que no haya blog", () => {
+    const raw = makeRaw({ site: makeSite({ hasBlog: false }), sitemap: sitemap([], false) });
+    expect(computeFacts(raw).blog).toBe("desconocido");
+  });
+
+  it("un sitemap incompleto con blog sí prueba que hay blog", () => {
+    const raw = makeRaw({ site: makeSite({ hasBlog: false }), sitemap: sitemap(["blog"], false) });
+    expect(computeFacts(raw).blog).toBe("si");
   });
 
   it("(g) rutas encontrada sin comprobación explícita → si", () => {

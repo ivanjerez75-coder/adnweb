@@ -166,6 +166,11 @@ export interface SitemapData {
   lastModified: string | null;
   /** URLs de blog con lastmod en los últimos 90 días. */
   recentBlogPosts: number;
+  /**
+   * true solo si se leyó el sitemap entero (sin hijos pendientes, fallidos, .gz ni cortados por
+   * un tope) y tiene URLs. Si es false, urlCount es un mínimo y una sección ausente no prueba nada.
+   */
+  complete: boolean;
 }
 
 export interface PathProbeData {

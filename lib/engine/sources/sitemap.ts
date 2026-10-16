@@ -1,18 +1,15 @@
 import type { FetchedPage, PageGetter } from "../safe-fetch";
 import type { SitemapData, SitemapSection } from "../types";
+import { sectionOf } from "./sections";
 
 const MAX_SITEMAP_FILES = 4; // raíz + 3 hijos
 const MAX_TOTAL_BYTES = 5_000_000;
 const MAX_URLS = 50_000;
+/** El PageGetter corta las respuestas en 2 MB: un archivo de ese tamaño puede venir incompleto. */
+const POSSIBLY_TRUNCATED_CHARS = 1_999_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const SECTION_RES: [SitemapSection, RegExp][] = [
-  ["blog", /\/(blog|noticias|news|articulos|recursos)(\/|$)/i],
-  ["ayuda", /\/(help|ayuda|support|soporte|faq)(\/|$)/i],
-  ["precios", /\/(pricing|precios|tarifas|planes|plans)(\/|$)/i],
-  ["empleo", /\/(careers|jobs|empleo|trabaja-con-nosotros|join-us)(\/|$)/i],
-  ["docs", /\/(docs|documentation|documentacion|developers)(\/|$)/i],
-];
+const SECTIONS: SitemapSection[] = ["blog", "ayuda", "precios", "empleo", "docs"];
 
 const LANGUAGE_CODES = new Set([
   "es", "en", "fr", "de", "it", "pt", "nl", "pl", "ru", "ja", "zh", "ko", "sv", "da", "no", "fi",
@@ -101,7 +98,11 @@ export function sitemapsFromRobots(robots: string, origin: string): string[] {
   return out.slice(0, 3);
 }
 
-export function summarizeSitemap(urls: SitemapUrl[], now: Date): SitemapData {
+/**
+ * Resume las URLs leídas. `complete` indica que se leyó el sitemap entero (sin archivos
+ * pendientes, fallidos, .gz ni cortados por un tope); solo entonces una ausencia prueba algo.
+ */
+export function summarizeSitemap(urls: SitemapUrl[], now: Date, complete = true): SitemapData {
   const sections = new Set<SitemapSection>();
   const languages = new Set<string>();
   let latest = 0;
@@ -114,8 +115,9 @@ export function summarizeSitemap(urls: SitemapUrl[], now: Date): SitemapData {
     } catch {
       continue;
     }
-    const urlSections = SECTION_RES.filter(([, re]) => re.test(path)).map(([s]) => s);
-    urlSections.forEach((s) => sections.add(s));
+    const found = sectionOf(path)?.section;
+    const urlSection = found && (SECTIONS as string[]).includes(found) ? (found as SitemapSection) : null;
+    if (urlSection) sections.add(urlSection);
 
     const segment = LANGUAGE_SEGMENT_RE.exec(path.split("/").filter(Boolean)[0] ?? "");
     const first = segment?.[1].toLowerCase();
@@ -128,16 +130,17 @@ export function summarizeSitemap(urls: SitemapUrl[], now: Date): SitemapData {
     const t = u.lastmod ? Date.parse(u.lastmod) : NaN;
     if (Number.isFinite(t) && t <= now.getTime() + DAY_MS) {
       latest = Math.max(latest, t);
-      if (urlSections.includes("blog") && now.getTime() - t <= 90 * DAY_MS) recentBlogPosts++;
+      if (urlSection === "blog" && now.getTime() - t <= 90 * DAY_MS) recentBlogPosts++;
     }
   }
 
   return {
     urlCount: urls.length,
-    sections: SECTION_RES.map(([s]) => s).filter((s) => sections.has(s)),
+    sections: SECTIONS.filter((s) => sections.has(s)),
     languages: [...languages].sort(),
     lastModified: latest ? new Date(latest).toISOString().slice(0, 10) : null,
     recentBlogPosts,
+    complete: complete && urls.length > 0,
   };
 }
 
@@ -149,6 +152,12 @@ const isHttpUrl = (u: string): boolean => {
     return false;
   }
 };
+
+/** Si no caben todos los hijos de un índice, primero los de blog. */
+const blogFirst = (children: string[]) => [
+  ...children.filter((c) => /blog/i.test(c)),
+  ...children.filter((c) => !/blog/i.test(c)),
+];
 
 const pathnameOf = (u: string): string => {
   try {
@@ -181,29 +190,45 @@ export async function fetchSitemap(siteUrl: string, get: PageGetter, now: Date):
   const seen = new Set<string>();
   const urls: SitemapUrl[] = [];
   let bytes = 0;
+  let files = 0;
   let parsedAny = false;
+  let complete = true;
 
-  while (queue.length > 0 && seen.size < MAX_SITEMAP_FILES && bytes < MAX_TOTAL_BYTES && urls.length < MAX_URLS) {
+  while (queue.length > 0 && files < MAX_SITEMAP_FILES && bytes < MAX_TOTAL_BYTES && urls.length < MAX_URLS) {
     const next = queue.shift()!;
     if (seen.has(next)) continue;
     seen.add(next);
+    if (/\.gz$/i.test(pathnameOf(next))) {
+      complete = false; // comprimido: no se lee
+      continue;
+    }
+    files++;
     const file = await tryGet(next);
-    if (!file || file.status >= 400 || /\.gz$/i.test(pathnameOf(next))) continue;
-    if (bytes + file.text.length > MAX_TOTAL_BYTES) break;
+    if (!file || file.status >= 400) {
+      complete = false;
+      continue;
+    }
+    if (bytes + file.text.length > MAX_TOTAL_BYTES) {
+      complete = false;
+      break;
+    }
     bytes += file.text.length;
+    if (file.text.length >= POSSIBLY_TRUNCATED_CHARS) complete = false;
     const parsed = parseSitemapXml(file.text, MAX_URLS - urls.length);
     if (parsed.kind === "index") {
-      parsedAny = true;
-      queue.push(...parsed.children.filter(isHttpUrl));
+      queue.push(...blogFirst(parsed.children.filter(isHttpUrl)));
     } else if (parsed.urls.length > 0) {
       parsedAny = true;
       for (const u of parsed.urls) urls.push(u);
     }
   }
+  // Archivos que quedaron sin leer por el tope de archivos, de bytes o de URLs.
+  if (queue.some((u) => !seen.has(u)) || urls.length >= MAX_URLS) complete = false;
 
+  // Solo cuenta como comprobado si se leyó alguna URL: un índice con todos sus hijos fallidos o .gz no prueba nada.
   if (!parsedAny) {
     if (requests > 0 && failures === requests) throw new Error("No se pudo leer el sitemap");
     return null;
   }
-  return summarizeSitemap(urls, now);
+  return summarizeSitemap(urls, now, complete);
 }

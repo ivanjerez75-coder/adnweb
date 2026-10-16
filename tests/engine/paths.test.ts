@@ -91,3 +91,15 @@ describe("probePaths", () => {
     expect((await probePaths("https://acme.example/", get)).found).toContain("blog");
   });
 });
+
+describe("probePaths — /blogs (Shopify)", () => {
+  it("incluye /blogs como ruta de blog", async () => {
+    const { PROBE_PATHS } = await import("../../lib/engine/sources/paths");
+    expect(PROBE_PATHS).toContainEqual(["blog", "/blogs"]);
+  });
+
+  it("encuentra el blog en /blogs", async () => {
+    const get: PageGetter = async (url) => (url.endsWith("/blogs") ? page(url, 200, "https://tienda.example/blogs/news") : page(url, 404));
+    expect((await probePaths("https://tienda.example/", get)).found).toContain("blog");
+  });
+});

@@ -74,7 +74,8 @@ export function extractSignals(raw: RawData, now: Date): Signal[] {
   const domainAgeMs = registeredAt ? now.getTime() - Date.parse(registeredAt) : NaN;
   if (Number.isFinite(domainAgeMs) && domainAgeMs >= 0 && domainAgeMs < 2 * YEAR_MS) add("dominio_reciente", "traccion", "rdap", "Dominio registrado hace menos de 2 años");
 
-  const lastModified = raw.sitemap?.lastModified;
+  // Con un sitemap leído a medias, la fecha más reciente vista no es la última de la web.
+  const lastModified = raw.sitemap?.complete ? raw.sitemap.lastModified : null;
   if (lastModified && now.getTime() - Date.parse(lastModified) > YEAR_MS) {
     add("web_inactiva", "contenido", "sitemap", `La última actualización del sitemap es de ${lastModified}`);
   }

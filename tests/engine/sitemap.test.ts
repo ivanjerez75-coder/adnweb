@@ -48,7 +48,35 @@ describe("summarizeSitemap", () => {
       languages: ["es", "fr"],
       lastModified: "2026-10-01",
       recentBlogPosts: 1,
+      complete: true,
     });
+  });
+
+  const sectionsOf = (...paths: string[]) =>
+    summarizeSitemap(paths.map((p) => ({ loc: `https://acme.example${p}`, lastmod: null, hreflangs: [] })), NOW).sections;
+
+  it("/blog/pricing-tips es solo blog", () => {
+    expect(sectionsOf("/blog/pricing-tips")).toEqual(["blog"]);
+  });
+
+  it("/help/pricing es solo ayuda", () => {
+    expect(sectionsOf("/help/pricing")).toEqual(["ayuda"]);
+  });
+
+  it("/es/precios es precios", () => {
+    expect(sectionsOf("/es/precios")).toEqual(["precios"]);
+  });
+
+  it("/blogs/journal/post (Shopify) es blog", () => {
+    expect(sectionsOf("/blogs/journal/post-1")).toEqual(["blog"]);
+  });
+
+  it("no cuenta una sección en el tercer segmento", () => {
+    expect(sectionsOf("/products/x/pricing", "/a/b/blog")).toEqual([]);
+  });
+
+  it("un sitemap sin URLs no es completo", () => {
+    expect(summarizeSitemap([], NOW).complete).toBe(false);
   });
 });
 
@@ -174,5 +202,101 @@ describe("límites de tamaño y de URLs", () => {
       "https://acme.example/sitemap.xml.gz?v=1": page("https://acme.example/sitemap.xml.gz?v=1", URLSET),
     });
     expect(await fetchSitemap("https://acme.example/", get, NOW)).toBeNull();
+  });
+});
+
+describe("sitemaps parciales", () => {
+  const getterFor = (pages: Record<string, FetchedPage>): PageGetter & { calls: string[] } => {
+    const calls: string[] = [];
+    return Object.assign(
+      async (url: string) => {
+        calls.push(url);
+        return pages[url] ?? page(url, "", 404);
+      },
+      { calls },
+    );
+  };
+  const urlset = (...paths: string[]) => `<urlset>${paths.map((p) => `<url><loc>https://acme.example${p}</loc></url>`).join("")}</urlset>`;
+  const index = (...children: string[]) => `<sitemapindex>${children.map((c) => `<sitemap><loc>${c}</loc></sitemap>`).join("")}</sitemapindex>`;
+  const robots = (url: string) => ({ "https://acme.example/robots.txt": page("https://acme.example/robots.txt", `Sitemap: ${url}`) });
+
+  it("un sitemap leído entero es completo", async () => {
+    const get = getterFor({ "https://acme.example/sitemap.xml": page("https://acme.example/sitemap.xml", urlset("/a", "/b")) });
+    expect((await fetchSitemap("https://acme.example/", get, NOW))?.complete).toBe(true);
+  });
+
+  it("un índice con solo hijos .gz → null (no comprobado)", async () => {
+    const get = getterFor({
+      ...robots("https://acme.example/index.xml"),
+      "https://acme.example/index.xml": page("https://acme.example/index.xml", index("https://acme.example/a.xml.gz", "https://acme.example/b.xml.gz")),
+    });
+    expect(await fetchSitemap("https://acme.example/", get, NOW)).toBeNull();
+  });
+
+  it("un índice cuyos hijos fallan todos → null (no comprobado)", async () => {
+    const get = getterFor({
+      ...robots("https://acme.example/index.xml"),
+      "https://acme.example/index.xml": page("https://acme.example/index.xml", index("https://acme.example/a.xml", "https://acme.example/b.xml")),
+      "https://acme.example/a.xml": page("https://acme.example/a.xml", "", 500),
+    });
+    expect(await fetchSitemap("https://acme.example/", get, NOW)).toBeNull();
+  });
+
+  it("con 5 hijos lee primero el que contiene «blog» y queda incompleto", async () => {
+    const children = ["pages", "products", "collections", "legal", "blog-posts"].map((n) => `https://acme.example/sitemap-${n}.xml`);
+    const pages: Record<string, FetchedPage> = {
+      ...robots("https://acme.example/index.xml"),
+      "https://acme.example/index.xml": page("https://acme.example/index.xml", index(...children)),
+    };
+    for (const c of children) pages[c] = page(c, urlset(c.includes("blog") ? "/blog/post-1" : `/p/${c.length}`));
+    const get = getterFor(pages);
+    const data = await fetchSitemap("https://acme.example/", get, NOW);
+    expect(get.calls).toContain("https://acme.example/sitemap-blog-posts.xml");
+    expect(data?.sections).toContain("blog");
+    expect(data?.complete).toBe(false);
+  });
+
+  it("un hijo que falla deja el sitemap incompleto", async () => {
+    const get = getterFor({
+      ...robots("https://acme.example/index.xml"),
+      "https://acme.example/index.xml": page("https://acme.example/index.xml", index("https://acme.example/a.xml", "https://acme.example/b.xml")),
+      "https://acme.example/a.xml": page("https://acme.example/a.xml", urlset("/a")),
+    });
+    const data = await fetchSitemap("https://acme.example/", get, NOW);
+    expect(data?.urlCount).toBe(1);
+    expect(data?.complete).toBe(false);
+  });
+
+  it("un hijo .gz deja el sitemap incompleto", async () => {
+    const get = getterFor({
+      ...robots("https://acme.example/index.xml"),
+      "https://acme.example/index.xml": page("https://acme.example/index.xml", index("https://acme.example/a.xml", "https://acme.example/b.xml.gz")),
+      "https://acme.example/a.xml": page("https://acme.example/a.xml", urlset("/a")),
+    });
+    expect((await fetchSitemap("https://acme.example/", get, NOW))?.complete).toBe(false);
+  });
+
+  it("un archivo de casi 2 MB puede venir cortado: incompleto", async () => {
+    const big = urlset("/a") + " ".repeat(1_999_000);
+    const get = getterFor({ "https://acme.example/sitemap.xml": page("https://acme.example/sitemap.xml", big) });
+    expect((await fetchSitemap("https://acme.example/", get, NOW))?.complete).toBe(false);
+  });
+
+  it("el tope de URLs deja el sitemap incompleto", async () => {
+    const xml = `<urlset>${Array.from({ length: 50010 }, (_, i) => `<url><loc>https://acme.example/n/${i}</loc></url>`).join("")}</urlset>`;
+    const get = getterFor({ "https://acme.example/sitemap.xml": page("https://acme.example/sitemap.xml", xml) });
+    expect((await fetchSitemap("https://acme.example/", get, NOW))?.complete).toBe(false);
+  });
+
+  it("el tope de bytes deja el sitemap incompleto", async () => {
+    const pad = "x".repeat(120);
+    const big = (prefix: string) =>
+      `<urlset>${Array.from({ length: 20000 }, (_, i) => `<url><loc>https://acme.example/${prefix}/${i}</loc><!-- ${pad} --></url>`).join("")}</urlset>`;
+    const get = getterFor({
+      "https://acme.example/robots.txt": page("https://acme.example/robots.txt", "Sitemap: https://acme.example/a.xml\nSitemap: https://acme.example/b.xml"),
+      "https://acme.example/a.xml": page("https://acme.example/a.xml", big("p")),
+      "https://acme.example/b.xml": page("https://acme.example/b.xml", big("q")),
+    });
+    expect((await fetchSitemap("https://acme.example/", get, NOW))?.complete).toBe(false);
   });
 });

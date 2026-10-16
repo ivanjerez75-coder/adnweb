@@ -16,6 +16,7 @@ const sitemap = (over: Partial<NonNullable<RawData["sitemap"]>> = {}) => ({
   languages: [],
   lastModified: "2026-10-01",
   recentBlogPosts: 0,
+  complete: true,
   ...over,
 });
 
@@ -87,6 +88,18 @@ describe("extractSignals — negativas", () => {
       dns: { emailProvider: "Ninguno", tools: [] },
     });
     expect(ids(raw, "negativa")).toEqual(["web_inactiva", "app_mal_valorada", "sin_email_corporativo"]);
+  });
+});
+
+describe("extractSignals — sitemap incompleto", () => {
+  it("web_inactiva no salta si el sitemap no se leyó entero", () => {
+    const raw = makeRaw({ sitemap: sitemap({ lastModified: "2024-01-01", complete: false }) });
+    expect(ids(raw)).not.toContain("web_inactiva");
+  });
+
+  it("sin_blog no salta con un sitemap incompleto aunque la web no vea el blog", () => {
+    const site = makeSite({ hasBlog: false });
+    expect(ids(makeRaw({ site, sitemap: sitemap({ complete: false }) }))).not.toContain("sin_blog");
   });
 });
 

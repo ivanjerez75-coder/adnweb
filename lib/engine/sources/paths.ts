@@ -4,6 +4,7 @@ import type { PathProbeData, ProbeKind } from "../types";
 
 export const PROBE_PATHS: [ProbeKind, string][] = [
   ["blog", "/blog"],
+  ["blog", "/blogs"],
   ["precios", "/pricing"],
   ["precios", "/precios"],
   ["empleo", "/careers"],

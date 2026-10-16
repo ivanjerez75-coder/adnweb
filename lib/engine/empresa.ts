@@ -15,7 +15,8 @@ export interface EmpresaFicha {
   app: Dato<{ nombre: string; valoracion: number | null; valoraciones: number; url: string }>;
   emailCorporativo: Dato<EmailProvider>;
   herramientas: Dato<Technology[]>;
-  web: Dato<{ paginas: number; ultimaActualizacion: string | null; idiomas: string[] }>;
+  /** completo: false si el sitemap no se leyó entero (paginas es un mínimo: «≥ N»). */
+  web: Dato<{ paginas: number; ultimaActualizacion: string | null; idiomas: string[]; completo: boolean }>;
   menciones: Dato<{ total: number; ultimoAnio: number; destacada: { titulo: string; puntos: number } | null }>;
 }
 
@@ -49,7 +50,14 @@ export function buildEmpresa(raw: RawData): EmpresaFicha {
     emailCorporativo: dato(raw.dns?.emailProvider, "dns"),
     herramientas: dato(raw.dns && raw.dns.tools.length > 0 ? raw.dns.tools : null, "dns"),
     web: dato(
-      raw.sitemap ? { paginas: raw.sitemap.urlCount, ultimaActualizacion: raw.sitemap.lastModified, idiomas: allLanguages(raw) } : null,
+      raw.sitemap
+        ? {
+            paginas: raw.sitemap.urlCount,
+            ultimaActualizacion: raw.sitemap.lastModified,
+            idiomas: allLanguages(raw),
+            completo: raw.sitemap.complete,
+          }
+        : null,
       "sitemap",
     ),
     menciones: dato(
