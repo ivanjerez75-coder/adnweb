@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { publicRevenueAnchor, employeeRevenueAnchor, computeAnchors } from "../../lib/engine/anchors";
-import { clampIngresos } from "../../lib/engine/report";
+import { buildReport, clampIngresos } from "../../lib/engine/report";
+import { validAiOutput } from "./ai-fixture";
+import type { JsonModel } from "../../lib/engine/ai/providers";
 import { makeRaw } from "./raw-fixture";
 import { NOW } from "./fake-network";
 import type { WikidataData } from "../../lib/engine/types";
@@ -55,8 +57,21 @@ describe("clampIngresos v2", () => {
   const traffic = { visitasMes: { min: 1, max: 2 }, confianzaTrafico: "baja" as const };
   const anchor = { range: { min: 3_000_000, max: 6_000_000 }, confianza: "media" as const, base: "b" };
 
-  it("intersecta el rango de la IA con el ancla y toma su confianza", () => {
+  it("intersecta el rango de la IA con el ancla y limita la confianza al mínimo", () => {
     expect(clampIngresos(base, traffic, anchor)).toMatchObject({ anualMin: 3_000_000, anualMax: 4_000_000, confianza: "media" });
+  });
+  it("la confianza es la menor entre la IA y el ancla", () => {
+    const alta = { ...anchor, confianza: "alta" as const };
+    expect(clampIngresos({ ...base, confianza: "baja" }, traffic, alta)).toMatchObject({ confianza: "baja" });
+  });
+  it("sin solape descarta la valoración de la IA y toma la confianza del ancla", () => {
+    const alta = { ...anchor, confianza: "alta" as const };
+    const out = clampIngresos({ ...base, anualMin: 100, anualMax: 200, confianza: "baja" }, traffic, alta);
+    expect(out).toMatchObject({ valoracionMin: null, valoracionMax: null, confianza: "alta" });
+  });
+  it("al intersectar, descarta la valoración si queda por debajo de los ingresos", () => {
+    const out = clampIngresos({ ...base, valoracionMin: 100_000, valoracionMax: 2_000_000 }, traffic, anchor);
+    expect(out).toMatchObject({ anualMin: 3_000_000, valoracionMin: null, valoracionMax: null });
   });
   it("si no se solapan, gana el ancla", () => {
     expect(clampIngresos({ ...base, anualMin: 100, anualMax: 200 }, traffic, anchor)).toMatchObject({ anualMin: 3_000_000, anualMax: 6_000_000 });
@@ -70,5 +85,27 @@ describe("clampIngresos v2", () => {
   });
   it("sin tráfico ni ancla, todo null", () => {
     expect(clampIngresos(base, { visitasMes: null, confianzaTrafico: "baja" })).toMatchObject({ anualMin: null, valoracionMax: null, confianza: "baja" });
+  });
+});
+
+describe("buildReport con anclas de ingresos", () => {
+  const model: JsonModel = { name: "fake", generate: async () => JSON.stringify(validAiOutput) };
+  const run = (w: WikidataData) => buildReport(makeRaw({ wikidata: w }), { models: [model], now: () => NOW });
+
+  it("el ingreso público de Wikidata manda sobre la IA", async () => {
+    const report = await run(wiki({ employees: 100, revenue: { amount: 10_000_000, currency: "EUR", year: 2023 } }));
+    expect(report.ingresos.anualMin).toBe(9_000_000);
+    expect(report.ingresos.anualMax).toBe(11_000_000);
+    expect(report.ingresos.confianza).toBe("alta");
+    expect(report.ingresos.valoracionMin).toBeNull();
+    expect(report.ingresos.suposiciones[0].startsWith("Ingresos públicos (Wikidata, 2023)")).toBe(true);
+  });
+
+  it("sin ingresos públicos usa el ancla por empleados", async () => {
+    const report = await run(wiki({ employees: 100 }));
+    expect(report.ingresos.anualMin).toBe(7_500_000);
+    expect(report.ingresos.anualMax).toBe(22_500_000);
+    expect(report.ingresos.confianza).toBe("media");
+    expect(report.ingresos.suposiciones[0]).toContain("100 empleados");
   });
 });

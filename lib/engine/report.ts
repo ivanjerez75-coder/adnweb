@@ -70,12 +70,29 @@ export function clampIngresos(
     if (anualMin !== null && anualMax !== null && anualMin <= max && anualMax >= min) {
       anualMin = Math.max(anualMin, min);
       anualMax = Math.min(anualMax, max);
-    } else {
-      anualMin = min;
-      anualMax = max;
+      // La confianza nunca supera la de la IA ni la del ancla.
+      const confianza =
+        CONFIDENCE_ORDER[Math.min(CONFIDENCE_ORDER.indexOf(ingresos.confianza), CONFIDENCE_ORDER.indexOf(revenueAnchor.confianza))];
+      // Una valoración por debajo de los ingresos ya acotados es incoherente: se descarta.
+      const incoherente = valoracionMax !== null && valoracionMax < anualMin;
+      return {
+        ...ingresos,
+        anualMin,
+        anualMax,
+        valoracionMin: incoherente ? null : valoracionMin,
+        valoracionMax: incoherente ? null : valoracionMax,
+        confianza,
+      };
     }
-    // La cifra queda acotada por el ancla: su confianza es la del ancla.
-    return { ...ingresos, anualMin, anualMax, valoracionMin, valoracionMax, confianza: revenueAnchor.confianza };
+    // Sin solape: gana el ancla y la valoración de la IA (ligada a los ingresos descartados) se descarta.
+    return {
+      ...ingresos,
+      anualMin: min,
+      anualMax: max,
+      valoracionMin: null,
+      valoracionMax: null,
+      confianza: revenueAnchor.confianza,
+    };
   }
 
   const cap = CONFIDENCE_ORDER.indexOf(anchors.confianzaTrafico);
