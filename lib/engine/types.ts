@@ -127,7 +127,13 @@ export interface RawData {
   /** true si el nombre de la empresa salió de la propia web (no de la etiqueta del dominio). */
   companyNameFromPage: boolean;
   collectedAt: string;
+  /** Web propia del negocio. null si no se pudo leer o si la página final es de otro (ver foreignSite). */
   site: SiteData | null;
+  /**
+   * Página final tras una redirección NO adoptada (Instagram, Linktree, otra empresa). Sus apps,
+   * idiomas, tecnologías o tableros son de otro: no alimenta hechos ni señales, solo contexto de la IA.
+   */
+  foreignSite: SiteData | null;
   tranco: TrancoData | null;
   radar: RadarData | null;
   pagespeed: PageSpeedData | null;

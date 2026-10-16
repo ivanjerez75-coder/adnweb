@@ -112,6 +112,7 @@ export async function collect(
     return outcome.status === "ok" ? outcome.value : null;
   };
 
+  const pageRead = take(siteR, "web", "tecnologias");
   const raw: RawData = {
     url: input.url,
     domain: input.domain,
@@ -119,7 +120,9 @@ export async function collect(
     finalDomain,
     companyNameFromPage,
     collectedAt: now.toISOString(),
-    site: take(siteR, "web", "tecnologias"),
+    // La página de otro se leyó (web "ok"), pero no es la web del negocio: no alimenta hechos ni señales.
+    site: foreign ? null : pageRead,
+    foreignSite: foreign ? pageRead : null,
     tranco: take(trancoR, "tranco"),
     radar: take(radarR, "radar"),
     pagespeed: take(pagespeedR, "pagespeed"),
@@ -135,9 +138,17 @@ export async function collect(
     fuentes,
     unavailable: [],
   };
+  if (foreign) {
+    // Tras una redirección no adoptada, PageSpeed y las tecnologías detectadas son las de la
+    // plataforma (Instagram, Linktree…), no las del negocio: no aplican.
+    raw.pagespeed = null;
+    fuentes.pagespeed = "no_aplica";
+    fuentes.tecnologias = "no_aplica";
+  }
   raw.unavailable = (Object.keys(fuentes) as CollectedSource[]).filter((k) => fuentes[k] === "fallo");
 
   const hasTraffic = validRank(raw.tranco?.rank) !== null || radarRank(raw.radar) !== null;
+  // Sin web propia (la de otro no cuenta) ni tráfico no hay nada cierto que contar.
   if (!raw.site && !hasTraffic) throw new InsufficientDataError();
 
   return raw;

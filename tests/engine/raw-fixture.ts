@@ -36,6 +36,7 @@ export function makeRaw(overrides: Partial<RawData> = {}): RawData {
     companyNameFromPage: true,
     collectedAt: "2026-10-14T00:00:00.000Z",
     site: makeSite(),
+    foreignSite: null,
     tranco: { rank: 5000, trend: "estable" },
     radar: { bucket: 10000, rank: null },
     pagespeed: { mobile: 90, desktop: 95 },

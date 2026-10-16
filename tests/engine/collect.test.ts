@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { collect, InsufficientDataError } from "../../lib/engine/collect";
 import { BlockedUrlError, type PageGetter } from "../../lib/engine/safe-fetch";
+import { buildReport } from "../../lib/engine/report";
+import type { JsonModel } from "../../lib/engine/ai/providers";
 import { fakeFetcher, fakeGetPage, NOW } from "./fake-network";
+import { validAiOutput } from "./ai-fixture";
 
 const input = { url: "https://facturo.example/", domain: "facturo.example" };
 const baseDeps = { getPage: fakeGetPage, fetcher: fakeFetcher(), radarToken: "tok", now: () => NOW };
@@ -269,5 +272,78 @@ describe("collect — redirecciones a otro dominio", () => {
     const raw = await collect(input, baseDeps);
     expect(raw.finalDomain).toBeNull();
     expect(raw.companyNameFromPage).toBe(true);
+    expect(raw.foreignSite).toBeNull();
+  });
+
+  describe("acme.example → instagram.com/acme con apps, 5 idiomas y analítica en la página de Instagram", () => {
+    const hreflangs = ["es", "en", "fr", "de", "it"].map((l) => `<link rel="alternate" hreflang="${l}" href="https://www.instagram.com/${l}/acme/">`).join("");
+    const html =
+      `<html lang="en"><head><title>Instagram</title>${hreflangs}` +
+      `<script src="https://www.googletagmanager.com/gtag/js?id=G-1"></script>` +
+      `<script src="https://widget.intercom.io/widget/x"></script><script src="https://js.hs-scripts.com/1.js"></script>` +
+      `<script src="https://chimpstatic.com/mcjs-connected/js/users/x.js"></script></head>` +
+      `<body><h1>Instagram</h1><p>${"Comparte fotos y vídeos con tus amigos. ".repeat(80)}</p>` +
+      `<a href="https://apps.apple.com/app/instagram/id389801252">App Store</a><a href="https://play.google.com/store/apps/details?id=com.instagram.android">Google Play</a>` +
+      `<a href="https://jobs.lever.co/meta">Jobs</a></body></html>`;
+    const getPage: PageGetter = async (url) =>
+      url === "https://acme.example/"
+        ? { url: "https://www.instagram.com/acme/", status: 200, headers: {}, text: html }
+        : { url, status: 404, headers: {}, text: "" };
+    const fetcher = fakeFetcher({
+      pagespeedonline: () => Response.json({ lighthouseResult: { categories: { performance: { score: 0.97 } } } }),
+    });
+    const acme = { url: "https://acme.example/", domain: "acme.example" };
+    const fakeModel: JsonModel = { name: "fake", generate: async () => JSON.stringify(validAiOutput) };
+
+    it("la página de otro no cuenta como web propia: va a foreignSite y PageSpeed no aplica", async () => {
+      const raw = await collect(acme, { ...baseDeps, getPage, fetcher });
+      expect(raw.site).toBeNull();
+      expect(raw.foreignSite?.finalUrl).toBe("https://www.instagram.com/acme/");
+      expect(raw.fuentes.web).toBe("ok");
+      expect(raw.pagespeed).toBeNull();
+      expect(raw.fuentes.pagespeed).toBe("no_aplica");
+      expect(raw.unavailable).not.toContain("pagespeed");
+      expect(raw.fuentes.tecnologias).toBe("no_aplica");
+    });
+
+    it("hechos, señales, tecnologías, nombre y análisis limitado se calculan como si no hubiera web", async () => {
+      const raw = await collect(acme, { ...baseDeps, getPage, fetcher });
+      const report = await buildReport(raw, { models: [fakeModel], now: () => NOW });
+      expect(report.hechos.app).not.toBe("si");
+      const ids = report.senales.map((s) => s.id);
+      for (const id of ["multi_idioma", "stack_crecimiento", "web_rapida"]) expect(ids).not.toContain(id);
+      expect(report.senales.filter((s) => ["web", "tecnologias", "pagespeed"].includes(s.source))).toEqual([]);
+      // Solo quedan las herramientas que el DNS ve en acme.example.
+      expect(report.trafico.tecnologias).toEqual(raw.dns?.tools ?? []);
+      expect(report.trafico.tecnologias.map((t) => t.name)).not.toContain("Google Analytics");
+      expect(report.trafico.pagespeed).toBeNull();
+      expect(report.trafico.redes).toEqual({});
+      expect(report.empresa.nombre).toBeNull();
+      expect(report.fuentes.pagespeed).toBe("no_aplica");
+      expect(report.fuentes.web).toBe("ok");
+      expect(report.analisisLimitado).toBe(true);
+    });
+
+    it("sin web propia ni tráfico lanza InsufficientDataError aunque se leyera la página de otro", async () => {
+      const noTraffic = fakeFetcher({
+        "tranco-list.eu": () => Response.json({ ranks: [] }),
+        "api.cloudflare.com": () => new Response("", { status: 404 }),
+      });
+      await expect(collect(acme, { ...baseDeps, getPage, fetcher: noTraffic })).rejects.toBeInstanceOf(InsufficientDataError);
+    });
+  });
+
+  it("notion.so → notion.com (adoptado): la web sigue siendo propia y PageSpeed se usa", async () => {
+    const getPage: PageGetter = async (url) =>
+      url === "https://notion.so/"
+        ? { url: "https://www.notion.com/", status: 200, headers: {}, text: `<html><head><title>Notion</title></head><body><a href="https://apps.apple.com/app/notion/id1232780281">App</a></body></html>` }
+        : { url, status: 404, headers: {}, text: "" };
+    const raw = await collect({ url: "https://notion.so/", domain: "notion.so" }, { ...baseDeps, getPage });
+    expect(raw.site?.finalUrl).toBe("https://www.notion.com/");
+    expect(raw.site?.hasAppLinks).toBe(true);
+    expect(raw.foreignSite).toBeNull();
+    expect(raw.pagespeed).toEqual({ mobile: 34, desktop: 34 });
+    expect(raw.fuentes.pagespeed).toBe("ok");
+    expect(raw.fuentes.tecnologias).toBe("ok");
   });
 });
