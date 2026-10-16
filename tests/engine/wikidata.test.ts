@@ -36,6 +36,19 @@ describe("extractWikidata", () => {
     });
   });
 
+  it("devuelve ingresos nulos si la unidad no es una moneda conocida", () => {
+    const unknown: WikidataEntity = {
+      id: "Q3",
+      claims: { P2139: [qty("+1000", "http://www.wikidata.org/entity/Q8146", 2023)] },
+    };
+    expect(extractWikidata(unknown, {}).revenue).toBeNull();
+  });
+
+  it("devuelve ingresos nulos si la unidad es '1'", () => {
+    const plain: WikidataEntity = { id: "Q4", claims: { P2139: [qty("+1000", "1", 2023)] } };
+    expect(extractWikidata(plain, {}).revenue).toBeNull();
+  });
+
   it("devuelve nulos si faltan datos", () => {
     expect(extractWikidata({ id: "Q2", claims: {} }, {})).toEqual({
       id: "Q2",
@@ -77,6 +90,19 @@ describe("fetchWikidata", () => {
 
   it("devuelve null si la búsqueda no da resultados", async () => {
     expect(await fetchWikidata({ companyName: "Nada", rootDomain: "nada.example" }, async () => Response.json({ search: [] }))).toBeNull();
+  });
+
+  it("compara el dominio sin distinguir mayúsculas", async () => {
+    const data = await fetchWikidata({ companyName: "Acme", rootDomain: "ACME.example" }, async (url) =>
+      url.includes("wbsearchentities") ? Response.json({ search: [{ id: "Q1" }] }) : Response.json({ entities: { Q1: ACME } }),
+    );
+    expect(data?.id).toBe("Q1");
+  });
+
+  it("lanza error si la API devuelve un cuerpo de error con estado 200", async () => {
+    await expect(
+      fetchWikidata({ companyName: "Acme", rootDomain: "acme.example" }, async () => Response.json({ error: { code: "maxlag" } })),
+    ).rejects.toThrow();
   });
 
   it("lanza error si Wikidata falla", async () => {

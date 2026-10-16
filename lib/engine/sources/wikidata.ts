@@ -82,6 +82,7 @@ export function extractWikidata(e: WikidataEntity, labels: Record<string, string
   const revenueClaim = latest(e.claims?.P2139);
   const revenue = quantity(revenueClaim);
   const currencyId = revenue?.unit.split("/").pop() ?? "";
+  const currency = Object.prototype.hasOwnProperty.call(CURRENCIES, currencyId) ? CURRENCIES[currencyId] : undefined;
 
   return {
     id: e.id,
@@ -90,7 +91,10 @@ export function extractWikidata(e: WikidataEntity, labels: Record<string, string
     founders,
     headquarters: hqId ? (labels[hqId] ?? null) : null,
     employees: employees ? employees.amount : null,
-    revenue: revenue ? { amount: revenue.amount, currency: CURRENCIES[currencyId] ?? currencyId, year: revenueClaim ? pointInTime(revenueClaim) : null } : null,
+    revenue:
+      revenue && currency
+        ? { amount: revenue.amount, currency, year: revenueClaim ? pointInTime(revenueClaim) : null }
+        : null,
   };
 }
 
@@ -98,7 +102,9 @@ async function api(params: Record<string, string>, fetcher: Fetcher): Promise<Re
   const qs = new URLSearchParams({ format: "json", origin: "*", ...params });
   const res = await fetcher(`${API}?${qs}`, { headers: HEADERS, signal: AbortSignal.timeout(10_000) });
   if (!res.ok) throw new Error(`Wikidata respondió ${res.status}`);
-  return (await res.json()) as Record<string, unknown>;
+  const body = (await res.json()) as Record<string, unknown>;
+  if ("error" in body) throw new Error(`Wikidata devolvió un error: ${JSON.stringify(body.error)}`);
+  return body;
 }
 
 export async function fetchWikidata(
@@ -117,7 +123,8 @@ export async function fetchWikidata(
 
   const got = await api({ action: "wbgetentities", ids: ids.join("|"), props: "claims|descriptions", languages: "es|en" }, fetcher);
   const entities = (got.entities ?? {}) as Record<string, WikidataEntity>;
-  const match = ids.map((id) => entities[id]).find((e) => e && officialDomains(e).includes(input.rootDomain));
+  const root = input.rootDomain.toLowerCase();
+  const match = ids.map((id) => entities[id]).find((e) => e && officialDomains(e).includes(root));
   if (!match) return null;
 
   const wanted = labelIds(match);
