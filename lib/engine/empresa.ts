@@ -10,7 +10,8 @@ export interface EmpresaFicha {
   sede: Dato<string>;
   empleados: Dato<number>;
   ingresosPublicos: Dato<{ importe: number; moneda: string; anio: number | null }>;
-  empleo: Dato<{ ofertas: number; porArea: Record<string, number>; plataforma: JobPlatform }>;
+  /** confianza: "alta" si la web enlaza el tablero; "media" si se dedujo del nombre del dominio. */
+  empleo: Dato<{ ofertas: number; porArea: Record<string, number>; plataforma: JobPlatform; confianza: "alta" | "media" }>;
   app: Dato<{ nombre: string; valoracion: number | null; valoraciones: number; url: string }>;
   emailCorporativo: Dato<EmailProvider>;
   herramientas: Dato<Technology[]>;
@@ -30,7 +31,17 @@ export function buildEmpresa(raw: RawData): EmpresaFicha {
     sede: dato(w?.headquarters, "wikidata"),
     empleados: dato(w?.employees, "wikidata"),
     ingresosPublicos: dato(w?.revenue ? { importe: w.revenue.amount, moneda: w.revenue.currency, anio: w.revenue.year } : null, "wikidata"),
-    empleo: dato(raw.empleo ? { ofertas: raw.empleo.openings, porArea: raw.empleo.byArea, plataforma: raw.empleo.platform } : null, "empleo"),
+    empleo: dato(
+      raw.empleo
+        ? {
+            ofertas: raw.empleo.openings,
+            porArea: raw.empleo.byArea,
+            plataforma: raw.empleo.platform,
+            confianza: raw.empleo.linkedFromSite ? ("alta" as const) : ("media" as const),
+          }
+        : null,
+      "empleo",
+    ),
     app: dato(
       raw.appstore ? { nombre: raw.appstore.name, valoracion: raw.appstore.rating, valoraciones: raw.appstore.ratingCount, url: raw.appstore.url } : null,
       "appstore",

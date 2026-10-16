@@ -110,11 +110,19 @@ describe("fetchJobs con tableros enlazados que fallan", () => {
     ).rejects.toThrow();
   });
 
-  it("(c) ignora un tablero enlazado 404 y devuelve el adivinado con ofertas", async () => {
-    const data = await fetchJobs([linked, guessed], async (url) =>
-      isGreenhouse(url) ? new Response("", { status: 404 }) : Response.json(lever),
-    );
-    expect(data).toEqual({ platform: "lever", token: "b", openings: 1, byArea: { Engineering: 1 }, linkedFromSite: false });
+  it("(c) con un tablero enlazado 404 no recurre al adivinado aunque tenga ofertas: null", async () => {
+    const urls: string[] = [];
+    const data = await fetchJobs([linked, guessed], async (url) => {
+      urls.push(url);
+      return isGreenhouse(url) ? new Response("", { status: 404 }) : Response.json(lever);
+    });
+    expect(data).toBeNull();
+    expect(urls.some((u) => u.includes("api.lever.co"))).toBe(false);
+  });
+
+  it("sin tableros enlazados sí usa los adivinados", async () => {
+    const data = await fetchJobs([guessed], async () => Response.json(lever));
+    expect(data?.linkedFromSite).toBe(false);
   });
 
   it("(d) lanza si todas las peticiones responden 500", async () => {

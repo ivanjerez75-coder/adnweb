@@ -19,12 +19,19 @@ describe("buildEmpresa", () => {
     expect(e.fundadores).toEqual({ valor: ["Ana"], fuente: "wikidata" });
     expect(e.empleados).toEqual({ valor: 80, fuente: "wikidata" });
     expect(e.ingresosPublicos).toBeNull();
-    expect(e.empleo).toEqual({ valor: { ofertas: 7, porArea: { Ventas: 7 }, plataforma: "lever" }, fuente: "empleo" });
+    expect(e.empleo).toEqual({ valor: { ofertas: 7, porArea: { Ventas: 7 }, plataforma: "lever", confianza: "alta" }, fuente: "empleo" });
     expect(e.app).toBeNull();
     expect(e.emailCorporativo).toEqual({ valor: "Google Workspace", fuente: "dns" });
     expect(e.herramientas).toBeNull();
     expect(e.web).toEqual({ valor: { paginas: 120, ultimaActualizacion: "2026-10-01", idiomas: ["es", "en", "fr"] }, fuente: "sitemap" });
     expect(e.menciones).toEqual({ valor: { total: 2, ultimoAnio: 1, destacada: { titulo: "Show HN", puntos: 10 } }, fuente: "hackernews" });
+  });
+
+  it("empleo: confianza alta si la web enlaza el tablero, media si se adivinó", () => {
+    const job = (linkedFromSite: boolean) =>
+      buildEmpresa(makeRaw({ empleo: { platform: "ashby", token: "f", openings: 3, byArea: {}, linkedFromSite } })).empleo?.valor.confianza;
+    expect(job(true)).toBe("alta");
+    expect(job(false)).toBe("media");
   });
 });
 

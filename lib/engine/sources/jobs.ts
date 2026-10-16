@@ -133,9 +133,12 @@ const PARSERS: Record<JobPlatform, (json: unknown) => JobCount | null> = {
 };
 
 export async function fetchJobs(
-  candidates: JobCandidate[],
+  allCandidates: JobCandidate[],
   fetcher: Fetcher,
 ): Promise<JobsData | null> {
+  // Si la web enlaza algún tablero, solo cuentan los enlazados: uno adivinado podría ser de otra empresa.
+  const linkedOnly = allCandidates.filter((c) => c.linkedFromSite);
+  const candidates = linkedOnly.length > 0 ? linkedOnly : allCandidates;
   const results = await Promise.allSettled(
     candidates.map(async (c) => {
       const res = await fetcher(ENDPOINTS[c.platform](c.token), {
