@@ -112,9 +112,13 @@ export interface WaybackData {
   changesLastYear: number;
 }
 
+export type CollectedSource = Exclude<SourceId, "mercado">;
+
 export interface RawData {
   url: string;
   domain: string;
+  /** Dominio registrable de la URL final (tras redirecciones), usado para rankings y registros. */
+  rootDomain: string;
   collectedAt: string;
   site: SiteData | null;
   tranco: TrancoData | null;
@@ -122,7 +126,16 @@ export interface RawData {
   pagespeed: PageSpeedData | null;
   rdap: RdapData | null;
   wayback: WaybackData | null;
-  unavailable: SourceId[];
+  sitemap: SitemapData | null;
+  rutas: PathProbeData | null;
+  empleo: JobsData | null;
+  appstore: AppStoreData | null;
+  wikidata: WikidataData | null;
+  dns: DnsData | null;
+  hackernews: HackerNewsData | null;
+  fuentes: Record<CollectedSource, SourceStatus>;
+  /** Fuentes con estado "fallo". */
+  unavailable: CollectedSource[];
 }
 
 export interface Range {

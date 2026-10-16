@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { collect, InsufficientDataError } from "../../lib/engine/collect";
-import { BlockedUrlError } from "../../lib/engine/safe-fetch";
+import { BlockedUrlError, type PageGetter } from "../../lib/engine/safe-fetch";
 import { fakeFetcher, fakeGetPage, NOW } from "./fake-network";
 
 const input = { url: "https://facturo.example/", domain: "facturo.example" };
@@ -18,12 +18,59 @@ describe("collect", () => {
     expect(raw.rdap).toEqual({ registeredAt: "2015-03-02" });
     expect(raw.wayback).toEqual({ firstCapture: "2015-04-01", lastChange: "2025-11-01", changesLastYear: 0 });
     expect(raw.unavailable).toEqual([]);
+    expect(raw.rootDomain).toBe("facturo.example");
+    expect(raw.fuentes).toEqual({
+      web: "ok", tecnologias: "ok", tranco: "ok", radar: "ok", pagespeed: "ok", rdap: "ok", wayback: "ok",
+      sitemap: "no_aplica", rutas: "ok", empleo: "no_aplica", appstore: "no_aplica", wikidata: "no_aplica", dns: "ok", hackernews: "ok",
+    });
+    expect(raw.dns).toEqual({ emailProvider: "Google Workspace", tools: [{ name: "Mailchimp", category: "email" }] });
+    expect(raw.rutas).toEqual({ found: ["precios"], checked: ["blog", "precios", "empleo", "about"] });
   });
 
-  it("marca Radar como no disponible si no hay token", async () => {
+  it("marca Radar como no aplicable si no hay token", async () => {
     const raw = await collect(input, { ...baseDeps, radarToken: undefined });
     expect(raw.radar).toBeNull();
-    expect(raw.unavailable).toEqual(["radar"]);
+    expect(raw.fuentes.radar).toBe("no_aplica");
+    expect(raw.unavailable).toEqual([]);
+  });
+
+  it("usa el dominio final tras las redirecciones para rankings, DNS y registro", async () => {
+    const urls: string[] = [];
+    const base = fakeFetcher();
+    const fetcher = async (url: string, init?: RequestInit) => {
+      urls.push(url);
+      return base(url, init);
+    };
+    const getPage: PageGetter = async (url) =>
+      url === "https://notion.so/"
+        ? { url: "https://www.notion.com/", status: 200, headers: {}, text: "<html><head><title>Notion</title></head><body></body></html>" }
+        : { url, status: 404, headers: {}, text: "" };
+    const raw = await collect({ url: "https://notion.so/", domain: "notion.so" }, { ...baseDeps, getPage, fetcher });
+    expect(raw.rootDomain).toBe("notion.com");
+    expect(urls.some((u) => u.endsWith("/api/ranks/domain/notion.com"))).toBe(true);
+    expect(urls.some((u) => u.includes("rdap.org/domain/notion.com"))).toBe(true);
+    expect(urls.some((u) => u.includes("dns-query?name=notion.com"))).toBe(true);
+  });
+
+  it("busca en Wikidata con el nombre de la empresa", async () => {
+    const urls: string[] = [];
+    const base = fakeFetcher();
+    await collect(input, {
+      ...baseDeps,
+      fetcher: async (url, init) => {
+        urls.push(url);
+        return base(url, init);
+      },
+    });
+    expect(urls.some((u) => u.includes("wbsearchentities") && u.includes("search=Facturo"))).toBe(true);
+  });
+
+  it("marca como fallo las fuentes que no terminan en el plazo y sigue", async () => {
+    const fetcher = fakeFetcher({ "hn.algolia.com": () => new Promise<Response>(() => {}) });
+    const raw = await collect(input, { ...baseDeps, fetcher, sleep: () => new Promise((r) => setTimeout(r, 50)) });
+    expect(raw.fuentes.hackernews).toBe("fallo");
+    expect(raw.unavailable).toEqual(["hackernews"]);
+    expect(raw.fuentes.tranco).toBe("ok");
   });
 
   it("continúa si falla una fuente", async () => {

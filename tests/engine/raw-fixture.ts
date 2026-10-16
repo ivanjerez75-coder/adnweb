@@ -31,6 +31,7 @@ export function makeRaw(overrides: Partial<RawData> = {}): RawData {
   return {
     url: "https://facturo.example/",
     domain: "facturo.example",
+    rootDomain: "facturo.example",
     collectedAt: "2026-10-14T00:00:00.000Z",
     site: makeSite(),
     tranco: { rank: 5000, trend: "estable" },
@@ -38,6 +39,17 @@ export function makeRaw(overrides: Partial<RawData> = {}): RawData {
     pagespeed: { mobile: 90, desktop: 95 },
     rdap: { registeredAt: "2015-03-02" },
     wayback: { firstCapture: "2015-04-01", lastChange: "2026-08-01", changesLastYear: 6 },
+    sitemap: null,
+    rutas: null,
+    empleo: null,
+    appstore: null,
+    wikidata: null,
+    dns: null,
+    hackernews: null,
+    fuentes: {
+      web: "ok", tecnologias: "ok", tranco: "ok", radar: "ok", pagespeed: "ok", rdap: "ok", wayback: "ok",
+      sitemap: "no_aplica", rutas: "fallo", empleo: "no_aplica", appstore: "no_aplica", wikidata: "no_aplica", dns: "fallo", hackernews: "fallo",
+    },
     unavailable: [],
     ...overrides,
   };
