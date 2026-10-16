@@ -30,12 +30,13 @@ describe("parseSitemapXml", () => {
 });
 
 describe("sitemapsFromRobots", () => {
-  it("extrae hasta 3 líneas Sitemap absolutas", () => {
-    const robots = "User-agent: *\nDisallow: /x\nSitemap: https://acme.example/a.xml\nsitemap: /b.xml\nSitemap: ftp://x/c.xml\nSitemap: https://acme.example/d.xml\nSitemap: https://acme.example/e.xml";
+  it("extrae TODAS las líneas Sitemap http(s) válidas, sin tope y sin duplicados", () => {
+    const robots = "User-agent: *\nDisallow: /x\nSitemap: https://acme.example/a.xml\nsitemap: /b.xml\nSitemap: ftp://x/c.xml\nSitemap: https://acme.example/d.xml\nSitemap: https://acme.example/e.xml\nSitemap: https://acme.example/a.xml";
     expect(sitemapsFromRobots(robots, "https://acme.example")).toEqual([
       "https://acme.example/a.xml",
       "https://acme.example/b.xml",
       "https://acme.example/d.xml",
+      "https://acme.example/e.xml",
     ]);
   });
 });
@@ -298,5 +299,136 @@ describe("sitemaps parciales", () => {
       "https://acme.example/b.xml": page("https://acme.example/b.xml", big("q")),
     });
     expect((await fetchSitemap("https://acme.example/", get, NOW))?.complete).toBe(false);
+  });
+});
+
+describe("sitemaps declarados en robots.txt", () => {
+  const getterFor = (pages: Record<string, FetchedPage>): PageGetter & { calls: string[] } => {
+    const calls: string[] = [];
+    return Object.assign(
+      async (url: string) => {
+        calls.push(url);
+        return pages[url] ?? page(url, "", 404);
+      },
+      { calls },
+    );
+  };
+  const urlset = (...paths: string[]) => `<urlset>${paths.map((p) => `<url><loc>https://acme.example${p}</loc></url>`).join("")}</urlset>`;
+  const robotsWith = (urls: string[]) => page("https://acme.example/robots.txt", urls.map((u) => `Sitemap: ${u}`).join("\n"));
+
+  it("4 sitemaps en robots, el 4.º con el blog: se lee (antes se descartaba y daba un falso «sin blog»)", async () => {
+    const urls = [1, 2, 3, 4].map((n) => `https://acme.example/s${n}.xml`);
+    const pages: Record<string, FetchedPage> = { "https://acme.example/robots.txt": robotsWith(urls) };
+    urls.forEach((u, i) => (pages[u] = page(u, urlset(i === 3 ? "/blog/p" : `/p${i}`))));
+    const data = await fetchSitemap("https://acme.example/", getterFor(pages), NOW);
+    expect(data?.urlCount).toBe(4);
+    expect(data?.sections).toContain("blog");
+    expect(data?.complete).toBe(true);
+  });
+
+  it("4 sitemaps en robots con un índice que agota el tope: el de blog se lee primero y el resultado es incompleto", async () => {
+    const urls = ["https://acme.example/index.xml", "https://acme.example/s2.xml", "https://acme.example/s3.xml", "https://acme.example/sitemap-blog.xml"];
+    const pages: Record<string, FetchedPage> = {
+      "https://acme.example/robots.txt": robotsWith(urls),
+      "https://acme.example/index.xml": page(
+        "https://acme.example/index.xml",
+        `<sitemapindex><sitemap><loc>https://acme.example/c1.xml</loc></sitemap><sitemap><loc>https://acme.example/c2.xml</loc></sitemap></sitemapindex>`,
+      ),
+      "https://acme.example/s2.xml": page("https://acme.example/s2.xml", urlset("/p2")),
+      "https://acme.example/s3.xml": page("https://acme.example/s3.xml", urlset("/p3")),
+      "https://acme.example/sitemap-blog.xml": page("https://acme.example/sitemap-blog.xml", urlset("/blog/p")),
+      "https://acme.example/c1.xml": page("https://acme.example/c1.xml", urlset("/c1")),
+      "https://acme.example/c2.xml": page("https://acme.example/c2.xml", urlset("/c2")),
+    };
+    const get = getterFor(pages);
+    const data = await fetchSitemap("https://acme.example/", get, NOW);
+    expect(get.calls[1]).toBe("https://acme.example/sitemap-blog.xml");
+    expect(data?.sections).toContain("blog");
+    expect(data?.complete).toBe(false);
+  });
+
+  it("5 sitemaps en robots sin «blog»: el 5.º no se lee y el resultado es incompleto", async () => {
+    const urls = [1, 2, 3, 4, 5].map((n) => `https://acme.example/s${n}.xml`);
+    const pages: Record<string, FetchedPage> = { "https://acme.example/robots.txt": robotsWith(urls) };
+    urls.forEach((u, i) => (pages[u] = page(u, urlset(`/p${i}`))));
+    const get = getterFor(pages);
+    const data = await fetchSitemap("https://acme.example/", get, NOW);
+    expect(get.calls).not.toContain("https://acme.example/s5.xml");
+    expect(data?.urlCount).toBe(4);
+    expect(data?.complete).toBe(false);
+  });
+
+  it("5 sitemaps en robots con el de blog al final: se lee el de blog primero", async () => {
+    const urls = ["s1", "s2", "s3", "s4", "blog"].map((n) => `https://acme.example/${n}.xml`);
+    const pages: Record<string, FetchedPage> = { "https://acme.example/robots.txt": robotsWith(urls) };
+    urls.forEach((u) => (pages[u] = page(u, urlset(u.includes("blog") ? "/blog/p" : "/x"))));
+    const get = getterFor(pages);
+    const data = await fetchSitemap("https://acme.example/", get, NOW);
+    expect(get.calls[1]).toBe("https://acme.example/blog.xml");
+    expect(data?.sections).toContain("blog");
+    expect(data?.complete).toBe(false);
+  });
+});
+
+describe("urlset cuyos loc son sitemaps", () => {
+  const getterFor = (pages: Record<string, FetchedPage>): PageGetter & { calls: string[] } => {
+    const calls: string[] = [];
+    return Object.assign(
+      async (url: string) => {
+        calls.push(url);
+        return pages[url] ?? page(url, "", 404);
+      },
+      { calls },
+    );
+  };
+
+  it("parseSitemapXml separa los loc .xml / .xml.gz como hijos y no como páginas", () => {
+    const xml = `<urlset><url><loc>https://acme.example/sitemap-posts.xml</loc></url><url><loc>https://acme.example/sitemap-pages.xml.gz</loc></url><url><loc>https://acme.example/about</loc></url></urlset>`;
+    const parsed = parseSitemapXml(xml);
+    expect(parsed.kind).toBe("urlset");
+    expect(parsed.children).toEqual(["https://acme.example/sitemap-posts.xml", "https://acme.example/sitemap-pages.xml.gz"]);
+    expect(parsed.urls.map((u) => u.loc)).toEqual(["https://acme.example/about"]);
+  });
+
+  it("fetchSitemap los encola como hijos (blog primero) y no los cuenta como páginas", async () => {
+    const get = getterFor({
+      "https://acme.example/sitemap.xml": page(
+        "https://acme.example/sitemap.xml",
+        `<urlset><url><loc>https://acme.example/sitemap-a.xml</loc></url><url><loc>https://acme.example/sitemap-blog.xml</loc></url></urlset>`,
+      ),
+      "https://acme.example/sitemap-a.xml": page("https://acme.example/sitemap-a.xml", `<urlset><url><loc>https://acme.example/a</loc></url></urlset>`),
+      "https://acme.example/sitemap-blog.xml": page("https://acme.example/sitemap-blog.xml", `<urlset><url><loc>https://acme.example/blog/p</loc></url></urlset>`),
+    });
+    const data = await fetchSitemap("https://acme.example/", get, NOW);
+    expect(get.calls).toContain("https://acme.example/sitemap-a.xml");
+    expect(get.calls.indexOf("https://acme.example/sitemap-blog.xml")).toBeLessThan(get.calls.indexOf("https://acme.example/sitemap-a.xml"));
+    expect(data?.urlCount).toBe(2);
+    expect(data?.sections).toEqual(["blog"]);
+    expect(data?.complete).toBe(true);
+  });
+
+  it("los hijos de un urlset respetan el tope de archivos y dejan el resultado incompleto", async () => {
+    const children = [1, 2, 3, 4, 5].map((n) => `https://acme.example/sitemap-${n}.xml`);
+    const pages: Record<string, FetchedPage> = {
+      "https://acme.example/sitemap.xml": page("https://acme.example/sitemap.xml", `<urlset>${children.map((c) => `<url><loc>${c}</loc></url>`).join("")}</urlset>`),
+    };
+    for (const c of children) pages[c] = page(c, `<urlset><url><loc>${c.replace(".xml", "")}/p</loc></url></urlset>`);
+    const get = getterFor(pages);
+    const data = await fetchSitemap("https://acme.example/", get, NOW);
+    expect(get.calls.filter((c) => c.endsWith(".xml"))).toHaveLength(4);
+    expect(data?.urlCount).toBe(3);
+    expect(data?.complete).toBe(false);
+  });
+
+  it("un hijo .xml.gz dentro de un urlset deja el resultado incompleto", async () => {
+    const get = getterFor({
+      "https://acme.example/sitemap.xml": page(
+        "https://acme.example/sitemap.xml",
+        `<urlset><url><loc>https://acme.example/a</loc></url><url><loc>https://acme.example/more.xml.gz</loc></url></urlset>`,
+      ),
+    });
+    const data = await fetchSitemap("https://acme.example/", get, NOW);
+    expect(data?.urlCount).toBe(1);
+    expect(data?.complete).toBe(false);
   });
 });

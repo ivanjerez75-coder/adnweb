@@ -27,11 +27,23 @@ export interface SitemapUrl {
 
 export interface ParsedSitemap {
   kind: "index" | "urlset";
+  /** Sitemaps hijos: los de un índice, o los loc .xml / .xml.gz de un urlset (no son páginas). */
   children: string[];
   urls: SitemapUrl[];
 }
 
 const NS = "(?:[\\w-]+:)?";
+
+/** Un loc que apunta a otro sitemap (.xml o .xml.gz), no a una página. */
+const SITEMAP_FILE_RE = /\.xml(?:\.gz)?$/i;
+
+const pathnameOf = (u: string): string => {
+  try {
+    return new URL(u).pathname;
+  } catch {
+    return u;
+  }
+};
 
 /** Elemento XML con o sin prefijo de espacio de nombres y con atributos opcionales. */
 const tagRe = (name: string, flags: string) =>
@@ -69,20 +81,30 @@ export function parseSitemapXml(xml: string, maxUrls = MAX_URLS): ParsedSitemap 
     return { kind: "index", children, urls: [] };
   }
   const urls: SitemapUrl[] = [];
+  const children: string[] = [];
   for (const m of xml.matchAll(tagRe("url", "gi"))) {
     if (urls.length >= maxUrls) break;
     const block = m[1];
     const loc = readTag(block, "loc");
     if (!loc) continue;
+    // Algunos urlset listan otros sitemaps como si fueran páginas: se tratan como hijos.
+    if (SITEMAP_FILE_RE.test(pathnameOf(loc))) {
+      if (!children.includes(loc)) children.push(loc);
+      continue;
+    }
     urls.push({
       loc,
       lastmod: readTag(block, "lastmod"),
       hreflangs: [...block.matchAll(/hreflang=["']([a-zA-Z-]+)["']/g)].map((h) => h[1].toLowerCase()),
     });
   }
-  return { kind: "urlset", children: [], urls };
+  return { kind: "urlset", children, urls };
 }
 
+/**
+ * Todas las líneas Sitemap http(s) de robots.txt, sin duplicados y sin tope: el tope de archivos
+ * lo aplica fetchSitemap, que marca el resultado como incompleto si alguna queda sin leer.
+ */
 export function sitemapsFromRobots(robots: string, origin: string): string[] {
   const out: string[] = [];
   for (const line of robots.split(/\r?\n/)) {
@@ -90,12 +112,13 @@ export function sitemapsFromRobots(robots: string, origin: string): string[] {
     if (!value) continue;
     try {
       const url = new URL(value, origin);
-      if (url.protocol === "http:" || url.protocol === "https:") out.push(url.toString());
+      const href = url.toString();
+      if ((url.protocol === "http:" || url.protocol === "https:") && !out.includes(href)) out.push(href);
     } catch {
       // línea inválida
     }
   }
-  return out.slice(0, 3);
+  return out;
 }
 
 /**
@@ -153,19 +176,11 @@ const isHttpUrl = (u: string): boolean => {
   }
 };
 
-/** Si no caben todos los hijos de un índice, primero los de blog. */
+/** Si no caben todos los sitemaps (de robots.txt, de un índice o de un urlset), primero los de blog. */
 const blogFirst = (children: string[]) => [
   ...children.filter((c) => /blog/i.test(c)),
   ...children.filter((c) => !/blog/i.test(c)),
 ];
-
-const pathnameOf = (u: string): string => {
-  try {
-    return new URL(u).pathname;
-  } catch {
-    return u;
-  }
-};
 
 export async function fetchSitemap(siteUrl: string, get: PageGetter, now: Date): Promise<SitemapData | null> {
   const origin = new URL(siteUrl).origin;
@@ -184,7 +199,7 @@ export async function fetchSitemap(siteUrl: string, get: PageGetter, now: Date):
 
   let queue: string[] = [];
   const robots = await tryGet(`${origin}/robots.txt`);
-  if (robots && robots.status < 400) queue = sitemapsFromRobots(robots.text, origin);
+  if (robots && robots.status < 400) queue = blogFirst(sitemapsFromRobots(robots.text, origin));
   if (queue.length === 0) queue = [`${origin}/sitemap.xml`];
 
   const seen = new Set<string>();
@@ -215,14 +230,14 @@ export async function fetchSitemap(siteUrl: string, get: PageGetter, now: Date):
     bytes += file.text.length;
     if (file.text.length >= POSSIBLY_TRUNCATED_CHARS) complete = false;
     const parsed = parseSitemapXml(file.text, MAX_URLS - urls.length);
-    if (parsed.kind === "index") {
-      queue.push(...blogFirst(parsed.children.filter(isHttpUrl)));
-    } else if (parsed.urls.length > 0) {
+    // Hijos de un índice o loc .xml de un urlset: mismos topes y misma regla de completitud.
+    queue.push(...blogFirst(parsed.children.filter(isHttpUrl)));
+    if (parsed.urls.length > 0) {
       parsedAny = true;
       for (const u of parsed.urls) urls.push(u);
     }
   }
-  // Archivos que quedaron sin leer por el tope de archivos, de bytes o de URLs.
+  // Sitemaps declarados (en robots.txt, índices o urlset) sin leer por el tope de archivos, de bytes o de URLs.
   if (queue.some((u) => !seen.has(u)) || urls.length >= MAX_URLS) complete = false;
 
   // Solo cuenta como comprobado si se leyó alguna URL: un índice con todos sus hijos fallidos o .gz no prueba nada.
