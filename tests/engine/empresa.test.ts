@@ -1,13 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { buildEmpresa } from "../../lib/engine/empresa";
 import { validateClaims } from "../../lib/engine/claims";
-import { makeRaw } from "./raw-fixture";
+import { makeRaw, makeSite } from "./raw-fixture";
 import type { Signal } from "../../lib/engine/types";
 
 describe("buildEmpresa", () => {
   it("rellena la ficha con la fuente de cada dato y null si falta", () => {
     const raw = makeRaw({
-      wikidata: { id: "Q1", description: null, inception: 2016, founders: ["Ana"], headquarters: "Madrid", employees: 80, revenue: null },
+      wikidata: { id: "Q1", description: null, inception: 2016, founders: ["Ana"], headquarters: "Madrid", employees: 80, employeesYear: 2024, revenue: null },
       empleo: { platform: "lever", token: "f", openings: 7, byArea: { Ventas: 7 }, linkedFromSite: true },
       dns: { emailProvider: "Google Workspace", tools: [] },
       sitemap: { urlCount: 120, sections: [], languages: ["fr"], lastModified: "2026-10-01", recentBlogPosts: 0, complete: true },
@@ -18,6 +18,7 @@ describe("buildEmpresa", () => {
     expect(e.fundacion).toEqual({ valor: 2016, fuente: "wikidata" });
     expect(e.fundadores).toEqual({ valor: ["Ana"], fuente: "wikidata" });
     expect(e.empleados).toEqual({ valor: 80, fuente: "wikidata" });
+    expect(e.empleadosAnio).toEqual({ valor: 2024, fuente: "wikidata" });
     expect(e.ingresosPublicos).toBeNull();
     expect(e.empleo).toEqual({ valor: { ofertas: 7, porArea: { Ventas: 7 }, plataforma: "lever", confianza: "alta" }, fuente: "empleo" });
     expect(e.app).toBeNull();
@@ -25,6 +26,11 @@ describe("buildEmpresa", () => {
     expect(e.herramientas).toBeNull();
     expect(e.web).toEqual({ valor: { paginas: 120, ultimaActualizacion: "2026-10-01", idiomas: ["es", "en", "fr"], completo: true }, fuente: "sitemap" });
     expect(e.menciones).toEqual({ valor: { total: 2, ultimoAnio: 1, destacada: { titulo: "Show HN", puntos: 10 } }, fuente: "hackernews" });
+  });
+
+  it("nombre: no toma el de la página si es de otro (redirección a una plataforma)", () => {
+    const raw = makeRaw({ site: makeSite({ companyName: "Instagram" }), finalDomain: "instagram.com", companyNameFromPage: false });
+    expect(buildEmpresa(raw).nombre).toBeNull();
   });
 
   it("web: completo false si el sitemap no se leyó entero (la UI muestra «≥ N»)", () => {

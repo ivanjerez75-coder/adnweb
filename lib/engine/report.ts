@@ -5,6 +5,7 @@ import { computeFacts, type Facts } from "./facts";
 import { allTechnologies, extractSignals } from "./signals";
 import { validateOpportunities, type Opportunity } from "./opportunities";
 import { buildPrompt } from "./ai/prompt";
+import { redirectionOf } from "./redirect";
 import { generateAiOutput, type JsonModel } from "./ai/providers";
 import type { AiOutput } from "./ai/schema";
 import type { StepReporter } from "./collect";
@@ -20,6 +21,8 @@ export interface Report {
   empresa: EmpresaFicha;
   hechos: Facts;
   fuentes: RawData["fuentes"];
+  /** Redirección a otro dominio: a dónde y si se tomó como la misma empresa (adoptada). */
+  redireccion: { a: string; adoptada: boolean } | null;
   resumen: AiOutput["resumen"];
   trafico: {
     visitasMes: Range | null;
@@ -156,6 +159,7 @@ export async function buildReport(
     empresa: buildEmpresa(raw),
     hechos: computeFacts(raw),
     fuentes: raw.fuentes,
+    redireccion: redirectionOf(raw),
     resumen: ai.resumen,
     trafico: {
       visitasMes: anchors.visitasMes,

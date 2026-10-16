@@ -32,6 +32,8 @@ export function makeRaw(overrides: Partial<RawData> = {}): RawData {
     url: "https://facturo.example/",
     domain: "facturo.example",
     rootDomain: "facturo.example",
+    finalDomain: null,
+    companyNameFromPage: true,
     collectedAt: "2026-10-14T00:00:00.000Z",
     site: makeSite(),
     tranco: { rank: 5000, trend: "estable" },

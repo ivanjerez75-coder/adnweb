@@ -78,7 +78,8 @@ export function extractWikidata(e: WikidataEntity, labels: Record<string, string
     .map((id) => (id ? labels[id] : undefined))
     .filter((l): l is string => typeof l === "string");
   const hqId = usable(e.claims?.P159).map(entityId)[0];
-  const employees = quantity(latest(e.claims?.P1128));
+  const employeesClaim = latest(e.claims?.P1128);
+  const employees = quantity(employeesClaim);
   const revenueClaim = latest(e.claims?.P2139);
   const revenue = quantity(revenueClaim);
   const currencyId = revenue?.unit.split("/").pop() ?? "";
@@ -91,6 +92,7 @@ export function extractWikidata(e: WikidataEntity, labels: Record<string, string
     founders,
     headquarters: hqId ? (labels[hqId] ?? null) : null,
     employees: employees ? employees.amount : null,
+    employeesYear: employees && employeesClaim ? pointInTime(employeesClaim) : null,
     revenue:
       revenue && currency
         ? { amount: revenue.amount, currency, year: revenueClaim ? pointInTime(revenueClaim) : null }
@@ -108,7 +110,7 @@ async function api(params: Record<string, string>, fetcher: Fetcher): Promise<Re
 }
 
 export async function fetchWikidata(
-  input: { companyName: string; rootDomain: string },
+  input: { companyName: string; domains: string[] },
   fetcher: Fetcher,
 ): Promise<WikidataData | null> {
   const search = await api(
@@ -123,8 +125,8 @@ export async function fetchWikidata(
 
   const got = await api({ action: "wbgetentities", ids: ids.join("|"), props: "claims|descriptions", languages: "es|en" }, fetcher);
   const entities = (got.entities ?? {}) as Record<string, WikidataEntity>;
-  const root = input.rootDomain.toLowerCase();
-  const match = ids.map((id) => entities[id]).find((e) => e && officialDomains(e).includes(root));
+  const domains = new Set(input.domains.map((d) => d.toLowerCase()));
+  const match = ids.map((id) => entities[id]).find((e) => e && officialDomains(e).some((d) => domains.has(d.toLowerCase())));
   if (!match) return null;
 
   const wanted = labelIds(match);

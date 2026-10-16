@@ -8,7 +8,7 @@ import { NOW } from "./fake-network";
 import type { WikidataData } from "../../lib/engine/types";
 
 const wiki = (over: Partial<WikidataData> = {}): WikidataData => ({
-  id: "Q1", description: null, inception: null, founders: [], headquarters: null, employees: null, revenue: null, ...over,
+  id: "Q1", description: null, inception: null, founders: [], headquarters: null, employees: null, employeesYear: null, revenue: null, ...over,
 });
 
 const base = {

@@ -149,7 +149,7 @@ describe("extractSignals — positivas", () => {
       empleo: { platform: "greenhouse", token: "f", openings: 35, byArea: {}, linkedFromSite: true },
       appstore: { name: "F", rating: 4.6, ratingCount: 12000, url: "u", linkedFromSite: true },
       sitemap: sitemap({ urlCount: 800, recentBlogPosts: 6, languages: ["fr", "de"] }),
-      wikidata: { id: "Q1", description: null, inception: 2016, founders: [], headquarters: null, employees: 450, revenue: null },
+      wikidata: { id: "Q1", description: null, inception: 2016, founders: [], headquarters: null, employees: 450, employeesYear: null, revenue: null },
       hackernews: { total: 40, lastYear: 3, top: null },
       dns: { emailProvider: "Google Workspace", tools: [{ name: "Salesforce", category: "ventas" }] },
     });
@@ -195,7 +195,7 @@ describe("extractSignals — fechas y umbrales", () => {
   const app = (rating: number, ratingCount: number) =>
     makeRaw({ appstore: { name: "F", rating, ratingCount, url: "u", linkedFromSite: true } });
   const wd = (employees: number) =>
-    makeRaw({ wikidata: { id: "Q1", description: null, inception: null, founders: [], headquarters: null, employees, revenue: null } });
+    makeRaw({ wikidata: { id: "Q1", description: null, inception: null, founders: [], headquarters: null, employees, employeesYear: null, revenue: null } });
   const cases: [string, RawData, string, boolean][] = [
     ["4 ofertas", emp(4), "contratando", false],
     ["5 ofertas", emp(5), "contratando", true],

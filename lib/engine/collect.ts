@@ -1,4 +1,3 @@
-import { getDomain } from "tldts";
 import type { NormalizedUrl } from "./url";
 import { BlockedUrlError, type PageGetter } from "./safe-fetch";
 import type { CollectedSource, Fetcher, RawData, SourceStatus } from "./types";
@@ -16,6 +15,7 @@ import { fetchWikidata } from "./sources/wikidata";
 import { fetchDns } from "./sources/dns";
 import { fetchHackerNews } from "./sources/hackernews";
 import { radarRank, validRank } from "./anchors";
+import { resolveDomains } from "./redirect";
 
 export class InsufficientDataError extends Error {
   constructor(message = "No hemos podido reunir datos suficientes sobre esta web.") {
@@ -78,11 +78,16 @@ export async function collect(
   if (siteR.status === "fallo" && siteR.error instanceof BlockedUrlError) throw siteR.error;
   const siteData = siteR.status === "ok" ? siteR.value : null;
 
-  // Rankings, registro y DNS van por el dominio registrable de la URL final (notion.so → notion.com).
-  const finalHost = siteData ? new URL(siteData.finalUrl).hostname.toLowerCase() : input.domain;
-  const rootDomain = getDomain(finalHost, { allowPrivateDomains: true }) ?? finalHost.replace(/^www\./, "");
-  const baseUrl = siteData?.finalUrl ?? input.url;
-  const companyName = siteData?.companyName ?? rootDomain.split(".")[0];
+  // Las fuentes externas usan el dominio final solo si es la misma empresa (notion.so → notion.com);
+  // una redirección a Instagram, Linktree o un parking no puede darnos su ranking, Wikidata o DNS.
+  const finalHost = siteData ? new URL(siteData.finalUrl).hostname : null;
+  const { rootDomain, inputRoot, finalDomain, adopted, domains } = resolveDomains(input.domain, finalHost);
+  /** La página final es de otro (plataforma u otra empresa): su nombre, apps y tableros no son de este negocio. */
+  const foreign = finalDomain !== null && !adopted;
+  const ownSite = foreign ? null : siteData;
+  const companyNameFromPage = !!ownSite?.companyName;
+  const companyName = ownSite?.companyName ?? inputRoot.split(".")[0];
+  const baseUrl = ownSite?.finalUrl ?? input.url;
 
   await onStep("Analizando tráfico y presencia…");
   const [trancoR, radarR, rdapR, dnsR, hnR, sitemapR, rutasR, empleoR, appR, wikiR, pagespeedR, waybackR] = await Promise.all([
@@ -91,11 +96,12 @@ export async function collect(
     run(fetchRdap(rootDomain, deps.fetcher)),
     run(fetchDns(rootDomain, deps.fetcher)),
     run(fetchHackerNews(rootDomain, deps.fetcher, now)),
-    run(fetchSitemap(baseUrl, deps.getPage, now)),
+    // El sitemap de la página final sería el de la plataforma.
+    foreign ? notApplicable<never>() : run(fetchSitemap(baseUrl, deps.getPage, now)),
     run(probePaths(baseUrl, deps.getPage)),
-    run(fetchJobs(jobCandidates(siteData, rootDomain), deps.fetcher)),
-    run(fetchAppStore({ appIds: siteData?.appStoreIds ?? [], companyName, rootDomain }, deps.fetcher)),
-    run(fetchWikidata({ companyName, rootDomain }, deps.fetcher)),
+    run(fetchJobs(jobCandidates(ownSite, rootDomain), deps.fetcher)),
+    run(fetchAppStore({ appIds: ownSite?.appStoreIds ?? [], companyName, domains }, deps.fetcher)),
+    run(fetchWikidata({ companyName, domains }, deps.fetcher)),
     pagespeed,
     wayback,
   ]);
@@ -110,6 +116,8 @@ export async function collect(
     url: input.url,
     domain: input.domain,
     rootDomain,
+    finalDomain,
+    companyNameFromPage,
     collectedAt: now.toISOString(),
     site: take(siteR, "web", "tecnologias"),
     tranco: take(trancoR, "tranco"),

@@ -117,8 +117,15 @@ export type CollectedSource = Exclude<SourceId, "mercado">;
 export interface RawData {
   url: string;
   domain: string;
-  /** Dominio registrable de la URL final (tras redirecciones), usado para rankings y registros. */
+  /**
+   * Dominio registrable usado para rankings, registro, DNS y menciones: el del usuario, o el final
+   * tras redirecciones si es la misma empresa (notion.so → notion.com). Nunca el de una plataforma.
+   */
   rootDomain: string;
+  /** Dominio registrable de la URL final si difiere del escrito por el usuario; si no, null. */
+  finalDomain: string | null;
+  /** true si el nombre de la empresa salió de la propia web (no de la etiqueta del dominio). */
+  companyNameFromPage: boolean;
   collectedAt: string;
   site: SiteData | null;
   tranco: TrancoData | null;
@@ -204,6 +211,8 @@ export interface WikidataData {
   founders: string[];
   headquarters: string | null;
   employees: number | null;
+  /** Año (P585) del dato de empleados, si Wikidata lo da. */
+  employeesYear: number | null;
   revenue: { amount: number; currency: string; year: number | null } | null;
 }
 

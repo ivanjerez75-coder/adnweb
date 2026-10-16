@@ -37,6 +37,11 @@ describe("computeFacts", () => {
     expect(computeFacts(makeRaw({ site: makeSite({ hasAppLinks: false }) })).app).toBe("no");
   });
 
+  it("app = desconocido si App Store no encontró nada pero el nombre no salió de la web de la empresa", () => {
+    const raw = makeRaw({ site: makeSite({ hasAppLinks: false }), companyNameFromPage: false });
+    expect(computeFacts(raw).app).toBe("desconocido");
+  });
+
   it("app = desconocido si App Store falló", () => {
     const raw = makeRaw({ site: makeSite({ hasAppLinks: false }) });
     raw.fuentes.appstore = "fallo";

@@ -32,8 +32,14 @@ describe("extractWikidata", () => {
       founders: ["Ana", "Luis"],
       headquarters: "Madrid",
       employees: 300,
+      employeesYear: 2024,
       revenue: { amount: 50_000_000, currency: "USD", year: 2023 },
     });
+  });
+
+  it("employeesYear sale del P585 de la afirmación elegida (null si no lo tiene)", () => {
+    const noYear: WikidataEntity = { id: "Q6", claims: { P1128: [qty("+50", "1")] } };
+    expect(extractWikidata(noYear, {})).toMatchObject({ employees: 50, employeesYear: null });
   });
 
   it("devuelve ingresos nulos si la unidad no es una moneda conocida", () => {
@@ -57,6 +63,7 @@ describe("extractWikidata", () => {
       founders: [],
       headquarters: null,
       employees: null,
+      employeesYear: null,
       revenue: null,
     });
   });
@@ -67,7 +74,7 @@ describe("fetchWikidata", () => {
 
   it("busca por nombre, acepta solo la entidad con la web del dominio y resuelve etiquetas", async () => {
     const urls: string[] = [];
-    const data = await fetchWikidata({ companyName: "Acme", rootDomain: "acme.example" }, async (url) => {
+    const data = await fetchWikidata({ companyName: "Acme", domains: ["acme.example"] }, async (url) => {
       urls.push(url);
       if (url.includes("wbsearchentities")) return Response.json({ search: [{ id: "Q9" }, { id: "Q1" }] });
       if (url.includes("props=labels")) {
@@ -82,32 +89,40 @@ describe("fetchWikidata", () => {
   });
 
   it("devuelve null si ninguna entidad tiene la web del dominio", async () => {
-    const data = await fetchWikidata({ companyName: "Acme", rootDomain: "acme.example" }, async (url) =>
+    const data = await fetchWikidata({ companyName: "Acme", domains: ["acme.example"] }, async (url) =>
       url.includes("wbsearchentities") ? Response.json({ search: [{ id: "Q9" }] }) : Response.json({ entities: { Q9: OTHER } }),
     );
     expect(data).toBeNull();
   });
 
   it("devuelve null si la búsqueda no da resultados", async () => {
-    expect(await fetchWikidata({ companyName: "Nada", rootDomain: "nada.example" }, async () => Response.json({ search: [] }))).toBeNull();
+    expect(await fetchWikidata({ companyName: "Nada", domains: ["nada.example"] }, async () => Response.json({ search: [] }))).toBeNull();
   });
 
   it("compara el dominio sin distinguir mayúsculas", async () => {
-    const data = await fetchWikidata({ companyName: "Acme", rootDomain: "ACME.example" }, async (url) =>
+    const data = await fetchWikidata({ companyName: "Acme", domains: ["ACME.example"] }, async (url) =>
       url.includes("wbsearchentities") ? Response.json({ search: [{ id: "Q1" }] }) : Response.json({ entities: { Q1: ACME } }),
     );
     expect(data?.id).toBe("Q1");
   });
 
+  it("acepta la entidad cuya web está en cualquiera de los dominios (notion.so → notion.com)", async () => {
+    const NOTION: WikidataEntity = { id: "Q5", claims: { P856: [str("https://www.notion.com/")] } };
+    const data = await fetchWikidata({ companyName: "Notion", domains: ["notion.so", "notion.com"] }, async (url) =>
+      url.includes("wbsearchentities") ? Response.json({ search: [{ id: "Q5" }] }) : Response.json({ entities: { Q5: NOTION } }),
+    );
+    expect(data?.id).toBe("Q5");
+  });
+
   it("lanza error si la API devuelve un cuerpo de error con estado 200", async () => {
     await expect(
-      fetchWikidata({ companyName: "Acme", rootDomain: "acme.example" }, async () => Response.json({ error: { code: "maxlag" } })),
+      fetchWikidata({ companyName: "Acme", domains: ["acme.example"] }, async () => Response.json({ error: { code: "maxlag" } })),
     ).rejects.toThrow();
   });
 
   it("lanza error si Wikidata falla", async () => {
     await expect(
-      fetchWikidata({ companyName: "Acme", rootDomain: "acme.example" }, async () => new Response("", { status: 500 })),
+      fetchWikidata({ companyName: "Acme", domains: ["acme.example"] }, async () => new Response("", { status: 500 })),
     ).rejects.toThrow();
   });
 });

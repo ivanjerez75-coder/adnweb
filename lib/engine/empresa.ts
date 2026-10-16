@@ -9,6 +9,8 @@ export interface EmpresaFicha {
   fundadores: Dato<string[]>;
   sede: Dato<string>;
   empleados: Dato<number>;
+  /** Año al que se refiere el dato de empleados. */
+  empleadosAnio: Dato<number>;
   ingresosPublicos: Dato<{ importe: number; moneda: string; anio: number | null }>;
   /** confianza: "alta" si la web enlaza el tablero; "media" si se dedujo del nombre del dominio. */
   empleo: Dato<{ ofertas: number; porArea: Record<string, number>; plataforma: JobPlatform; confianza: "alta" | "media" }>;
@@ -26,11 +28,13 @@ const dato = <T>(valor: T | null | undefined, fuente: SourceId): Dato<T> =>
 export function buildEmpresa(raw: RawData): EmpresaFicha {
   const w = raw.wikidata;
   return {
-    nombre: dato(raw.site?.companyName, "web"),
+    // Si la página final es de otro (Instagram, Linktree…), su nombre no es el de este negocio.
+    nombre: dato(raw.companyNameFromPage ? raw.site?.companyName : null, "web"),
     fundacion: dato(w?.inception, "wikidata"),
     fundadores: dato(w && w.founders.length > 0 ? w.founders : null, "wikidata"),
     sede: dato(w?.headquarters, "wikidata"),
     empleados: dato(w?.employees, "wikidata"),
+    empleadosAnio: dato(w?.employees != null ? w.employeesYear : null, "wikidata"),
     ingresosPublicos: dato(w?.revenue ? { importe: w.revenue.amount, moneda: w.revenue.currency, anio: w.revenue.year } : null, "wikidata"),
     empleo: dato(
       raw.empleo

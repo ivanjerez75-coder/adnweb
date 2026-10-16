@@ -56,6 +56,14 @@ describe("buildReport", () => {
     expect(report.fuentes.appstore).toBe("no_aplica");
   });
 
+  it("informa de la redirección y de si se adoptó el dominio final", async () => {
+    expect((await buildReport(raw, { models: [fakeModel], now: () => NOW })).redireccion).toBeNull();
+    const foreign = makeRaw({ finalDomain: "instagram.com", companyNameFromPage: false });
+    expect((await buildReport(foreign, { models: [fakeModel], now: () => NOW })).redireccion).toEqual({ a: "instagram.com", adoptada: false });
+    const adopted = makeRaw({ domain: "notion.so", rootDomain: "notion.com", finalDomain: "notion.com" });
+    expect((await buildReport(adopted, { models: [fakeModel], now: () => NOW })).redireccion).toEqual({ a: "notion.com", adoptada: true });
+  });
+
   it("marca el análisis como limitado si apenas hay texto", async () => {
     const limited = await buildReport(makeRaw({ site: makeSite({ textLength: 100 }) }), { models: [fakeModel], now: () => NOW });
     expect(limited.analisisLimitado).toBe(true);

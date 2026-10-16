@@ -57,7 +57,8 @@ export function computeFacts(raw: RawData): Facts {
     ]),
     app: presence([
       webSees((s) => s.hasAppLinks),
-      raw.appstore ? true : raw.fuentes.appstore === "no_aplica" ? false : null,
+      // "No encontrada" solo prueba algo si se buscó con el nombre real de la empresa (sacado de su web).
+      raw.appstore ? true : raw.fuentes.appstore === "no_aplica" && raw.companyNameFromPage ? false : null,
     ]),
     emailMarketing: presence([webTech("email"), dnsSees("email")]),
     chatSoporte: presence([webTech("chat"), dnsSees("chat")]),

@@ -1,6 +1,7 @@
 import type { Anchors } from "../anchors";
 import { buildEmpresa } from "../empresa";
 import { computeFacts } from "../facts";
+import { redirectionOf } from "../redirect";
 import type { RawData, Signal } from "../types";
 
 const OUTPUT_SHAPE = `{
@@ -21,6 +22,7 @@ export function buildPrompt(raw: RawData, anchors: Anchors, signals: Signal[]): 
   const data = {
     dominio: raw.domain,
     dominioRaiz: raw.rootDomain,
+    redireccion: redirectionOf(raw),
     empresa: buildEmpresa(raw),
     hechos: computeFacts(raw),
     web: raw.site && {

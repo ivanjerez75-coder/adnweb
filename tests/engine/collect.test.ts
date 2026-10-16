@@ -181,3 +181,93 @@ describe("collect", () => {
     expect(steps).toEqual(["Leyendo la web…", "Analizando tráfico y presencia…"]);
   });
 });
+
+describe("collect — redirecciones a otro dominio", () => {
+  const recording = (overrides: Parameters<typeof fakeFetcher>[0] = {}) => {
+    const urls: string[] = [];
+    const base = fakeFetcher(overrides);
+    const fetcher = async (url: string, init?: RequestInit) => {
+      urls.push(url);
+      return base(url, init);
+    };
+    return { urls, fetcher };
+  };
+  const redirectTo = (from: string, to: string, title: string): PageGetter & { calls: string[] } => {
+    const calls: string[] = [];
+    return Object.assign(
+      async (url: string) => {
+        calls.push(url);
+        return url === from
+          ? { url: to, status: 200, headers: {}, text: `<html><head><title>${title}</title></head><body></body></html>` }
+          : { url, status: 404, headers: {}, text: "" };
+      },
+      { calls },
+    );
+  };
+
+  it("notion.so → www.notion.com: adopta notion.com y usa ambos dominios para App Store y Wikidata", async () => {
+    const { urls, fetcher } = recording({
+      "itunes.apple.com": () =>
+        Response.json({ results: [{ trackName: "Notion", trackViewUrl: "https://apps.apple.com/app/id1", userRatingCount: 10, sellerUrl: "https://www.notion.so/" }] }),
+    });
+    const getPage = redirectTo("https://notion.so/", "https://www.notion.com/", "Notion");
+    const raw = await collect({ url: "https://notion.so/", domain: "notion.so" }, { ...baseDeps, getPage, fetcher });
+    expect(raw.rootDomain).toBe("notion.com");
+    expect(raw.finalDomain).toBe("notion.com");
+    expect(raw.companyNameFromPage).toBe(true);
+    expect(urls).toContain("https://tranco-list.eu/api/ranks/domain/notion.com");
+    expect(raw.appstore?.name).toBe("Notion"); // vendedor en notion.so, aceptado
+  });
+
+  it("acme.example → instagram.com/acme: NO adopta la identidad de Instagram", async () => {
+    const { urls, fetcher } = recording();
+    const getPage = redirectTo("https://acme.example/", "https://www.instagram.com/acme/", "Instagram");
+    const raw = await collect({ url: "https://acme.example/", domain: "acme.example" }, { ...baseDeps, getPage, fetcher });
+    expect(raw.rootDomain).toBe("acme.example");
+    expect(raw.finalDomain).toBe("instagram.com");
+    expect(raw.companyNameFromPage).toBe(false);
+    expect(urls).toContain("https://tranco-list.eu/api/ranks/domain/acme.example");
+    expect(urls.some((u) => u.includes("instagram.com"))).toBe(false);
+    expect(urls.some((u) => u.includes("wbsearchentities") && /search=acme(&|$)/.test(u))).toBe(true);
+    expect(urls.some((u) => u.includes("itunes.apple.com/search?term=acme&"))).toBe(true);
+    // El sitemap sería el de Instagram: no se lee.
+    expect(getPage.calls.some((u) => u.includes("robots.txt") || u.includes("sitemap"))).toBe(false);
+    expect(raw.fuentes.sitemap).toBe("no_aplica");
+  });
+
+  it("acme.example → other.example (otra primera etiqueta): NO adopta", async () => {
+    const { urls, fetcher } = recording();
+    const getPage = redirectTo("https://acme.example/", "https://other.example/", "Other Corp");
+    const raw = await collect({ url: "https://acme.example/", domain: "acme.example" }, { ...baseDeps, getPage, fetcher });
+    expect(raw.rootDomain).toBe("acme.example");
+    expect(raw.finalDomain).toBe("other.example");
+    expect(urls).toContain("https://rdap.org/domain/acme.example");
+    expect(urls.some((u) => u.includes("search=Other"))).toBe(false);
+  });
+
+  it("acme.example → acme.myshopify.com: una plataforma de la lista no se adopta aunque coincida la etiqueta", async () => {
+    const { urls, fetcher } = recording();
+    const getPage = redirectTo("https://acme.example/", "https://acme.myshopify.com/", "Acme");
+    const raw = await collect({ url: "https://acme.example/", domain: "acme.example" }, { ...baseDeps, getPage, fetcher });
+    expect(raw.rootDomain).toBe("acme.example");
+    expect(urls).toContain("https://tranco-list.eu/api/ranks/domain/acme.example");
+  });
+
+  it("no usa las apps ni los tableros de empleo que enlaza la página de otro", async () => {
+    const { urls, fetcher } = recording();
+    const html = `<html><head><title>Instagram</title></head><body><a href="https://apps.apple.com/app/instagram/id389801252">App</a><a href="https://jobs.lever.co/meta">Jobs</a></body></html>`;
+    const getPage: PageGetter = async (url) =>
+      url === "https://acme.example/"
+        ? { url: "https://www.instagram.com/acme/", status: 200, headers: {}, text: html }
+        : { url, status: 404, headers: {}, text: "" };
+    await collect({ url: "https://acme.example/", domain: "acme.example" }, { ...baseDeps, getPage, fetcher });
+    expect(urls.some((u) => u.includes("lookup?id=389801252"))).toBe(false);
+    expect(urls.some((u) => u.includes("api.lever.co/v0/postings/meta"))).toBe(false);
+  });
+
+  it("sin redirección, finalDomain es null", async () => {
+    const raw = await collect(input, baseDeps);
+    expect(raw.finalDomain).toBeNull();
+    expect(raw.companyNameFromPage).toBe(true);
+  });
+});
