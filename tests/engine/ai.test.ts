@@ -216,3 +216,79 @@ describe("reintentos ante saturación", () => {
     expect(backup.calls).toBe(0);
   });
 });
+
+describe("plazo total de la IA", () => {
+  /** Reloj simulado: cada llamada al modelo "tarda" `callMs` y cada espera avanza el reloj. */
+  const clocked = (callMs: number, answers: (string | Error)[], name = "gemini") => {
+    const clock = { t: 0, timeouts: [] as (number | undefined)[] };
+    const m = {
+      name,
+      calls: 0,
+      generate: async (_prompt: string, opts?: { timeoutMs?: number }) => {
+        clock.timeouts.push(opts?.timeoutMs);
+        clock.t += callMs;
+        const answer = answers[Math.min(m.calls, answers.length - 1)];
+        m.calls++;
+        if (answer instanceof Error) throw answer;
+        return answer;
+      },
+    };
+    return { m, clock };
+  };
+
+  it("se detiene al agotar el presupuesto con kind unavailable y un mensaje de tiempo", async () => {
+    const { m: a, clock } = clocked(20_000, [new Error("fetch failed")]);
+    // El segundo modelo comparte el reloj del primero.
+    const b = {
+      name: "groq",
+      calls: 0,
+      generate: async () => {
+        b.calls++;
+        clock.t += 20_000;
+        return VALID;
+      },
+    };
+    let error: unknown;
+    try {
+      await generateAiOutput("p", [a, b], 3, async (ms) => {
+        clock.t += ms;
+      }, 45_000, () => clock.t);
+    } catch (e) {
+      error = e;
+    }
+    expect(error).toBeInstanceOf(AiUnavailableError);
+    expect((error as AiUnavailableError).kind).toBe("unavailable");
+    expect((error as AiUnavailableError).message).toMatch(/tiempo/i);
+    expect(a.calls).toBe(3); // 0 s, 20 s, 40 s (quedan 5 s ≥ 3 s)
+    expect(b.calls).toBe(0); // a los 60 s ya no queda presupuesto
+  });
+
+  it("pasa a cada llamada el presupuesto restante como timeoutMs", async () => {
+    const { m, clock } = clocked(20_000, [new Error("fetch failed"), new Error("fetch failed"), VALID]);
+    await generateAiOutput("p", [m], 3, async () => {}, 45_000, () => clock.t);
+    expect(clock.timeouts).toEqual([45_000, 25_000, 5_000]);
+  });
+
+  it("se salta una espera de saturación que no cabe en el presupuesto", async () => {
+    const waits: number[] = [];
+    const clock = { t: 0 };
+    const busy = {
+      name: "gemini",
+      calls: 0,
+      generate: async () => {
+        busy.calls++;
+        clock.t += 41_000;
+        throw new Error("503 UNAVAILABLE");
+      },
+    };
+    const backup = model("groq", [VALID]);
+    const out = await generateAiOutput("p", [busy, backup], 3, async (ms) => {
+      waits.push(ms);
+      clock.t += ms;
+    }, 45_000, () => clock.t);
+    expect(out).toEqual(validAiOutput);
+    expect(waits).toEqual([]); // quedaban 4 s: esperar 2 s no deja margen para otro intento
+    expect(busy.calls).toBe(1);
+    expect(backup.calls).toBe(1);
+  });
+});
