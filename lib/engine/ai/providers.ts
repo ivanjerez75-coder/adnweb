@@ -21,7 +21,19 @@ export class AiUnavailableError extends Error {
 
 const AI_TIMEOUT_MS = 60_000;
 
-export function geminiModel(apiKey: string, model = "gemini-2.5-flash"): JsonModel {
+export const DEFAULT_GEMINI_MODELS = ["gemini-3.5-flash", "gemini-flash-lite-latest"];
+export const OVERLOAD_BACKOFF_MS = [2000, 5000];
+
+const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+export function geminiModelNames(env: { GEMINI_MODELS?: string; GEMINI_MODEL?: string }): string[] {
+  const listed = (env.GEMINI_MODELS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const chain = listed.length > 0 ? listed : [...DEFAULT_GEMINI_MODELS];
+  const legacy = env.GEMINI_MODEL?.trim();
+  return legacy ? [legacy, ...chain.filter((m) => m !== legacy)] : chain;
+}
+
+export function geminiModel(apiKey: string, model = DEFAULT_GEMINI_MODELS[0]): JsonModel {
   const ai = new GoogleGenAI({ apiKey });
   return {
     name: `gemini:${model}`,
@@ -83,12 +95,14 @@ export async function generateAiOutput(
   prompt: string,
   models: JsonModel[],
   attemptsPerModel = 3,
+  sleep: (ms: number) => Promise<void> = defaultSleep,
 ): Promise<AiOutput> {
   const errors: string[] = [];
   const lastReasons: FailureReason[] = [];
 
   for (const model of models) {
     let lastReason: FailureReason = "unavailable";
+    let overloadRetries = 0;
     for (let attempt = 0; attempt < attemptsPerModel; attempt++) {
       let text: string;
       try {
@@ -100,7 +114,15 @@ export async function generateAiOutput(
           break; // cupo agotado: pasar al siguiente proveedor
         }
         lastReason = "unavailable";
-        if (isOverloadedError(error)) break; // servicio saturado: pasar al siguiente proveedor
+        if (isOverloadedError(error)) {
+          // Saturación pasajera: esperar y reintentar el mismo modelo sin gastar un intento.
+          if (overloadRetries < OVERLOAD_BACKOFF_MS.length) {
+            await sleep(OVERLOAD_BACKOFF_MS[overloadRetries++]);
+            attempt--;
+            continue;
+          }
+          break; // sigue saturado: pasar al siguiente modelo
+        }
         continue;
       }
       lastReason = "invalid";

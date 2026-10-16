@@ -138,7 +138,7 @@ describe("analyze", () => {
 describe("depsFromEnv", () => {
   it("configura Gemini y Groq según las variables disponibles", () => {
     const deps = depsFromEnv({ GEMINI_API_KEY: "g", GROQ_API_KEY: "q", GROQ_MODEL: "m" } as unknown as NodeJS.ProcessEnv);
-    expect(deps.models.map((m) => m.name)).toEqual(["gemini:gemini-2.5-flash", "groq:m"]);
+    expect(deps.models.map((m) => m.name)).toEqual(["gemini:gemini-3.5-flash", "gemini:gemini-flash-lite-latest", "groq:m"]);
     expect(deps.radarToken).toBeUndefined();
   });
 });
