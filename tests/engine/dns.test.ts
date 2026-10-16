@@ -19,10 +19,13 @@ describe("toolsFromTxt", () => {
       "facebook-domain-verification=abc",
       "atlassian-domain-verification=xyz",
     ];
-    expect(toolsFromTxt(txt).map((t) => t.name)).toEqual(["Salesforce", "Mailchimp", "Zendesk", "Meta Ads", "Atlassian"]);
+    expect(toolsFromTxt(txt).map((t) => t.name)).toEqual(["Salesforce", "Mailchimp", "Zendesk", "Meta Business", "Atlassian"]);
   });
   it("no inventa nada sin registros", () => {
     expect(toolsFromTxt([])).toEqual([]);
+  });
+  it("no reporta remitentes transaccionales (SES, SendGrid, Mailgun)", () => {
+    expect(toolsFromTxt(["v=spf1 include:amazonses.com include:sendgrid.net include:mailgun.org ~all"])).toEqual([]);
   });
 });
 
@@ -33,13 +36,13 @@ describe("fetchDns", () => {
       urls.push(url);
       expect(new Headers(init?.headers).get("accept")).toBe("application/dns-json");
       if (url.includes("type=MX")) return Response.json({ Status: 0, Answer: [{ type: 15, data: "1 aspmx.l.google.com." }] });
-      return Response.json({ Status: 0, Answer: [{ type: 16, data: '"v=spf1 include:sendgrid" ".net ~all"' }] });
+      return Response.json({ Status: 0, Answer: [{ type: 16, data: '"v=spf1 include:_spf.hub" "spot.com ~all"' }] });
     });
     expect(urls).toEqual([
       "https://cloudflare-dns.com/dns-query?name=acme.example&type=MX",
       "https://cloudflare-dns.com/dns-query?name=acme.example&type=TXT",
     ]);
-    expect(data).toEqual({ emailProvider: "Google Workspace", tools: [{ name: "SendGrid", category: "email" }] });
+    expect(data).toEqual({ emailProvider: "Google Workspace", tools: [{ name: "HubSpot", category: "email" }] });
   });
 
   it("dominio inexistente (NXDOMAIN) → sin email ni herramientas", async () => {

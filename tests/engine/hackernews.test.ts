@@ -13,7 +13,7 @@ describe("fetchHackerNews", () => {
         ? Response.json({ nbHits: 4, hits: [] })
         : Response.json({ nbHits: 25, hits: [{ title: "Show HN: Acme", points: 512 }] });
     }, NOW);
-    expect(urls[0]).toBe("https://hn.algolia.com/api/v1/search?query=acme.example&restrictSearchableAttributes=url&tags=story&hitsPerPage=1");
+    expect(urls[0]).toBe("https://hn.algolia.com/api/v1/search?query=%22acme.example%22&restrictSearchableAttributes=url&tags=story&hitsPerPage=1");
     expect(urls[1]).toContain(`numericFilters=created_at_i%3E${SINCE}`);
     expect(data).toEqual({ total: 25, lastYear: 4, top: { title: "Show HN: Acme", points: 512 } });
   });

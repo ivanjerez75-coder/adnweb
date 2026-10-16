@@ -16,7 +16,7 @@ async function search(url: string, fetcher: Fetcher): Promise<AlgoliaResponse> {
 const count = (n: unknown) => (typeof n === "number" && Number.isFinite(n) ? n : 0);
 
 export async function fetchHackerNews(domain: string, fetcher: Fetcher, now: Date): Promise<HackerNewsData> {
-  const base = `${HN}?query=${encodeURIComponent(domain)}&restrictSearchableAttributes=url&tags=story`;
+  const base = `${HN}?query=${encodeURIComponent(`"${domain}"`)}&restrictSearchableAttributes=url&tags=story`;
   const since = Math.floor(now.getTime() / 1000) - 365 * 24 * 60 * 60;
   const [all, lastYear] = await Promise.all([
     search(`${base}&hitsPerPage=1`, fetcher),
