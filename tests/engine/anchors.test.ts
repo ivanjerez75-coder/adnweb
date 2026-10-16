@@ -22,6 +22,8 @@ describe("computeAnchors", () => {
       visitasMes: { min: 5_000_000, max: 50_000_000 },
       confianzaTrafico: "media",
       antiguedadAnios: 11,
+      ingresosPublicos: null,
+      empleados: null,
     });
   });
 

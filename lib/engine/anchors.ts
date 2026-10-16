@@ -1,4 +1,4 @@
-import type { Confidence, Range, RawData } from "./types";
+import type { Confidence, Range, RawData, WikidataData } from "./types";
 
 // Tabla orientativa ranking → visitas/mes. Documentada en docs/decisiones/0003-anclas-de-trafico.md.
 const RANK_TABLE: [maxRank: number, min: number, max: number][] = [
@@ -28,10 +28,56 @@ export function radarRank(radar: RawData["radar"]): number | null {
   return validRank(radar?.rank) ?? validRank(radar?.bucket);
 }
 
+export type TipoNegocio = "saas" | "ecommerce" | "marketplace" | "contenido_ads" | "servicios" | "app" | "otro";
+
+export interface RevenueAnchor {
+  range: Range;
+  confianza: Confidence;
+  base: string;
+}
+
+export const FX_TO_EUR: Record<string, number> = { EUR: 1, USD: 0.92, GBP: 1.17 };
+
+export const REVENUE_PER_EMPLOYEE_EUR: Record<TipoNegocio, number> = {
+  saas: 150_000,
+  ecommerce: 250_000,
+  marketplace: 200_000,
+  contenido_ads: 120_000,
+  servicios: 100_000,
+  app: 150_000,
+  otro: 120_000,
+};
+
+export function publicRevenueAnchor(w: WikidataData | null): RevenueAnchor | null {
+  const r = w?.revenue;
+  if (!r) return null;
+  const fx = FX_TO_EUR[r.currency];
+  if (!fx || !(r.amount > 0)) return null;
+  const eur = r.amount * fx;
+  return {
+    range: { min: Math.round(eur * 0.9), max: Math.round(eur * 1.1) },
+    confianza: "alta",
+    base: `Ingresos públicos (Wikidata${r.year ? `, ${r.year}` : ""}): ${Math.round(eur)} €`,
+  };
+}
+
+export function employeeRevenueAnchor(employees: number | null, tipo: TipoNegocio): RevenueAnchor | null {
+  if (employees === null || !(employees > 0)) return null;
+  const perEmployee = REVENUE_PER_EMPLOYEE_EUR[tipo];
+  const mid = employees * perEmployee;
+  return {
+    range: { min: Math.round(mid * 0.5), max: Math.round(mid * 1.5) },
+    confianza: "media",
+    base: `${employees} empleados × ${perEmployee} € por empleado (${tipo})`,
+  };
+}
+
 export interface Anchors {
   visitasMes: Range | null;
   confianzaTrafico: Confidence;
   antiguedadAnios: number | null;
+  ingresosPublicos: RevenueAnchor | null;
+  empleados: number | null;
 }
 
 export function computeAnchors(raw: RawData, now: Date): Anchors {
@@ -49,5 +95,7 @@ export function computeAnchors(raw: RawData, now: Date): Anchors {
     visitasMes,
     confianzaTrafico: trancoRank !== null && radarValue !== null ? "media" : "baja",
     antiguedadAnios: born ? Math.floor((now.getTime() - Date.parse(born)) / YEAR_MS) : null,
+    ingresosPublicos: publicRevenueAnchor(raw.wikidata),
+    empleados: raw.wikidata?.employees ?? null,
   };
 }

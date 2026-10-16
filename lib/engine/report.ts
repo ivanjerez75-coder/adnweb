@@ -1,4 +1,4 @@
-import { computeAnchors, type Anchors } from "./anchors";
+import { computeAnchors, employeeRevenueAnchor, type Anchors, type RevenueAnchor } from "./anchors";
 import { extractSignals } from "./signals";
 import { validateOpportunities, type Opportunity } from "./opportunities";
 import { buildPrompt } from "./ai/prompt";
@@ -57,12 +57,27 @@ function orderedPair(min: number | null, max: number | null): [number | null, nu
 export function clampIngresos(
   ingresos: AiOutput["ingresos"],
   anchors: Pick<Anchors, "visitasMes" | "confianzaTrafico">,
+  revenueAnchor: RevenueAnchor | null = null,
 ): AiOutput["ingresos"] {
-  if (anchors.visitasMes === null) {
+  if (anchors.visitasMes === null && revenueAnchor === null) {
     return { ...ingresos, anualMin: null, anualMax: null, valoracionMin: null, valoracionMax: null, confianza: "baja" };
   }
-  const [anualMin, anualMax] = orderedPair(ingresos.anualMin, ingresos.anualMax);
+  let [anualMin, anualMax] = orderedPair(ingresos.anualMin, ingresos.anualMax);
   const [valoracionMin, valoracionMax] = orderedPair(ingresos.valoracionMin, ingresos.valoracionMax);
+
+  if (revenueAnchor) {
+    const { min, max } = revenueAnchor.range;
+    if (anualMin !== null && anualMax !== null && anualMin <= max && anualMax >= min) {
+      anualMin = Math.max(anualMin, min);
+      anualMax = Math.min(anualMax, max);
+    } else {
+      anualMin = min;
+      anualMax = max;
+    }
+    // La cifra queda acotada por el ancla: su confianza es la del ancla.
+    return { ...ingresos, anualMin, anualMax, valoracionMin, valoracionMax, confianza: revenueAnchor.confianza };
+  }
+
   const cap = CONFIDENCE_ORDER.indexOf(anchors.confianzaTrafico);
   const confianza = CONFIDENCE_ORDER[Math.min(CONFIDENCE_ORDER.indexOf(ingresos.confianza), cap)];
   return { ...ingresos, anualMin, anualMax, valoracionMin, valoracionMax, confianza };
@@ -104,6 +119,10 @@ export async function buildReport(
   ) as Record<SubscoreKey, Subscore>;
   const puntuacion = Math.round(SUBSCORE_KEYS.reduce((sum, k) => sum + puntuaciones[k].valor, 0) / SUBSCORE_KEYS.length);
 
+  const revenueAnchor = anchors.ingresosPublicos ?? employeeRevenueAnchor(anchors.empleados, ai.resumen.tipoNegocio);
+  const ingresos = clampIngresos(ai.ingresos, anchors, revenueAnchor);
+  if (revenueAnchor) ingresos.suposiciones = [revenueAnchor.base, ...ingresos.suposiciones];
+
   return {
     dominio: raw.domain,
     generadoEn: now.toISOString(),
@@ -119,7 +138,7 @@ export async function buildReport(
       tecnologias: raw.site?.technologies ?? [],
       comentario: ai.trafico.comentario,
     },
-    ingresos: clampIngresos(ai.ingresos, anchors),
+    ingresos,
     oportunidades,
     pistas,
     veredicto: {
