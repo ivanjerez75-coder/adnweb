@@ -61,10 +61,18 @@ Reglas:
 10. Usa "empresa" (datos reales con su fuente) para el resumen y para los ingresos: si hay empleados o ingresos públicos, apóyate en ellos y explícalo en "suposiciones".
 
 Señales detectadas (id — fuente — polaridad — descripción):
-${signals.map((s) => `- ${s.id} — ${s.source} — ${s.polarity} — ${s.label}`).join("\n") || "- (ninguna)"}
+${signals.map((s) => `- ${s.id} — ${s.source} — ${s.polarity} — ${escapeAngles(s.label)}`).join("\n") || "- (ninguna)"}
 
 Datos:
 <<<DATOS_WEB
-${JSON.stringify(data)}
+${escapeAngles(JSON.stringify(data))}
 DATOS_WEB>>>`;
+}
+
+/**
+ * Escapa < y > para que el texto de la web no pueda cerrar el delimitador DATOS_WEB.
+ * Aplicado sobre JSON, el resultado sigue siendo JSON válido (\u003c y \u003e son escapes de cadena).
+ */
+function escapeAngles(text: string): string {
+  return text.replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
 }
