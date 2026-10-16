@@ -223,6 +223,21 @@ describe("extractSignals — fechas y umbrales", () => {
   });
 });
 
+describe("stack_crecimiento", () => {
+  it("no cuenta Meta Business (solo verifica el dominio en Facebook)", () => {
+    const raw = makeRaw({
+      site: makeSite({ technologies: [{ name: "Intercom", category: "chat" }, { name: "Mailchimp", category: "email" }] }),
+      dns: { emailProvider: "Otro", tools: [{ name: "Meta Business", category: "publicidad" }] },
+    });
+    expect(ids(raw)).not.toContain("stack_crecimiento");
+    const withHubspot = makeRaw({
+      site: makeSite({ technologies: [{ name: "Intercom", category: "chat" }, { name: "Mailchimp", category: "email" }] }),
+      dns: { emailProvider: "Otro", tools: [{ name: "HubSpot", category: "ventas" }] },
+    });
+    expect(ids(withHubspot)).toContain("stack_crecimiento");
+  });
+});
+
 describe("allTechnologies", () => {
   it("une web y DNS sin duplicar por nombre", () => {
     const raw = makeRaw({ dns: { emailProvider: "Otro", tools: [{ name: "Mailchimp", category: "email" }, { name: "Salesforce", category: "ventas" }] } });

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const confidence = z.enum(["baja", "media", "alta"]);
-const claim = z.object({ texto: z.string(), senales: z.array(z.string()) });
+const claim = z.object({ texto: z.string(), senales: z.array(z.string()).default([]) });
 const subscore = z.object({ valor: z.number().min(0).max(100), senales: z.array(z.string()) });
 
 export const aiOutputSchema = z.object({

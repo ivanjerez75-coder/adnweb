@@ -131,7 +131,8 @@ export function extractSignals(raw: RawData, now: Date): Signal[] {
   if (employees !== null && employees >= 200) pos("plantilla_grande", "traccion", "wikidata", `Plantilla de ${employees} empleados`);
   const stories = raw.hackernews?.total ?? 0;
   if (stories >= 20) pos("notoriedad_tech", "alcance", "hackernews", `${stories} historias en Hacker News enlazan a la web`);
-  const growthTools = allTechnologies(raw).filter((t) => GROWTH_CATEGORIES.has(t.category));
+  // Meta Business solo indica que el dominio está verificado en Facebook, no una herramienta de crecimiento.
+  const growthTools = allTechnologies(raw).filter((t) => GROWTH_CATEGORIES.has(t.category) && t.name !== "Meta Business");
   if (growthTools.length >= 3) pos("stack_crecimiento", "tecnica", "tecnologias", `Usa ${growthTools.length} herramientas de marketing, ventas o soporte`);
   if (mobile !== null && mobile >= 90) pos("web_rapida", "tecnica", "pagespeed", `Web rápida en móvil: ${mobile}/100`);
 

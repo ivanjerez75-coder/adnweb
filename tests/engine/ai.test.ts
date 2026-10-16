@@ -27,6 +27,14 @@ describe("aiOutputSchema", () => {
   it("acepta la respuesta de ejemplo", () => {
     expect(aiOutputSchema.safeParse(validAiOutput).success).toBe(true);
   });
+  it("acepta fortalezas y debilidades sin senales (lista vacía por defecto)", () => {
+    const loose = structuredClone(validAiOutput) as { veredicto: { fortalezas: { senales?: string[] }[] } };
+    delete loose.veredicto.fortalezas[0].senales;
+    const parsed = aiOutputSchema.safeParse(loose);
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.veredicto.fortalezas[0].senales).toEqual([]);
+  });
+
   it("rechaza ids de mercado sin prefijo", () => {
     const bad = { ...validAiOutput, senalesMercado: [{ id: "competidores", etiqueta: "x" }] };
     expect(aiOutputSchema.safeParse(bad).success).toBe(false);
