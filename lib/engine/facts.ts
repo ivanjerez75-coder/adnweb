@@ -1,4 +1,4 @@
-import type { Presence, RawData, TechCategory } from "./types";
+import type { Presence, RawData, SiteData, TechCategory } from "./types";
 
 /** null = no se pudo comprobar; true = visto; false = comprobado y no visto. */
 export function presence(checks: (boolean | null)[]): Presence {
@@ -17,18 +17,30 @@ export interface Facts {
   redes: string[];
 }
 
+/** Texto mínimo de la home para afirmar que algo no está (una home fina no prueba nada). */
+const READABLE_TEXT = 1500;
+
 export function computeFacts(raw: RawData): Facts {
   const site = raw.site;
+  const readable = !!site && site.textLength >= READABLE_TEXT;
+  /** Web: true si la ve; false solo si la home es legible y no la ve; null si no se puede afirmar. */
+  const webSees = (seen: (s: SiteData) => boolean) => (site ? (seen(site) ? true : readable ? false : null) : null);
   const sitemapHas = (s: "blog" | "precios" | "empleo") => (raw.sitemap ? raw.sitemap.sections.includes(s) : null);
-  const routeHas = (k: "blog" | "precios" | "empleo") =>
-    raw.rutas && raw.rutas.checked.includes(k) ? raw.rutas.found.includes(k) : null;
-  const webTech = (c: TechCategory) => (site ? site.technologies.some((t) => t.category === c) : null);
+  const routeHas = (k: "blog" | "precios" | "empleo") => {
+    if (!raw.rutas) return null;
+    if (raw.rutas.found.includes(k)) return true;
+    if (raw.rutas.checked.includes(k)) return false;
+    return null;
+  };
+  const webTech = (c: TechCategory) => webSees((s) => s.technologies.some((t) => t.category === c));
   const dnsTech = (c: TechCategory) => (raw.dns ? raw.dns.tools.some((t) => t.category === c) : null);
+  /** El DNS solo puede confirmar presencia de chat; su ausencia no prueba nada. */
+  const dnsSeesChat = raw.dns && raw.dns.tools.some((t) => t.category === "chat") ? true : null;
 
   return {
-    blog: presence([site ? site.hasBlog : null, sitemapHas("blog"), routeHas("blog")]),
+    blog: presence([webSees((s) => s.hasBlog), sitemapHas("blog"), routeHas("blog")]),
     paginaPrecios: presence([
-      site ? site.hasPricingPage || site.pricesFound.length > 0 : null,
+      webSees((s) => s.hasPricingPage || s.pricesFound.length > 0),
       sitemapHas("precios"),
       routeHas("precios"),
     ]),
@@ -40,11 +52,11 @@ export function computeFacts(raw: RawData): Facts {
       raw.empleo ? true : null,
     ]),
     app: presence([
-      site ? site.hasAppLinks : null,
+      webSees((s) => s.hasAppLinks),
       raw.appstore ? true : raw.fuentes.appstore === "no_aplica" ? false : null,
     ]),
     emailMarketing: presence([webTech("email"), dnsTech("email")]),
-    chatSoporte: presence([webTech("chat"), dnsTech("chat")]),
+    chatSoporte: presence([webTech("chat"), dnsSeesChat]),
     redes: Object.keys(site?.socialLinks ?? {}),
   };
 }

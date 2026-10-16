@@ -67,4 +67,43 @@ describe("computeFacts", () => {
   it("redes une los enlaces de la web sin duplicados", () => {
     expect(computeFacts(makeRaw()).redes).toEqual(["x", "linkedin"]);
   });
+
+  it("(a) home fina sin blog + ruta comprobada sin blog: solo una ausencia válida → desconocido", () => {
+    const raw = makeRaw({ site: makeSite({ hasBlog: false, textLength: 300 }), rutas: { found: [], checked: ["blog"] } });
+    expect(computeFacts(raw).blog).toBe("desconocido");
+  });
+
+  it("(b) home legible sin blog + sitemap sin sección blog → no", () => {
+    const raw = makeRaw({ site: makeSite({ hasBlog: false }), sitemap: sitemap([]) });
+    expect(computeFacts(raw).blog).toBe("no");
+  });
+
+  it("(c) chat: web legible sin chat y DNS sin chat → desconocido (DNS no prueba ausencia)", () => {
+    const raw = makeRaw({ site: makeSite({ technologies: [] }), dns: { emailProvider: "Otro", tools: [] } });
+    expect(computeFacts(raw).chatSoporte).toBe("desconocido");
+  });
+
+  it("(d) chat: DNS con Zendesk (categoría chat) → si", () => {
+    const raw = makeRaw({ site: makeSite({ technologies: [] }), dns: { emailProvider: "Otro", tools: [{ name: "Zendesk", category: "chat" }] } });
+    expect(computeFacts(raw).chatSoporte).toBe("si");
+  });
+
+  it("(e) paginaPrecios con precios encontrados → si", () => {
+    expect(computeFacts(makeRaw({ site: makeSite({ hasPricingPage: false, pricesFound: ["9 €"] }) })).paginaPrecios).toBe("si");
+  });
+
+  it("(f) sin web y sin datos → desconocido en todo y redes vacío", () => {
+    const f = computeFacts(makeRaw({ site: null }));
+    expect(f.blog).toBe("desconocido");
+    expect(f.paginaPrecios).toBe("desconocido");
+    expect(f.empleo).toBe("desconocido");
+    expect(f.app).toBe("desconocido");
+    expect(f.emailMarketing).toBe("desconocido");
+    expect(f.chatSoporte).toBe("desconocido");
+    expect(f.redes).toEqual([]);
+  });
+
+  it("(g) rutas encontrada sin comprobación explícita → si", () => {
+    expect(computeFacts(makeRaw({ site: null, rutas: { found: ["blog"], checked: [] } })).blog).toBe("si");
+  });
 });
