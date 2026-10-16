@@ -57,6 +57,9 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("polaridad");
     expect(prompt).toContain('"empresa"');
     expect(prompt).toContain('"hechos"');
+    // La antigüedad es la del dominio, no la de la empresa.
+    expect(prompt).toContain('"antiguedadDominioAnios":11');
+    expect(prompt).not.toContain('"antiguedadAnios"');
   });
 
   it("incluye la redirección en los datos", () => {

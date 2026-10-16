@@ -26,7 +26,7 @@ describe("buildReport", () => {
       visitasMes: { min: 500_000, max: 5_000_000 },
       confianza: "media",
       tendencia: "baja",
-      antiguedadAnios: 11,
+      antiguedadDominioAnios: 11,
     });
     expect(report.ingresos.anualMin).toBe(300000);
   });

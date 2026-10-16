@@ -30,7 +30,7 @@ export interface Report {
     tendencia: Trend | "no estimable";
     redes: Record<string, string>;
     pagespeed: PageSpeedData | null;
-    antiguedadAnios: number | null;
+    antiguedadDominioAnios: number | null;
     tecnologias: Technology[];
     comentario: string;
   };
@@ -167,7 +167,7 @@ export async function buildReport(
       tendencia: raw.tranco?.trend ?? "no estimable",
       redes: raw.site?.socialLinks ?? {},
       pagespeed: raw.pagespeed,
-      antiguedadAnios: anchors.antiguedadAnios,
+      antiguedadDominioAnios: anchors.antiguedadDominioAnios,
       tecnologias: allTechnologies(raw),
       comentario: ai.trafico.comentario,
     },

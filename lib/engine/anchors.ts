@@ -75,7 +75,8 @@ export function employeeRevenueAnchor(employees: number | null, tipo: TipoNegoci
 export interface Anchors {
   visitasMes: Range | null;
   confianzaTrafico: Confidence;
-  antiguedadAnios: number | null;
+  /** Años desde el registro del dominio (RDAP) o, si no lo hay, desde la primera captura en Wayback. No es la edad de la empresa. */
+  antiguedadDominioAnios: number | null;
   ingresosPublicos: RevenueAnchor | null;
   empleados: number | null;
 }
@@ -94,7 +95,7 @@ export function computeAnchors(raw: RawData, now: Date): Anchors {
   return {
     visitasMes,
     confianzaTrafico: trancoRank !== null && radarValue !== null ? "media" : "baja",
-    antiguedadAnios: born ? Math.floor((now.getTime() - Date.parse(born)) / YEAR_MS) : null,
+    antiguedadDominioAnios: born ? Math.floor((now.getTime() - Date.parse(born)) / YEAR_MS) : null,
     ingresosPublicos: publicRevenueAnchor(raw.wikidata),
     empleados: raw.wikidata?.employees ?? null,
   };
