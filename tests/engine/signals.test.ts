@@ -34,6 +34,12 @@ describe("extractSignals — negativas", () => {
     expect(ids(makeRaw({ site }), "negativa")).toEqual(["sin_precios_publicos", "solo_demo", "sin_testimonios"]);
   });
 
+  it("sin_testimonios dice que no se detectan (no que no existan)", () => {
+    const site = makeSite({ hasTestimonials: false });
+    const signal = extractSignals(makeRaw({ site }), NOW).find((s) => s.id === "sin_testimonios");
+    expect(signal?.label).toBe("No se detectan testimonios, reseñas ni casos de éxito");
+  });
+
   it("sin_plan_gratuito solo si se leyó una página de precios", () => {
     const home = { url: "https://facturo.example/", title: "Facturo", description: "", headings: [], text: "x".repeat(1500) };
     const pricing = { ...home, url: "https://facturo.example/es/precios" };

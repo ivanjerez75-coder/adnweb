@@ -53,7 +53,7 @@ export function extractSignals(raw: RawData, now: Date): Signal[] {
     if (site.textLength < READABLE_TEXT && !(raw.sitemap && raw.sitemap.urlCount >= 50)) {
       add("contenido_escaso", "contenido", "web", "Muy poco texto indexable en la web");
     }
-    if (readable && !site.hasTestimonials) add("sin_testimonios", "confianza", "web", "Sin testimonios, reseñas ni casos de éxito visibles");
+    if (readable && !site.hasTestimonials) add("sin_testimonios", "confianza", "web", "No se detectan testimonios, reseñas ni casos de éxito");
     if (readable && !site.technologies.some((t) => t.category === "analitica")) {
       add("sin_analitica", "tecnica", "tecnologias", "No se detecta ninguna herramienta de analítica");
     }
@@ -64,6 +64,9 @@ export function extractSignals(raw: RawData, now: Date): Signal[] {
   if (readable && facts.redes.length < 2) {
     add("pocas_redes", "alcance", "web", facts.redes.length === 0 ? "No enlaza a ninguna red social" : "Solo enlaza a 1 red social");
   }
+  // Hoy inalcanzables: "no" exige dos comprobaciones negativas y solo la web puede darla (el DNS
+  // solo confirma presencia), así que chatSoporte y emailMarketing nunca valen "no". Se mantienen
+  // para que la señal vuelva sola si se añade una segunda fuente capaz de comprobar la ausencia.
   if (facts.chatSoporte === "no") add("sin_chat_soporte", "tecnica", "tecnologias", "No se detecta chat ni soporte en vivo");
   if (facts.emailMarketing === "no") add("sin_captacion_email", "tecnica", "tecnologias", "No se detecta herramienta de email marketing");
   if (facts.empleo === "no") add("sin_empleo", "traccion", "rutas", "No se detecta página de empleo ni ofertas abiertas");
