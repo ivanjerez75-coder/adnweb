@@ -130,10 +130,48 @@ describe("extractSignals — positivas", () => {
   it("trafico_alto por Radar si Tranco no tiene rango", () => {
     const raw = makeRaw({ tranco: { rank: null, trend: null }, radar: { bucket: 5000, rank: null } });
     expect(extractSignals(raw, NOW).find((s) => s.id === "trafico_alto")?.source).toBe("radar");
+    expect(ids(raw)).not.toContain("fuera_top_1m");
   });
 
   it("no inventa señales de fuentes no disponibles", () => {
     expect(ids(makeRaw({ site: null, pagespeed: null, tranco: null, radar: null, wayback: null, rdap: null }))).toEqual([]);
+  });
+});
+
+describe("extractSignals — fechas y umbrales", () => {
+  it("dominio con fecha futura no es reciente", () => {
+    expect(ids(makeRaw({ rdap: { registeredAt: "2030-01-01" } }))).not.toContain("dominio_reciente");
+  });
+
+  const emp = (n: number) => makeRaw({ empleo: { platform: "lever", token: "f", openings: n, byArea: {}, linkedFromSite: false } });
+  const app = (rating: number, ratingCount: number) =>
+    makeRaw({ appstore: { name: "F", rating, ratingCount, url: "u", linkedFromSite: true } });
+  const wd = (employees: number) =>
+    makeRaw({ wikidata: { id: "Q1", description: null, inception: null, founders: [], headquarters: null, employees, revenue: null } });
+  const cases: [string, RawData, string, boolean][] = [
+    ["4 ofertas", emp(4), "contratando", false],
+    ["5 ofertas", emp(5), "contratando", true],
+    ["29 ofertas contratando", emp(29), "contratando", true],
+    ["29 ofertas no fuerte", emp(29), "contratacion_fuerte", false],
+    ["30 ofertas", emp(30), "contratacion_fuerte", true],
+    ["tranco 10000", makeRaw({ tranco: { rank: 10_000, trend: null } }), "trafico_alto", true],
+    ["tranco 10001", makeRaw({ tranco: { rank: 10_001, trend: null } }), "trafico_alto", false],
+    ["app 4.3", app(4.3, 1000), "app_valorada", true],
+    ["app 4.2", app(4.2, 1000), "app_valorada", false],
+    ["app 3.4/100", app(3.4, 100), "app_mal_valorada", true],
+    ["app 3.4/99", app(3.4, 99), "app_mal_valorada", false],
+    ["app 3.5/500", app(3.5, 500), "app_mal_valorada", false],
+    ["3 posts", makeRaw({ sitemap: sitemap({ recentBlogPosts: 3 }) }), "blog_activo", false],
+    ["4 posts", makeRaw({ sitemap: sitemap({ recentBlogPosts: 4 }) }), "blog_activo", true],
+    ["móvil 89", makeRaw({ pagespeed: { mobile: 89, desktop: 90 } }), "web_rapida", false],
+    ["móvil 90", makeRaw({ pagespeed: { mobile: 90, desktop: 90 } }), "web_rapida", true],
+    ["199 empleados", wd(199), "plantilla_grande", false],
+    ["200 empleados", wd(200), "plantilla_grande", true],
+    ["HN 19", makeRaw({ hackernews: { total: 19, lastYear: 0, top: null } }), "notoriedad_tech", false],
+    ["HN 20", makeRaw({ hackernews: { total: 20, lastYear: 0, top: null } }), "notoriedad_tech", true],
+  ];
+  it.each(cases)("%s", (_n, raw, id, expected) => {
+    expect(ids(raw).includes(id)).toBe(expected);
   });
 });
 

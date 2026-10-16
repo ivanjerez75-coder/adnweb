@@ -62,7 +62,7 @@ export function extractSignals(raw: RawData, now: Date): Signal[] {
   if (desktop !== null && desktop < 50) add("pagespeed_escritorio_bajo", "tecnica", "pagespeed", `Rendimiento en escritorio bajo: ${desktop}/100`);
 
   if (raw.tranco?.trend === "baja") add("trafico_en_caida", "traccion", "tranco", "Su posición en el ranking de tráfico está bajando");
-  if (raw.tranco && raw.tranco.rank === null) add("fuera_top_1m", "traccion", "tranco", "Fuera del top 1 millón de webs más visitadas");
+  if (raw.tranco && raw.tranco.rank === null && radarRank(raw.radar) === null) add("fuera_top_1m", "traccion", "tranco", "Fuera del top 1 millón de webs más visitadas");
   const radarBucket = validRank(raw.radar?.bucket);
   if (raw.radar && validRank(raw.radar.rank) === null && (radarBucket === null || radarBucket > 200_000)) {
     add("popularidad_baja", "traccion", "radar", "Popularidad baja según Cloudflare Radar");
@@ -72,7 +72,7 @@ export function extractSignals(raw: RawData, now: Date): Signal[] {
   }
   const registeredAt = raw.rdap?.registeredAt;
   const domainAgeMs = registeredAt ? now.getTime() - Date.parse(registeredAt) : NaN;
-  if (Number.isFinite(domainAgeMs) && domainAgeMs < 2 * YEAR_MS) add("dominio_reciente", "traccion", "rdap", "Dominio registrado hace menos de 2 años");
+  if (Number.isFinite(domainAgeMs) && domainAgeMs >= 0 && domainAgeMs < 2 * YEAR_MS) add("dominio_reciente", "traccion", "rdap", "Dominio registrado hace menos de 2 años");
 
   const lastModified = raw.sitemap?.lastModified;
   if (lastModified && now.getTime() - Date.parse(lastModified) > YEAR_MS) {
