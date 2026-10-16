@@ -72,6 +72,17 @@ describe("summarizeSitemap", () => {
     expect(sectionsOf("/blogs/journal/post-1")).toEqual(["blog"]);
   });
 
+  it("careers/jobs/empleo bajo about/company/empresa/nosotros es empleo", () => {
+    expect(sectionsOf("/company/careers")).toEqual(["empleo"]);
+    expect(sectionsOf("/about/jobs/engineer")).toEqual(["empleo"]);
+    expect(sectionsOf("/es/empresa/empleo")).toEqual(["empleo"]);
+    expect(sectionsOf("/nosotros/careers")).toEqual(["empleo"]);
+    // El resto de páginas de empresa siguen siendo "about" (no es sección del sitemap).
+    expect(sectionsOf("/company/team", "/about")).toEqual([]);
+    // Solo vale bajo una página de empresa: /blog/careers sigue siendo blog.
+    expect(sectionsOf("/blog/careers")).toEqual(["blog"]);
+  });
+
   it("no cuenta una sección en el tercer segmento", () => {
     expect(sectionsOf("/products/x/pricing", "/a/b/blog")).toEqual([]);
   });
