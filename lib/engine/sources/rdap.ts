@@ -8,6 +8,8 @@ export function parseRdap(json: unknown): RdapData {
 
 export async function fetchRdap(domain: string, fetcher: Fetcher): Promise<RdapData> {
   const res = await fetcher(`https://rdap.org/domain/${encodeURIComponent(domain)}`, {
+    // Sin User-Agent rdap.org responde 403.
+    headers: { "user-agent": "DNAweb/0.1 (analizador de negocios digitales)", accept: "application/rdap+json" },
     signal: AbortSignal.timeout(10_000),
   });
   if (res.status === 404) return { registeredAt: null };
