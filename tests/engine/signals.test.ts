@@ -250,3 +250,11 @@ describe("allTechnologies", () => {
     expect(allTechnologies(raw).map((t) => t.name)).toEqual(["Google Analytics", "Intercom", "Mailchimp", "Salesforce"]);
   });
 });
+
+describe("extractSignals — empresa_consolidada por RDAP", () => {
+  it("etiqueta con los años del dominio y aclara que no es la edad de la empresa", () => {
+    const registeredAt = new Date(NOW.getTime() - 8.5 * 365 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+    const s = extractSignals(makeRaw({ rdap: { registeredAt }, wikidata: null }), NOW).find((x) => x.id === "empresa_consolidada");
+    expect(s).toMatchObject({ source: "rdap", label: "Dominio registrado hace 8 años (no indica la edad de la empresa)" });
+  });
+});

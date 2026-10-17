@@ -128,7 +128,7 @@ export function extractSignals(raw: RawData, now: Date): Signal[] {
   if (inception !== null && now.getUTCFullYear() - inception >= 5) {
     pos("empresa_consolidada", "confianza", "wikidata", `Empresa fundada en ${inception}`);
   } else if (inception === null && Number.isFinite(domainAgeMs) && domainAgeMs >= 5 * YEAR_MS) {
-    pos("empresa_consolidada", "confianza", "rdap", "Dominio registrado hace más de 5 años");
+    pos("empresa_consolidada", "confianza", "rdap", `Dominio registrado hace ${Math.floor(domainAgeMs / YEAR_MS)} años (no indica la edad de la empresa)`);
   }
   const employees = raw.wikidata?.employees ?? null;
   if (employees !== null && employees >= 200) pos("plantilla_grande", "traccion", "wikidata", `Plantilla de ${employees} empleados`);
