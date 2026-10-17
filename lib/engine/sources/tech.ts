@@ -5,12 +5,14 @@ interface TechRule {
   name: string;
   category: TechCategory;
   pattern: RegExp;
+  /** Solo se prueba contra URLs de recursos (script src, link href, iframe src), nunca contra texto incrustado. */
+  urlPattern?: RegExp;
 }
 
 const RULES: TechRule[] = [
-  { name: "Shopify", category: "ecommerce", pattern: /cdn\.shopify\.com|Shopify\.theme/i },
-  { name: "WooCommerce", category: "ecommerce", pattern: /woocommerce/i },
-  { name: "PrestaShop", category: "ecommerce", pattern: /prestashop/i },
+  { name: "Shopify", category: "ecommerce", pattern: /Shopify\.(?:theme|shop)\b/, urlPattern: /cdn\.shopify\.com/i },
+  { name: "WooCommerce", category: "ecommerce", pattern: /wp-content\/plugins\/woocommerce|wc-ajax|woocommerce_params|woocommerce-/i },
+  { name: "PrestaShop", category: "ecommerce", pattern: /var prestashop\s*=|prestashop\.(?:urls|static_token)|^generator:\s*prestashop/im },
   { name: "Magento", category: "ecommerce", pattern: /Magento|mage\/cookies/i },
   { name: "WordPress", category: "cms", pattern: /wp-content|wp-includes/i },
   { name: "Wix", category: "cms", pattern: /static\.wixstatic\.com|wix\.com/i },
@@ -41,20 +43,37 @@ const RULES: TechRule[] = [
   { name: "Next.js", category: "framework", pattern: /\/_next\/static|__NEXT_DATA__|Next\.js/ },
 ];
 
-function technicalHaystack(html: string, headers: Record<string, string>): string {
+// Texto incrustado que son datos (JSON de la página, payloads de Next.js) y no código: contiene copy de marketing.
+const DATA_SCRIPT = 'script[type="application/json"], script[type="application/ld+json"], script#__NEXT_DATA__';
+const NL = String.fromCharCode(10);
+const COPY_META =new Set(["description", "og:description", "twitter:description", "og:title", "twitter:title"]);
+
+function technicalHaystacks(html: string, headers: Record<string, string>): { all: string; urls: string } {
   const $ = cheerio.load(html);
-  const parts: string[] = [];
+  const urls: string[] = [];
+  const text: string[] = [];
   $("script").each((_, el) => {
-    parts.push($(el).attr("src") ?? "", $(el).text());
+    const node = $(el);
+    urls.push(node.attr("src") ?? "");
+    if (node.is(DATA_SCRIPT)) return;
+    const inline = node.text();
+    if (inline.trim().startsWith("self.__next_f")) return;
+    text.push(inline);
   });
-  $("link[href]").each((_, el) => void parts.push($(el).attr("href") ?? ""));
-  $("iframe[src]").each((_, el) => void parts.push($(el).attr("src") ?? ""));
-  $("meta").each((_, el) => void parts.push($(el).attr("name") ?? "", $(el).attr("content") ?? ""));
-  for (const [k, v] of Object.entries(headers)) parts.push(`${k}: ${v}`);
-  return parts.join("\n");
+  $("link[href]").each((_, el) => void urls.push($(el).attr("href") ?? ""));
+  $("iframe[src]").each((_, el) => void urls.push($(el).attr("src") ?? ""));
+  $("meta").each((_, el) => {
+    const key = ($(el).attr("name") ?? $(el).attr("property") ?? "").toLowerCase();
+    if (COPY_META.has(key)) return;
+    const content = $(el).attr("content") ?? "";
+    text.push(key === "generator" ? `generator: ${content}` : `${key}: ${content}`);
+  });
+  for (const [k, v] of Object.entries(headers)) text.push(`${k}: ${v}`);
+  const urlText = urls.join(NL);
+  return { all: [urlText, ...text].join(NL), urls: urlText };
 }
 
 export function detectTech(html: string, headers: Record<string, string>): Technology[] {
-  const haystack = technicalHaystack(html, headers);
-  return RULES.filter((rule) => rule.pattern.test(haystack)).map(({ name, category }) => ({ name, category }));
+  const { all, urls } = technicalHaystacks(html, headers);
+  return RULES.filter((rule) => rule.pattern.test(all) || rule.urlPattern?.test(urls) === true).map(({ name, category }) => ({ name, category }));
 }
