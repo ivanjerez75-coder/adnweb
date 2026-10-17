@@ -62,6 +62,16 @@ describe("buildPrompt", () => {
     expect(prompt).not.toContain('"antiguedadAnios"');
   });
 
+  it("limita las afirmaciones de fortalezas y debilidades a lo que respaldan los datos", () => {
+    const raw = makeRaw();
+    const prompt = buildPrompt(raw, computeAnchors(raw, NOW), []);
+    expect(prompt).toContain("solo puede afirmar lo que respaldan las etiquetas de las señales citadas");
+    expect(prompt).toContain("edad del dominio");
+    expect(prompt).toContain("no la de la empresa");
+    expect(prompt).toContain("no es tráfico orgánico ni SEO");
+    expect(prompt).toContain("visibilidad en la comunidad tecnológica");
+  });
+
   it("incluye la redirección en los datos", () => {
     const raw = makeRaw({ finalDomain: "instagram.com", companyNameFromPage: false });
     expect(buildPrompt(raw, computeAnchors(raw, NOW), [])).toContain(`"redireccion":{"a":"instagram.com","adoptada":false}`);
