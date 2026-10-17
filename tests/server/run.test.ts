@@ -95,8 +95,40 @@ describe("runAnalysis", () => {
       throw new Error("y");
     };
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const refund = vi.spyOn(worker, "devolverCredito");
     await expect(runAnalysis(a.id, normalized, deps)).resolves.toBeUndefined();
+    expect(refund).toHaveBeenCalledTimes(1);
     expect(err).toHaveBeenCalled();
     err.mockRestore();
+  });
+
+  it("si buscarCache lanza, se trata como fallo de caché y se recoge", async () => {
+    const { worker, state, a, deps } = setup([okModel]);
+    worker.buscarCache = async () => {
+      throw new Error("db caída");
+    };
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    await runAnalysis(a.id, normalized, deps);
+    err.mockRestore();
+    expect(state.analisis[0].estado).toBe("listo");
+    expect(state.analisis[0].informe?.dominio).toBe("facturo.example");
+  });
+
+  it("si los datos en caché son inservibles, recoge de nuevo", async () => {
+    const { state, a, deps } = setup([okModel]);
+    state.insertarAnalisis({
+      userId: "u2",
+      dominio: normalized.domain,
+      estado: "listo",
+      datosBrutos: {} as never,
+      createdAt: new Date(NOW.getTime() - 3_600_000),
+    });
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    await runAnalysis(a.id, normalized, deps);
+    expect(err).toHaveBeenCalled();
+    err.mockRestore();
+    const mine = state.analisis.find((x) => x.id === a.id)!;
+    expect(mine.estado).toBe("listo");
+    expect(mine.datosBrutos?.domain).toBe("facturo.example");
   });
 });

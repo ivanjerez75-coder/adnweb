@@ -1,6 +1,7 @@
 import { collect, type CollectDeps } from "@/lib/engine/collect";
-import { buildReport } from "@/lib/engine/report";
+import { buildReport, type Report } from "@/lib/engine/report";
 import type { JsonModel } from "@/lib/engine/ai/providers";
+import type { RawData } from "@/lib/engine/types";
 import type { NormalizedUrl } from "@/lib/engine/url";
 import type { WorkerRepo } from "@/lib/server/analyses/repo";
 import { describirFallo } from "@/lib/server/analyses/errors";
@@ -15,7 +16,9 @@ export interface RunDeps {
 
 /** Ejecuta el análisis en segundo plano. Nunca lanza: los fallos se guardan y se devuelve el crédito. */
 export async function runAnalysis(id: string, normalized: NormalizedUrl, deps: RunDeps): Promise<void> {
-  const { worker, engine, now } = deps;
+  const { worker, now } = deps;
+  // Un solo reloj: deps.now para la ventana de caché y para el motor.
+  const engine = { ...deps.engine, now };
   // Un fallo al guardar el progreso no debe romper el análisis.
   const onStep = async (texto: string) => {
     try {
@@ -26,11 +29,28 @@ export async function runAnalysis(id: string, normalized: NormalizedUrl, deps: R
   };
 
   try {
-    const desde = new Date(now().getTime() - DIA_MS);
-    const cached = await worker.buscarCache(normalized.domain, desde);
-    const raw = cached ?? (await collect(normalized, engine, onStep));
-    if (cached) await onStep("Analizando tráfico y presencia…");
-    const informe = await buildReport(raw, { models: engine.models, now: engine.now }, onStep);
+    let cached: RawData | null = null;
+    try {
+      cached = await worker.buscarCache(normalized.domain, new Date(now().getTime() - DIA_MS));
+    } catch (e) {
+      console.error("runAnalysis: fallo al buscar en caché, se recoge de nuevo", e);
+    }
+
+    let raw: RawData | null = null;
+    let informe: Report | null = null;
+    if (cached) {
+      try {
+        await onStep("Analizando tráfico y presencia…");
+        informe = await buildReport(cached, { models: engine.models, now }, onStep);
+        raw = cached;
+      } catch (e) {
+        console.error("runAnalysis: datos en caché inservibles, se recoge de nuevo", e);
+      }
+    }
+    if (!raw || !informe) {
+      raw = await collect(normalized, engine, onStep);
+      informe = await buildReport(raw, { models: engine.models, now }, onStep);
+    }
     await worker.completar(id, raw, informe);
   } catch (e) {
     const { mensaje, kind } = describirFallo(e);
