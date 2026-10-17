@@ -44,7 +44,6 @@ export function createFakeRepos(opts?: {
 }): { user: UserRepo; worker: WorkerRepo; state: FakeState } {
   const userId = opts?.userId ?? "u1";
   let reloj = new Date("2026-01-01T00:00:00Z").getTime();
-  let seq = 0;
 
   const state: FakeState = {
     creditos: opts?.creditos ?? 5,
@@ -56,7 +55,7 @@ export function createFakeRepos(opts?: {
     insertarAnalisis: (p) => {
       const ahora = state.now();
       const a: FakeAnalisis = {
-        id: `a${++seq}`,
+        id: crypto.randomUUID(),
         url: `https://${p.dominio ?? "x.com"}`,
         dominio: "x.com",
         estado: "procesando",
