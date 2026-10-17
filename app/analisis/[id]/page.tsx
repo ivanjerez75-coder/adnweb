@@ -21,7 +21,7 @@ async function Contenido({ params }: { params: Promise<{ id: string }> }) {
       </main>
     );
   }
-  if (a.estado === "error") {
+  if (a.estado !== "listo") {
     return (
       <main>
         <h1>{a.dominio}</h1>
@@ -36,12 +36,14 @@ async function Contenido({ params }: { params: Promise<{ id: string }> }) {
   return (
     <main>
       <h1>{a.dominio}</h1>
-      {informe && (
+      {informe ? (
         <>
           <p>{informe.resumen.queHace}</p>
           <p>Puntuación: {informe.veredicto.puntuacion}</p>
           <pre>{JSON.stringify(informe, null, 2)}</pre>
         </>
+      ) : (
+        <p>El informe no está disponible.</p>
       )}
       <p>
         <Link href="/dashboard">Volver al panel</Link>

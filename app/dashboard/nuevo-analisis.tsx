@@ -27,8 +27,9 @@ export function NuevoAnalisis({ urlInicial }: { urlInicial: string }) {
       setError(cuerpo.error ?? "Ha ocurrido un error inesperado.");
     } catch {
       setError("Ha ocurrido un error inesperado.");
+    } finally {
+      setEnviando(false);
     }
-    setEnviando(false);
   }
 
   return (

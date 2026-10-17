@@ -2,43 +2,57 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { siguienteSondeo } from "@/lib/server/analyses/polling";
+import { decidirSondeo, siguienteSondeo } from "@/lib/server/analyses/polling";
 
 export function Progreso({ id }: { id: string }) {
   const router = useRouter();
   const [paso, setPaso] = useState<string | null>(null);
-  const [lento, setLento] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelado = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let fallos = 0;
 
     async function sondear(intento: number) {
+      let status = 0;
       let estado = "procesando";
+      let errorApi: string | undefined;
       try {
         const res = await fetch(`/api/analisis/${id}`, { cache: "no-store" });
+        status = res.status;
+        const d = (await res.json().catch(() => ({}))) as {
+          estado?: string;
+          pasoActual?: string | null;
+          error?: string | null;
+        };
         if (res.ok) {
-          const d = (await res.json()) as { estado: string; pasoActual: string | null };
-          estado = d.estado;
-          if (!cancelado) setPaso(d.pasoActual);
+          estado = d.estado ?? "procesando";
+          if (!cancelado) setPaso(d.pasoActual ?? null);
+        } else if (typeof d.error === "string") {
+          errorApi = d.error;
         }
       } catch {
-        // error de red: se reintenta en el siguiente sondeo
+        status = 0;
       }
       if (cancelado) return;
-      if (estado !== "procesando") {
+
+      if (status >= 200 && status < 300 && estado !== "procesando") {
         router.refresh();
         return;
       }
-      const espera = siguienteSondeo(intento + 1);
-      if (espera === null) {
-        setLento(true);
+      const d = decidirSondeo(status, intento, fallos);
+      fallos = status >= 200 && status < 300 ? 0 : fallos + 1;
+      if (d.accion === "refrescar") {
+        router.refresh();
         return;
       }
-      timer = setTimeout(() => void sondear(intento + 1), espera);
+      setAviso(d.mensaje ? (d.accion === "seguir" && errorApi ? errorApi : d.mensaje) : null);
+      if (d.accion === "parar") return;
+      timer = setTimeout(() => void sondear(intento + 1), d.espera);
     }
 
-    timer = setTimeout(() => void sondear(0), siguienteSondeo(0) ?? 2000);
+    timer = setTimeout(() => void sondear(0), siguienteSondeo(0)!);
     return () => {
       cancelado = true;
       if (timer) clearTimeout(timer);
@@ -48,7 +62,7 @@ export function Progreso({ id }: { id: string }) {
   return (
     <div>
       <p role="status">{paso ?? "Preparando el análisis…"}</p>
-      {lento && <p>Esto está tardando más de lo normal; recarga la página.</p>}
+      {aviso && <p role="alert">{aviso}</p>}
     </div>
   );
 }
