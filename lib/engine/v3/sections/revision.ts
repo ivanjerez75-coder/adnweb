@@ -6,7 +6,7 @@ import { bloqueDatosWeb, REGLAS_COMUNES } from "../prompt";
 import type { Adn } from "./adn";
 import { resumenAdn } from "./saber";
 
-const Check = z.enum(["si", "no", "no_aplica"]);
+const Check = z.enum(["si", "no", "no_aplica"]).catch("no_aplica"); // un valor raro no tumba la sección
 export type CheckValor = z.infer<typeof Check>;
 const ids = z.array(z.string()).default([]);
 
