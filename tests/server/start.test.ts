@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { startAnalysis } from "@/lib/server/analyses/start";
 import { createFakeRepos } from "./fake-repo";
 import { BlockedUrlError } from "@/lib/engine/safe-fetch";
@@ -51,6 +51,17 @@ describe("startAnalysis", () => {
       status: 402,
       mensaje: "No te quedan créditos este mes.",
     });
+  });
+
+  it("sin créditos: 402 sin hacer ninguna petición a la web", async () => {
+    const { user } = createFakeRepos({ creditos: 0 });
+    const getPage = vi.fn(okGetter);
+    expect(await startAnalysis("example.com", { user, getPage })).toEqual({
+      ok: false,
+      status: 402,
+      mensaje: "No te quedan créditos este mes.",
+    });
+    expect(getPage).not.toHaveBeenCalled();
   });
 
   it("análisis en curso: 409", async () => {
