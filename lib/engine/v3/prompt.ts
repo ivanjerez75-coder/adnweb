@@ -1,6 +1,6 @@
 import type { RawData } from "../types";
 import { escapeAngles } from "../ai/prompt";
-import { datosPublicados } from "./estimates";
+import { datosPublicados } from "./evidence";
 
 /** Instrucciones compartidas por todas las secciones del informe v3. */
 export const REGLAS_COMUNES = `- Responde en español.

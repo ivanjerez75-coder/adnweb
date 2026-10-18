@@ -95,20 +95,21 @@ describe("buildReportV3", () => {
     expect(calls[0]).toEqual(["datos", "lista"]);
     expect(calls[1]).toEqual(["adn", "lista"]);
     expect(calls[calls.length - 1][0]).toBe("cierre");
-    expect(calls.filter(([c]) => c === "datos")).toHaveLength(2);
+    expect(calls.filter(([c]) => c === "datos")).toHaveLength(1);
     expect(Object.values(r.estados).every((e) => e === "lista")).toBe(true);
     expect(r.secciones.competidores).toBeInstanceOf(Array);
   });
 
-  it("el datos final trae ingresos estimados con el tipo de negocio", async () => {
+  it("datos se emite una sola vez, con métricas etiquetadas y sin visitas inventadas", async () => {
     const datos: unknown[] = [];
     await buildReportV3(raw, deps(fakeModels()), async (c, x) => {
       if (c === "datos") datos.push(x);
     });
-    const [primero, segundo] = datos as { ingresos: { motivoNoEstimable?: string; valor: unknown } }[];
-    expect(primero.ingresos.motivoNoEstimable).toBe("Pendiente del tipo de negocio");
-    expect(primero.ingresos.valor).toBeNull();
-    expect(segundo.ingresos.valor).not.toBeNull();
+    expect(datos).toHaveLength(1);
+    const d = datos[0] as { metricas: { clave: string; valor: unknown; estado: string }[]; precios: unknown[]; escenario: unknown };
+    expect(d.metricas.find((m) => m.clave === "visitas_mensuales")).toMatchObject({ valor: null, estado: "insuficiente" });
+    expect(d.metricas.find((m) => m.clave === "valoracion")?.estado).toBe("no_aplica");
+    expect(Array.isArray(d.precios)).toBe(true);
   });
 
   it("un competidores que falla da error y el resto sigue lista", async () => {

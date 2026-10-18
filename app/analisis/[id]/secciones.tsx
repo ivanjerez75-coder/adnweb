@@ -3,7 +3,6 @@
 import { Component, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { Evidence } from "@/lib/engine/v3/evidence";
-import type { Estimacion } from "@/lib/engine/v3/estimates";
 import type { DnaScore } from "@/lib/engine/v3/score";
 import type { Adn, AdnBloque } from "@/lib/engine/v3/sections/adn";
 import type { Competidor } from "@/lib/engine/v3/sections/competidores";
@@ -59,6 +58,16 @@ function Evidencias({ lista }: { lista: Evidence[] | undefined }) {
 }
 
 const num = (n: number) => n.toLocaleString("es-ES", { maximumFractionDigits: 2 });
+
+/** Forma antigua de `datos` (v3); Task 5 la sustituye por las métricas v3.1. */
+interface Estimacion {
+  valor: { min: number; max: number } | number | null;
+  unidad: string;
+  fuente: string;
+  metodologia: string;
+  confianza: string;
+  motivoNoEstimable?: string;
+}
 
 function Cifra({ titulo, e }: { titulo: string; e: Estimacion | undefined }) {
   if (!e) return null;

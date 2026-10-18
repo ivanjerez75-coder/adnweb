@@ -1,171 +1,197 @@
 import { describe, it, expect } from "vitest";
-import { computeAnchors } from "../../../lib/engine/anchors";
 import {
-  estimarTrafico,
-  estimarIngresosMensuales,
-  estimarValoracion,
-  metricasSeo,
-  datosPublicados,
-  parsearPrecioEur,
+  construirMetricas,
+  escenarioIngresos,
+  preciosPublicados,
+  parsearPrecio,
+  type Metrica,
 } from "../../../lib/engine/v3/estimates";
-import { buildEvidence } from "../../../lib/engine/v3/evidence";
-import { makeRaw } from "../raw-fixture";
+import { makeRaw, makeSite, ps } from "../raw-fixture";
 
 const NOW = new Date("2026-10-18T00:00:00Z");
+const get = (ms: Metrica[], clave: string) => {
+  const m = ms.find((x) => x.clave === clave);
+  if (!m) throw new Error(`falta ${clave}`);
+  return m;
+};
+const wd = (revenue: { amount: number; currency: string; year: number | null } | null) => ({
+  id: "Q1", description: null, inception: null, founders: [], headquarters: null, employees: null, employeesYear: null, revenue,
+});
+const CLAVES = [
+  "visitas_mensuales", "popularidad_tranco", "popularidad_radar", "usuarios_reales_crux", "ingresos_publicados", "valoracion",
+  "pagespeed_movil", "pagespeed_escritorio", "accesibilidad", "seo_tecnico", "buenas_practicas",
+  "paginas_sitemap", "titulos_descripciones", "idiomas", "blog_activo",
+];
 
-describe("estimarTrafico", () => {
-  it("usa la tabla de rankings con su confianza", () => {
-    const raw = makeRaw({ tranco: { rank: 5000, trend: "estable" }, radar: { bucket: 10000, rank: null } });
-    const e = estimarTrafico(computeAnchors(raw, NOW));
-    expect(e.valor).toEqual({ min: 5_000_000, max: 50_000_000 });
-    expect(e.unidad).toBe("visitas/mes");
-    expect(e.confianza).toBe("media");
-    expect(e.fuente).toMatch(/Tranco/);
-    expect(e.metodologia.length).toBeGreaterThan(10);
-  });
-
-  it("es no estimable sin ranking", () => {
-    const e = estimarTrafico(computeAnchors(makeRaw({ tranco: null, radar: null }), NOW));
-    expect(e.valor).toBeNull();
-    expect(e.motivoNoEstimable).toMatch(/ranking/i);
+describe("parsearPrecio", () => {
+  it("conserva moneda, importe y periodicidad", () => {
+    expect(parsearPrecio("29 €/mes")).toMatchObject({ importe: 29, moneda: "EUR", periodicidad: "mes" });
+    expect(parsearPrecio("$100 per month")).toMatchObject({ importe: 100, moneda: "USD", periodicidad: "mes" });
+    expect(parsearPrecio("290 € al año")).toMatchObject({ importe: 290, periodicidad: "año" });
+    expect(parsearPrecio("1.200 € anual")).toMatchObject({ importe: 1200, periodicidad: "año" });
+    expect(parsearPrecio("9,99 €")).toMatchObject({ importe: 9.99, periodicidad: null });
+    expect(parsearPrecio("gratis")).toBeNull();
   });
 });
 
-describe("parsearPrecioEur", () => {
-  it("convierte a euros", () => {
-    expect(parsearPrecioEur("9 €")).toBe(9);
-    expect(parsearPrecioEur("$100")).toBeCloseTo(92);
-    expect(parsearPrecioEur("1.200 €")).toBe(1200);
-    expect(parsearPrecioEur("9,99 €")).toBeCloseTo(9.99);
-    expect(parsearPrecioEur("gratis")).toBeNull();
+describe("construirMetricas: sin datos publicados (teb-like)", () => {
+  const raw = makeRaw({ tranco: null, radar: null, site: makeSite({ pricesFound: [] }) });
+  const ms = construirMetricas(raw, NOW);
+
+  it("siempre incluye todas las métricas, sin omitir ninguna", () => {
+    for (const c of CLAVES) expect(ms.some((m) => m.clave === c)).toBe(true);
+    expect(new Set(ms.map((m) => m.clave)).size).toBe(ms.length);
+  });
+  it("visitas mensuales: nunca un número", () => {
+    const v = get(ms, "visitas_mensuales");
+    expect(v).toMatchObject({ valor: null, estado: "insuficiente", confianza: "insuficiente" });
+    expect(v.metodologia + v.motivoConfianza).toMatch(/No hay datos fiables disponibles/);
+  });
+  it("ingresos insuficientes y sin escenario", () => {
+    expect(get(ms, "ingresos_publicados")).toMatchObject({ valor: null, estado: "insuficiente" });
+    expect(ms.some((m) => m.clave === "escenario_ingresos")).toBe(false);
+  });
+  it("valoración no estimable", () => {
+    const v = get(ms, "valoracion");
+    expect(v.estado).toBe("no_aplica");
+    expect(v.valor).toBeNull();
+    expect(JSON.stringify(v)).toContain("No estimable con los datos disponibles");
+  });
+  it("Tranco y Radar sin dato: insuficiente", () => {
+    expect(get(ms, "popularidad_tranco").estado).toBe("insuficiente");
+    expect(get(ms, "popularidad_radar").estado).toBe("insuficiente");
   });
 });
 
-describe("estimarIngresosMensuales", () => {
-  it("teb-like (servicios, sin precios ni Wikidata): no estimable con motivo en español", () => {
-    const raw = makeRaw({ tranco: null, radar: null });
-    const ing = estimarIngresosMensuales(raw, computeAnchors(raw, NOW), "servicios", []);
-    expect(ing.valor).toBeNull();
-    expect(ing.motivoNoEstimable).toMatch(/[a-z]{4}/i);
-    const val = estimarValoracion(ing, "servicios");
-    expect(val.valor).toBeNull();
-    expect(val.motivoNoEstimable).toBeTruthy();
+describe("construirMetricas: popularidad", () => {
+  it("Tranco puesto 50000: observado, alta, no mide visitas", () => {
+    const m = get(construirMetricas(makeRaw({ tranco: { rank: 50_000, trend: "sube" } }), NOW), "popularidad_tranco");
+    expect(m).toMatchObject({ valor: 50_000, unidad: "puesto", tipo: "observado", confianza: "alta", estado: "disponible" });
+    expect(m.limitaciones.join(" ")).toContain("No mide visitas");
+    expect(m.fuente).toMatch(/Tranco/);
   });
-
-  it("saas con tráfico y precios: rango según la fórmula, confianza baja", () => {
-    const raw = makeRaw({ tranco: { rank: 5000, trend: "estable" }, radar: null });
-    const anchors = computeAnchors(raw, NOW);
-    const ing = estimarIngresosMensuales(raw, anchors, "saas", ["9 €", "29 €"]);
-    // mediana de 9 y 29 = 19; visitas 5M-50M; conversión 2-5 %
-    expect(ing.valor).toEqual({ min: 5_000_000 * 0.02 * 19, max: 50_000_000 * 0.05 * 19 });
-    expect(ing.confianza).toBe("baja");
-    expect(ing.unidad).toBe("€/mes");
-    expect(ing.metodologia).toMatch(/conversión/i);
-    expect(ing.metodologia).toMatch(/se asume que los precios detectados son mensuales/i);
-  });
-
-  it("con ingresos de Wikidata usa el ancla / 12 con confianza alta", () => {
-    const raw = makeRaw({
-      wikidata: { id: "Q1", description: null, inception: 2000, founders: [], headquarters: null, employees: null, employeesYear: null, revenue: { amount: 12_000_000, currency: "EUR", year: 2024 } },
-    });
-    const ing = estimarIngresosMensuales(raw, computeAnchors(raw, NOW), "servicios", []);
-    const v = ing.valor as { min: number; max: number };
-    expect(v.min).toBeCloseTo(900_000, -2);
-    expect(v.max).toBeCloseTo(1_100_000, -2);
-    expect(ing.confianza).toBe("alta");
-    expect(ing.fuente).toMatch(/Wikidata/);
-  });
-
-  it("solo empleados en Wikidata (sin ingresos ni precios): no estimable", () => {
-    const raw = makeRaw({
-      tranco: null, radar: null,
-      wikidata: { id: "Q1", description: null, inception: null, founders: [], headquarters: null, employees: 500, employeesYear: 2024, revenue: null },
-    });
-    const ing = estimarIngresosMensuales(raw, computeAnchors(raw, NOW), "saas", []);
-    expect(ing.valor).toBeNull();
-    expect(ing.motivoNoEstimable).toBeTruthy();
-  });
-
-  it("sin precios válidos no estima aunque haya tráfico", () => {
-    const raw = makeRaw();
-    const ing = estimarIngresosMensuales(raw, computeAnchors(raw, NOW), "saas", ["gratis"]);
-    expect(ing.valor).toBeNull();
-    expect(ing.motivoNoEstimable).toMatch(/precio/i);
+  it("Radar con franja: observado y no mide visitas", () => {
+    const m = get(construirMetricas(makeRaw({ radar: { bucket: 10_000, rank: null } }), NOW), "popularidad_radar");
+    expect(m).toMatchObject({ tipo: "observado", confianza: "alta", estado: "disponible" });
+    expect(m.limitaciones.join(" ")).toContain("No mide visitas");
   });
 });
 
-describe("estimarValoracion", () => {
-  it("multiplica ingresos anuales por el múltiplo y no supera la confianza de los ingresos", () => {
-    const raw = makeRaw({ tranco: { rank: 5000, trend: "estable" }, radar: null });
-    const ing = estimarIngresosMensuales(raw, computeAnchors(raw, NOW), "saas", ["9 €", "29 €"]);
-    const val = estimarValoracion(ing, "saas");
-    const r = ing.valor as { min: number; max: number };
-    expect(val.valor).toEqual({ min: r.min * 12 * 3, max: r.max * 12 * 8 });
-    expect(val.confianza).toBe("baja");
-  });
-
-  it("con ingresos de confianza alta, la valoración queda en media como máximo", () => {
+describe("construirMetricas: CrUX y PageSpeed", () => {
+  it("con campo: usuarios reales observados", () => {
     const raw = makeRaw({
-      wikidata: { id: "Q1", description: null, inception: null, founders: [], headquarters: null, employees: null, employeesYear: null, revenue: { amount: 12_000_000, currency: "EUR", year: null } },
+      pagespeed: { ...ps(80, 90), campo: { fuente: "origen", lcpMs: 2400, inpMs: 180, cls: 0.05, categoria: "FAST" } },
     });
-    const ing = estimarIngresosMensuales(raw, computeAnchors(raw, NOW), "ecommerce", []);
-    const val = estimarValoracion(ing, "ecommerce");
-    expect(val.confianza).toBe("media");
-    expect(val.valor).not.toBeNull();
+    const m = get(construirMetricas(raw, NOW), "usuarios_reales_crux");
+    expect(m).toMatchObject({ tipo: "observado", confianza: "alta", estado: "disponible" });
+    expect(String(m.valor)).toMatch(/2400/);
+    expect(m.limitaciones.join(" ")).toMatch(/visitas/i);
   });
-
-  it("tipo sin múltiplo de referencia: no estimable", () => {
-    const raw = makeRaw({
-      wikidata: { id: "Q1", description: null, inception: null, founders: [], headquarters: null, employees: null, employeesYear: null, revenue: { amount: 12_000_000, currency: "EUR", year: null } },
-    });
-    const ing = estimarIngresosMensuales(raw, computeAnchors(raw, NOW), "servicios", []);
-    const val = estimarValoracion(ing, "servicios");
-    expect(val.valor).toBeNull();
-    expect(val.motivoNoEstimable).toMatch(/múltiplo/i);
+  it("sin campo: insuficiente", () => {
+    expect(get(construirMetricas(makeRaw(), NOW), "usuarios_reales_crux").estado).toBe("insuficiente");
+  });
+  it("puntuaciones disponibles", () => {
+    const raw = makeRaw({ pagespeed: { ...ps(80, 90), accesibilidad: 95, buenasPracticas: 100, seo: 88 } });
+    const ms = construirMetricas(raw, NOW);
+    expect(get(ms, "pagespeed_movil")).toMatchObject({ valor: 80, unidad: "/100", tipo: "observado", confianza: "alta" });
+    expect(get(ms, "pagespeed_escritorio").valor).toBe(90);
+    expect(get(ms, "accesibilidad").valor).toBe(95);
+    expect(get(ms, "seo_tecnico").valor).toBe(88);
+    expect(get(ms, "buenas_practicas").valor).toBe(100);
+  });
+  it("error de PageSpeed: todas sus métricas con estado error y motivo", () => {
+    const raw = makeRaw({ pagespeed: { ...ps(null, null), error: "cuota agotada" } });
+    const ms = construirMetricas(raw, NOW);
+    for (const c of ["pagespeed_movil", "pagespeed_escritorio", "accesibilidad", "seo_tecnico", "buenas_practicas", "usuarios_reales_crux"]) {
+      const m = get(ms, c);
+      expect(m.estado).toBe("error");
+      expect(m.valor).toBeNull();
+      expect(m.motivoConfianza).toContain("cuota agotada");
+    }
+  });
+  it("pagespeed ausente: nunca omitida", () => {
+    const ms = construirMetricas(makeRaw({ pagespeed: null }), NOW);
+    expect(get(ms, "pagespeed_movil").valor).toBeNull();
+    expect(get(ms, "pagespeed_movil").estado).not.toBe("disponible");
   });
 });
 
-describe("metricasSeo", () => {
-  it("cuenta títulos y descripciones de las páginas leídas", () => {
+describe("construirMetricas: ingresos publicados", () => {
+  const ing = (year: number | null) =>
+    get(construirMetricas(makeRaw({ wikidata: wd({ amount: 12_000_000, currency: "EUR", year }) }), NOW), "ingresos_publicados");
+  it("reciente (≤ 2 años): alta, con año y moneda originales", () => {
+    const m = ing(2025);
+    expect(m).toMatchObject({ valor: 12_000_000, tipo: "observado", confianza: "alta", estado: "disponible", periodo: "2025" });
+    expect(m.unidad).toContain("EUR");
+    expect(m.fuente).toMatch(/Wikidata/);
+  });
+  it("de hace 3 años: media", () => expect(ing(2023).confianza).toBe("media"));
+  it("de hace 5 años: media; de hace 6: baja", () => {
+    expect(ing(2021).confianza).toBe("media");
+    expect(ing(2020).confianza).toBe("baja");
+  });
+  it("sin año: baja", () => expect(ing(null).confianza).toBe("baja"));
+  it("conserva la moneda original", () => {
+    const m = get(construirMetricas(makeRaw({ wikidata: wd({ amount: 5_000_000, currency: "USD", year: 2025 }) }), NOW), "ingresos_publicados");
+    expect(m.valor).toBe(5_000_000);
+    expect(m.unidad).toContain("USD");
+  });
+});
+
+describe("precios y escenario", () => {
+  const rawPrecios = (pricesFound: string[]) => makeRaw({ site: makeSite({ pricesFound }) });
+
+  it("preciosPublicados: importe, moneda, periodicidad, url y texto", () => {
+    const p = preciosPublicados(rawPrecios(["29 €/mes", "290 €/año", "gratis"]));
+    expect(p).toHaveLength(2);
+    expect(p[0]).toMatchObject({ importe: 29, moneda: "EUR", periodicidad: "mes", texto: "29 €/mes", plan: null });
+    expect(p[0].url).toMatch(/^https:\/\//);
+    expect(p[1]).toMatchObject({ importe: 290, periodicidad: "año" });
+  });
+
+  it("escenarioIngresos: mediana mensual de 29 €/mes y 290 €/año", () => {
+    const e = escenarioIngresos(preciosPublicados(rawPrecios(["29 €/mes", "290 €/año"])))!;
+    expect(e.map((x) => x.clientes)).toEqual([100, 500, 1000]);
+    expect(e.map((x) => x.ingresosMes)).toEqual([2658, 13292, 26583]);
+  });
+  it("null sin precios", () => expect(escenarioIngresos([])).toBeNull());
+
+  it("métrica escenario_ingresos: hipotética con texto fijo y supuestos", () => {
+    const ms = construirMetricas(rawPrecios(["29 €/mes", "290 €/año"]), NOW);
+    const m = get(ms, "escenario_ingresos");
+    expect(m.tipo).toBe("hipotetico");
+    expect(m.limitaciones).toContain("Escenario ilustrativo: no son los ingresos de la empresa");
+    expect(m.supuestos.length).toBeGreaterThan(0);
+    expect(m.supuestos.join(" ")).not.toMatch(/periodicidad desconocida/);
+  });
+  it("periodicidad desconocida se declara como supuesto", () => {
+    const raw = rawPrecios(["desde 9 €"]);
+    const m = get(construirMetricas(raw, NOW), "escenario_ingresos");
+    expect(m.supuestos).toContain("periodicidad desconocida: se trata como mensual");
+    expect(escenarioIngresos(preciosPublicados(raw))![0].ingresosMes).toBe(900);
+  });
+});
+
+describe("construirMetricas: SEO", () => {
+  it("sitemap, títulos, idiomas y blog", () => {
     const raw = makeRaw({
       sitemap: { urlCount: 120, sections: ["blog"], languages: ["es"], lastModified: "2026-10-01", recentBlogPosts: 2, complete: false, candidatas: [] },
       paginas: [
         { id: "p1", url: "https://facturo.example/", titulo: "Inicio", tieneDescripcion: true, extractos: [] },
         { id: "p2", url: "https://facturo.example/a", titulo: "", tieneDescripcion: false, extractos: [] },
-        { id: "p3", url: "https://facturo.example/b", titulo: "B", tieneDescripcion: false, extractos: [] },
       ],
     });
-    expect(metricasSeo(raw)).toEqual({
-      paginasSitemap: 120,
-      sitemapCompleto: false,
-      pagespeedMovil: 90,
-      titulosYDescripciones: { conTitulo: 2, conDescripcion: 1, total: 3 },
-      idiomas: ["es", "en"],
-      blogActivo: true,
-    });
+    const ms = construirMetricas(raw, NOW);
+    expect(get(ms, "paginas_sitemap")).toMatchObject({ valor: 120, estado: "disponible" });
+    expect(get(ms, "paginas_sitemap").limitaciones.join(" ")).toMatch(/al menos|incompleto/i);
+    expect(String(get(ms, "titulos_descripciones").valor)).toMatch(/1.*2/);
+    expect(String(get(ms, "idiomas").valor)).toMatch(/es/);
+    expect(get(ms, "blog_activo")).toMatchObject({ valor: "Sí", estado: "disponible" });
   });
-
-  it("sin datos devuelve nulos y ceros", () => {
-    const m = metricasSeo(makeRaw({ site: null, pagespeed: null }));
-    expect(m).toMatchObject({ paginasSitemap: null, sitemapCompleto: false, pagespeedMovil: null, blogActivo: null });
-    expect(m.titulosYDescripciones).toEqual({ conTitulo: 0, conDescripcion: 0, total: 0 });
-  });
-});
-
-describe("datosPublicados", () => {
-  it("cada dato apunta a un id dato:* del registro de evidencias", () => {
-    const raw = makeRaw({
-      wikidata: { id: "Q1", description: null, inception: 2012, founders: [], headquarters: "Madrid", employees: 80, employeesYear: 2024, revenue: { amount: 12_000_000, currency: "EUR", year: 2023 } },
-    });
-    const datos = datosPublicados(raw);
-    const reg = buildEvidence(raw, []);
-    expect(datos.length).toBeGreaterThanOrEqual(3);
-    for (const d of datos) {
-      expect(d.evidencia).toMatch(/^dato:/);
-      expect(reg.has(d.evidencia)).toBe(true);
-      expect(d.etiqueta && d.valor && d.fuente).toBeTruthy();
+  it("sin sitemap ni páginas: insuficiente", () => {
+    const ms = construirMetricas(makeRaw({ sitemap: null, paginas: null, site: null }), NOW);
+    for (const c of ["paginas_sitemap", "titulos_descripciones", "idiomas", "blog_activo"]) {
+      expect(get(ms, c)).toMatchObject({ valor: null, estado: "insuficiente" });
     }
-    expect(datos.find((d) => d.evidencia === "dato:ingresos")?.valor).toMatch(/2023.*Wikidata/);
-    expect(datos.find((d) => d.evidencia === "dato:fundacion")?.valor).toMatch(/2012/);
   });
 });

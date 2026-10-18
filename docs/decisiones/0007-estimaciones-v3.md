@@ -1,23 +1,14 @@
-# 0007 — Estimaciones calculadas por código (informe v3)
+# 0007 — Métricas v3.1: registros etiquetados, sin cifras inventadas
 
-- **Fecha:** 2026-10-18
-- **Decisión:** Las cifras del informe (tráfico, ingresos, valoración) las calcula el código, no la IA. Cada estimación lleva valor, unidad, fuente, metodología y confianza. Si no hay base suficiente, el valor es "No estimable" con un motivo en español; nunca se rellena con una cifra inventada. Código en `lib/engine/v3/estimates.ts`.
-- **Tráfico:** se reutiliza la tabla ranking → visitas de la decisión 0003 y su confianza.
-- **Ingresos mensuales**, por orden de prioridad:
-  1. Ingresos públicos de Wikidata: rango del ancla (±10 %) dividido entre 12, confianza alta.
-  2. Fórmula propia: visitas mín. × conversión mín. × precio … visitas máx. × conversión máx. × precio, confianza baja. Precio = mediana de los precios detectados, pasados a euros (USD 0,92; GBP 1,17).
-  3. Si falta tráfico, precios o una conversión para ese tipo: no estimable.
-- **Solo dos fuentes (spec §8b.1):** no se usa el ingreso por empleado ni ninguna otra heurística; empleados sin ingresos ni precios da "No estimable".
-- **Valoración:** ingresos anuales (mensuales × 12) × múltiplo del tipo de negocio. Su confianza nunca supera la de los ingresos y, al ser un múltiplo genérico, nunca pasa de "media". Sin ingresos o sin múltiplo para el tipo: no estimable.
-
-| Tipo | Conversión de referencia | Múltiplo de valoración (× ingresos anuales) |
-|---|---|---|
-| saas | 2-5 % | 3-8 |
-| ecommerce | 1-3 % | 1-3 |
-| marketplace | 1-4 % | 2-5 |
-| app | 1-3 % | 2-6 |
-
-- **Tipos sin tabla** (contenido_ads, servicios, otro): no hay conversión ni múltiplo de referencia fiable, así que solo se estiman ingresos si hay datos públicos en Wikidata.
-- **Métricas SEO y datos publicados:** títulos y descripciones se cuentan sobre las páginas leídas en profundidad (`PageDoc.tieneDescripcion`, meta description no vacía). Los datos publicados reutilizan el registro de evidencias (`dato:*`), de modo que cada uno es citable.
-- **Por qué:** una cifra sin fuente ni método no se puede defender; mejor "No estimable" que un número inventado.
-- **Pendiente de calibrar:** conversiones y múltiplos son valores orientativos; contrastarlos con casos reales. El precio detectado se trata como mensual, lo que puede sobrestimar si es un pago anual o por pedido.
+- **Fecha:** 2026-10-18 (sustituye a la versión de estimaciones de v3).
+- **Decisión:** cada cifra del informe es un registro `Metrica` calculado por código (no por la IA), con su tipo (`observado` / `estimado` / `hipotetico`), fuente, metodología, confianza con su motivo, limitaciones, supuestos y estado (`disponible` / `insuficiente` / `error` / `no_aplica`). Una métrica sin datos no se omite: aparece con su estado. Código en `lib/engine/v3/estimates.ts`.
+- **Visitas mensuales:** siempre `insuficiente`, valor nulo, "No hay datos fiables disponibles". Ninguna fuente gratuita mide visitas, y un ranking nunca se convierte en visitas (se elimina la tabla ranking → visitas de la decisión 0003 para el informe v3).
+- **Popularidad:** el puesto en Tranco, la franja de Cloudflare Radar y los datos de usuarios reales de Chrome (CrUX, vía PageSpeed) son `observado` con confianza alta *para lo que miden*; sus limitaciones dicen lo que no miden ("No mide visitas").
+- **PageSpeed:** móvil, escritorio, accesibilidad, SEO técnico y buenas prácticas, `observado`, alta. Si PageSpeed falla (cuota, sin clave), esas métricas salen con estado `error` y el motivo; el informe no falla.
+- **Ingresos publicados:** solo si Wikidata los da, con importe, moneda y año originales. Confianza por antigüedad: alta hasta 2 años, media hasta 5, baja después o sin año. Si no hay dato: `insuficiente`, "No estimable". No se usan ni empleados ni conversiones.
+- **Escenario hipotético de ingresos:** solo si la web publica un precio verificable. Clientes (100, 500 y 1.000) × mediana del precio mensual publicado. Los precios anuales se dividen entre 12; los de periodicidad desconocida se tratan como mensuales y se declara el supuesto "periodicidad desconocida: se trata como mensual"; los pagos únicos se excluyen. Tipo `hipotetico`, confianza baja, siempre con el texto "Escenario ilustrativo: no son los ingresos de la empresa".
+- **Valoración:** siempre `no_aplica`, "No estimable con los datos disponibles" (haría falta ingresos, márgenes, crecimiento y comparables). Se eliminan los múltiplos por tipo de negocio.
+- **Precios publicados:** cada uno con importe, moneda original, periodicidad (si consta: "/mes", "al mes", "/mo", "month", "/año", "anual", "year"), plan (si consta), URL y texto. Un precio anunciado no es un ingreso medio por cliente.
+- **Evidencias:** el registro de evidencias gana `dato:cif`, `dato:razon_social`, `dato:aviso_legal`, `dato:privacidad`, `dato:cookies`, `dato:contacto`, `dato:jsonld_org`, `dato:pagespeed`, `dato:crux` y `dato:precio:<n>`, cada uno solo si existe su valor.
+- **Por qué:** una cifra sin fuente ni método no se puede defender; un informe más pequeño con pruebas defendibles vale más que uno completo con cifras inventadas.
+- **Pendiente:** el escenario usa un tipo de cambio fijo para USD y GBP (`FX_TO_EUR`); el plan de cada precio aún no se detecta.

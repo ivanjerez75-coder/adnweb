@@ -1,17 +1,9 @@
 import type { JsonModel } from "../ai/providers";
-import { computeAnchors, type TipoNegocio } from "../anchors";
 import { computeFacts } from "../facts";
 import type { PageGetter } from "../safe-fetch";
 import { extractSignals } from "../signals";
 import type { RawData } from "../types";
-import {
-  datosPublicados,
-  estimarIngresosMensuales,
-  estimarTrafico,
-  estimarValoracion,
-  metricasSeo,
-  type Estimacion,
-} from "./estimates";
+import { construirMetricas, escenarioIngresos, preciosPublicados } from "./estimates";
 import { buildEvidence } from "./evidence";
 import { limitarConcurrencia, type RunSectionOpts } from "./llm";
 import { calcularScore, type DnaScore } from "./score";
@@ -44,7 +36,6 @@ export interface ReportV3Deps {
 export type OnSection = (clave: SeccionClave, contenido: unknown | null, estado: EstadoSeccion) => Promise<void>;
 
 const MAX_IA_SIMULTANEAS = 3;
-const PENDIENTE = "Pendiente del tipo de negocio";
 
 /**
  * Cada llamada de IA (incluida la segunda de "diferencias" dentro de competidores) pasa por UN
@@ -54,15 +45,6 @@ const PENDIENTE = "Pendiente del tipo de negocio";
 function limitar(models: JsonModel[], limit: <T>(fn: () => Promise<T>) => Promise<T>): JsonModel[] {
   return models.map((m) => ({ ...m, generate: (p, o) => limit(() => m.generate(p, o)) }));
 }
-
-const pendiente = (unidad: string): Estimacion => ({
-  valor: null,
-  unidad,
-  fuente: "Pendiente",
-  metodologia: "Se calcula cuando se conoce el tipo de negocio.",
-  confianza: "baja",
-  motivoNoEstimable: PENDIENTE,
-});
 
 export async function buildReportV3(raw: RawData, deps: ReportV3Deps, onSection: OnSection): Promise<ReportV3> {
   const generadoEn = deps.now().toISOString();
@@ -95,19 +77,17 @@ export async function buildReportV3(raw: RawData, deps: ReportV3Deps, onSection:
   const sectionDeps = { models, runOpts: deps.runOpts };
 
   const now = deps.now();
-  const anchors = computeAnchors(raw, now);
   const signals = extractSignals(raw, now);
   const facts = computeFacts(raw);
   const reg = buildEvidence(raw, signals);
-  const precios = raw.site?.pricesFound ?? [];
 
-  // Fase 1: datos desde código (ingresos y valoración quedan pendientes hasta conocer el tipo de negocio).
-  const datosBase = {
-    trafico: estimarTrafico(anchors),
-    seo: metricasSeo(raw),
-    publicados: datosPublicados(raw),
-  };
-  await emitir("datos", { ...datosBase, ingresos: pendiente("€/mes"), valoracion: pendiente("€") }, "lista");
+  // Fase 1: datos desde código (métricas etiquetadas, precios publicados y escenario hipotético).
+  try {
+    const precios = preciosPublicados(raw);
+    await emitir("datos", { metricas: construirMetricas(raw, now), precios, escenario: escenarioIngresos(precios) }, "lista");
+  } catch {
+    await emitir("datos", null, "error");
+  }
 
   // Fase 2: adn. Si falla, todo el informe falla.
   let adn;
@@ -118,16 +98,6 @@ export async function buildReportV3(raw: RawData, deps: ReportV3Deps, onSection:
     throw e;
   }
   await emitir("adn", adn, "lista", true);
-
-  // datos completo, ya con el tipo de negocio (misma clave: sustituye al anterior).
-  try {
-    // Los tipos solo de v3 no tienen tabla de referencia: se tratan como "otro" (queda "No estimable").
-    const tipo: TipoNegocio = adn.tipoNegocio === "organizacion_social" || adn.tipoNegocio === "negocio_local" ? "otro" : adn.tipoNegocio;
-    const ingresos = estimarIngresosMensuales(raw, anchors, tipo, precios);
-    await emitir("datos", { ...datosBase, ingresos, valoracion: estimarValoracion(ingresos, tipo) }, "lista");
-  } catch {
-    // se queda con el datos de la fase 1
-  }
 
   // Fase 3: en paralelo (el limitador reparte los huecos de IA).
   // aprender no espera a competidores ni a revision (recibe [] y null): así no queda en la cola
