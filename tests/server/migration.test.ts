@@ -99,6 +99,39 @@ describe("migración 0001_cuentas.sql", () => {
     expect(def).toContain("devolver_credito(");
   });
 
+  it("iniciar_analisis limita la longitud de url y dominio (url_invalida)", () => {
+    const def = definicion("iniciar_analisis");
+    expect(def).toContain("raise exception 'url_invalida'");
+    expect(def).toContain("p_url is null");
+    expect(def).toContain("char_length(p_url) > 2048");
+    expect(def).toContain("p_dominio is null");
+    expect(def).toContain("char_length(p_dominio) > 253");
+    // La validación va antes del cobro.
+    expect(def.indexOf("url_invalida")).toBeLessThan(def.indexOf("creditos_restantes - 1"));
+  });
+
+  it("crear_perfil y el relleno inicial recortan el nombre a 100 caracteres", () => {
+    const def = definicion("crear_perfil");
+    expect(def).toContain("left(new.raw_user_meta_data->>'nombre', 100)");
+    expect(sql).toContain("select u.id, left(u.raw_user_meta_data->>'nombre', 100) from auth.users u");
+  });
+
+  it("devolver_credito solo devuelve análisis en estado error", () => {
+    const def = definicion("devolver_credito");
+    expect(def).toMatch(/where id = p_id and estado = 'error' and not credito_devuelto/);
+  });
+
+  it("marcar_colgados también devuelve los error sin devolver", () => {
+    const def = definicion("marcar_colgados");
+    expect(def).toMatch(/where user_id = p_user and estado = 'error' and not credito_devuelto/);
+  });
+
+  it("obtener_perfil barre los colgados del usuario antes de devolver", () => {
+    const def = definicion("obtener_perfil");
+    expect(def).toContain("perform public.marcar_colgados(v_uid)");
+    expect(def.indexOf("marcar_colgados(v_uid)")).toBeLessThan(def.indexOf("select * into v_perfil"));
+  });
+
   it("revoca y concede permisos de ejecución correctamente", () => {
     for (const f of FUNCIONES) {
       expect(sql).toMatch(new RegExp(`revoke execute on function public\\.${f}\\([^)]*\\) from public, anon`));

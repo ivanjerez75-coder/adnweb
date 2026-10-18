@@ -77,8 +77,39 @@ export function createFakeRepos(opts?: {
   const procesando = (id: string) =>
     state.analisis.find((a) => a.id === id && a.estado === "procesando");
 
+  // devolver_credito: solo análisis en 'error' y una sola vez.
+  const devolver = (a: FakeAnalisis): boolean => {
+    if (a.estado !== "error" || a.creditoDevuelto) return false;
+    a.creditoDevuelto = true;
+    a.updatedAt = state.now();
+    if (a.userId === userId) state.creditos += 1;
+    return true;
+  };
+
+  // marcar_colgados: timeout de los procesando > 3 min y devolución de
+  // todo 'error' pendiente del usuario. Devuelve cuántos ha marcado.
+  const marcarColgados = (uid: string): number => {
+    const limite = state.now().getTime() - TRES_MIN;
+    let n = 0;
+    for (const a of state.analisis) {
+      if (a.userId !== uid || a.estado !== "procesando") continue;
+      if (a.createdAt.getTime() >= limite) continue;
+      a.estado = "error";
+      a.error = "El análisis ha tardado demasiado. Te hemos devuelto el crédito.";
+      a.errorKind = "timeout";
+      a.updatedAt = state.now();
+      n++;
+    }
+    for (const a of state.analisis) {
+      if (a.userId === uid && a.estado === "error" && !a.creditoDevuelto) devolver(a);
+    }
+    return n;
+  };
+
   const user: UserRepo = {
     async obtenerPerfil() {
+      // obtener_perfil barre los colgados antes de devolver el perfil.
+      marcarColgados(userId);
       return {
         id: userId,
         nombre: null,
@@ -132,14 +163,6 @@ export function createFakeRepos(opts?: {
     },
   };
 
-  const devolver = (a: FakeAnalisis): boolean => {
-    if (a.creditoDevuelto) return false;
-    a.creditoDevuelto = true;
-    a.updatedAt = state.now();
-    if (a.userId === userId) state.creditos += 1;
-    return true;
-  };
-
   const worker: WorkerRepo = {
     async paso(id, texto) {
       const a = procesando(id);
@@ -186,19 +209,7 @@ export function createFakeRepos(opts?: {
     },
 
     async marcarColgados(uid) {
-      const limite = state.now().getTime() - TRES_MIN;
-      let n = 0;
-      for (const a of state.analisis) {
-        if (a.userId !== uid || a.estado !== "procesando") continue;
-        if (a.createdAt.getTime() >= limite) continue;
-        a.estado = "error";
-        a.error = "El análisis ha tardado demasiado. Te hemos devuelto el crédito.";
-        a.errorKind = "timeout";
-        a.updatedAt = state.now();
-        devolver(a);
-        n++;
-      }
-      return n;
+      return marcarColgados(uid);
     },
   };
 

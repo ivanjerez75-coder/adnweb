@@ -25,9 +25,52 @@ describe("fake repos", () => {
     const r = await user.iniciar("u", "d");
     if (!r.ok) throw new Error("x");
     expect(state.creditos).toBe(4);
+    await worker.fallar(r.id, "m", "k");
     expect(await worker.devolverCredito(r.id)).toBe(true);
     expect(await worker.devolverCredito(r.id)).toBe(false);
     expect(state.creditos).toBe(5);
+  });
+
+  it("devolverCredito sobre un análisis listo: false y créditos sin cambios", async () => {
+    const { user, worker, state } = createFakeRepos({ creditos: 5 });
+    const r = await user.iniciar("u", "d");
+    if (!r.ok) throw new Error("x");
+    await worker.completar(r.id, raw, informe);
+    expect(await worker.devolverCredito(r.id)).toBe(false);
+    expect(state.creditos).toBe(4);
+    expect(state.analisis[0].creditoDevuelto).toBe(false);
+  });
+
+  it("devolverCredito sobre un análisis procesando: false", async () => {
+    const { user, worker, state } = createFakeRepos({ creditos: 5 });
+    const r = await user.iniciar("u", "d");
+    if (!r.ok) throw new Error("x");
+    expect(await worker.devolverCredito(r.id)).toBe(false);
+    expect(state.creditos).toBe(4);
+  });
+
+  it("marcarColgados devuelve una sola vez un error aún no devuelto", async () => {
+    const { user, worker, state } = createFakeRepos({ creditos: 5 });
+    const r = await user.iniciar("u", "d");
+    if (!r.ok) throw new Error("x");
+    // Función cortada entre fallar y devolverCredito.
+    await worker.fallar(r.id, "m", "k");
+    expect(state.creditos).toBe(4);
+    expect(await worker.marcarColgados("u1")).toBe(0);
+    expect(state.creditos).toBe(5);
+    expect(state.analisis[0].creditoDevuelto).toBe(true);
+    await worker.marcarColgados("u1");
+    expect(state.creditos).toBe(5);
+  });
+
+  it("obtenerPerfil tras 4 min muestra el crédito devuelto del colgado", async () => {
+    const { user, state } = createFakeRepos({ creditos: 5 });
+    const r = await user.iniciar("u", "d");
+    if (!r.ok) throw new Error("x");
+    expect((await user.obtenerPerfil()).creditosRestantes).toBe(4);
+    state.avanzar(4 * 60_000);
+    expect((await user.obtenerPerfil()).creditosRestantes).toBe(5);
+    expect(state.analisis[0].estado).toBe("error");
   });
 
   it("marcarColgados con now + 4 min", async () => {
