@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { extractSignals, allTechnologies } from "../../lib/engine/signals";
-import { makeRaw, makeSite } from "./raw-fixture";
+import { makeRaw, makeSite, ps } from "./raw-fixture";
 import { NOW } from "./fake-network";
 import type { RawData } from "../../lib/engine/types";
 
@@ -108,7 +108,7 @@ describe("extractSignals — negativas", () => {
 
   it("rendimiento, tracción y antigüedad", () => {
     const raw = makeRaw({
-      pagespeed: { mobile: 34, desktop: 45 },
+      pagespeed: ps(34, 45),
       tranco: { rank: null, trend: null },
       radar: { bucket: null, rank: null },
       wayback: { firstCapture: "2025-01-01", lastChange: "2025-06-01", changesLastYear: 0 },
@@ -151,7 +151,7 @@ describe("extractSignals — positivas", () => {
     const raw = makeRaw({
       tranco: { rank: 50_000, trend: "sube" },
       radar: null,
-      pagespeed: { mobile: 70, desktop: 80 },
+      pagespeed: ps(70, 80),
       rdap: { registeredAt: "2025-01-01" },
       empleo: { platform: "greenhouse", token: "f", openings: 35, byArea: {}, linkedFromSite: true },
       appstore: { name: "F", rating: 4.6, ratingCount: 12000, url: "u", linkedFromSite: true },
@@ -218,8 +218,8 @@ describe("extractSignals — fechas y umbrales", () => {
     ["app 3.5/500", app(3.5, 500), "app_mal_valorada", false],
     ["3 posts", makeRaw({ sitemap: sitemap({ recentBlogPosts: 3 }) }), "blog_activo", false],
     ["4 posts", makeRaw({ sitemap: sitemap({ recentBlogPosts: 4 }) }), "blog_activo", true],
-    ["móvil 89", makeRaw({ pagespeed: { mobile: 89, desktop: 90 } }), "web_rapida", false],
-    ["móvil 90", makeRaw({ pagespeed: { mobile: 90, desktop: 90 } }), "web_rapida", true],
+    ["móvil 89", makeRaw({ pagespeed: ps(89, 90) }), "web_rapida", false],
+    ["móvil 90", makeRaw({ pagespeed: ps(90, 90) }), "web_rapida", true],
     ["199 empleados", wd(199), "plantilla_grande", false],
     ["200 empleados", wd(200), "plantilla_grande", true],
     ["HN 19", makeRaw({ hackernews: { total: 19, lastYear: 0, top: null } }), "notoriedad_tech", false],

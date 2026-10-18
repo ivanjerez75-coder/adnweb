@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import type { JobBoardRef, JobPlatform, SiteData, SitePage, Technology } from "../types";
+import type { JobBoardRef, JobPlatform, JsonLdOrg, SiteData, SitePage, Technology } from "../types";
 import { isSectionPath, sectionOf } from "./sections";
 
 export interface ParsedPage {
@@ -10,6 +10,7 @@ export interface ParsedPage {
   socialLinks: Record<string, string>;
   ctas: string[];
   jsonLdTypes: string[];
+  jsonLdOrg: JsonLdOrg | null;
   prices: string[];
   hasAppLinks: boolean;
   mentionsTestimonials: boolean;
@@ -88,9 +89,23 @@ interface JsonLdInfo {
   types: string[];
   orgNames: string[];
   sameAs: string[];
+  org: JsonLdOrg | null;
 }
 
 const ORG_TYPES = new Set(["Organization", "Corporation", "Company", "OnlineStore", "OnlineBusiness", "LocalBusiness", "NGO"]);
+
+const str = (v: unknown): string | undefined => (typeof v === "string" && v.trim() ? v.trim() : undefined);
+
+/** Dirección como texto: admite string o PostalAddress. */
+function addressText(v: unknown): string | undefined {
+  const text = str(v);
+  if (text) return text;
+  if (!v || typeof v !== "object") return undefined;
+  const a = v as Record<string, unknown>;
+  const country = a.addressCountry && typeof a.addressCountry === "object" ? (a.addressCountry as Record<string, unknown>).name : a.addressCountry;
+  const parts = [a.streetAddress, a.postalCode, a.addressLocality, a.addressRegion, country].map(str).filter((p): p is string => !!p);
+  return parts.length ? parts.join(", ") : undefined;
+}
 
 function walkJsonLd(node: unknown, out: JsonLdInfo): void {
   if (Array.isArray(node)) {
@@ -110,6 +125,20 @@ function walkJsonLd(node: unknown, out: JsonLdInfo): void {
     if (typeof obj.name === "string" && obj.name.trim()) out.orgNames.push(obj.name.trim());
     const sameAs = Array.isArray(obj.sameAs) ? obj.sameAs : [obj.sameAs];
     for (const s of sameAs) if (typeof s === "string") out.sameAs.push(s);
+    if (!out.org) {
+      const org: JsonLdOrg = {};
+      const name = str(obj.name);
+      const legalName = str(obj.legalName);
+      const address = addressText(obj.address);
+      const foundingDate = str(obj.foundingDate);
+      const links = sameAs.filter((s): s is string => typeof s === "string" && s.trim() !== "");
+      if (name) org.name = name;
+      if (legalName) org.legalName = legalName;
+      if (address) org.address = address;
+      if (foundingDate) org.foundingDate = foundingDate;
+      if (links.length) org.sameAs = links;
+      if (Object.keys(org).length) out.org = org;
+    }
   }
   if (Array.isArray(obj["@graph"])) walkJsonLd(obj["@graph"], out);
 }
@@ -131,7 +160,7 @@ function titlePrefix(title: string): string | null {
 export function parsePage(html: string, pageUrl: string): ParsedPage {
   const $ = cheerio.load(html);
 
-  const jsonLd: JsonLdInfo = { types: [], orgNames: [], sameAs: [] };
+  const jsonLd: JsonLdInfo = { types: [], orgNames: [], sameAs: [], org: null };
   $('script[type="application/ld+json"]').each((_, el) => {
     try {
       walkJsonLd(JSON.parse($(el).text()), jsonLd);
@@ -225,6 +254,7 @@ export function parsePage(html: string, pageUrl: string): ParsedPage {
     socialLinks,
     ctas,
     jsonLdTypes: jsonLd.types,
+    jsonLdOrg: jsonLd.org,
     prices: Array.from(new Set(text.match(PRICE_RE) ?? [])).slice(0, 20),
     hasAppLinks,
     mentionsTestimonials: TESTIMONIALS_RE.test(text),
@@ -289,5 +319,6 @@ export function buildSiteData(finalUrl: string, pages: ParsedPage[], technologie
       .flatMap((p) => p.jobBoards)
       .filter((j, i, all) => all.findIndex((o) => o.platform === j.platform && o.token === j.token) === i),
     appStoreIds: Array.from(new Set(pages.flatMap((p) => p.appStoreIds))),
+    jsonLdOrg: pages.find((p) => p.jsonLdOrg)?.jsonLdOrg ?? null,
   };
 }

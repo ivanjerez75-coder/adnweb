@@ -18,7 +18,8 @@ export type SourceId =
   | "wikidata"
   | "dns"
   | "hackernews"
-  | "paginas";
+  | "paginas"
+  | "legal";
 
 export type SignalPolarity = "positiva" | "negativa";
 
@@ -82,6 +83,16 @@ export interface SiteData {
   companyName: string | null;
   jobBoards: JobBoardRef[];
   appStoreIds: string[];
+  /** Datos de la organización declarados en JSON-LD (schema.org). null si no hay ninguno. */
+  jsonLdOrg: JsonLdOrg | null;
+}
+
+export interface JsonLdOrg {
+  name?: string;
+  legalName?: string;
+  address?: string;
+  foundingDate?: string;
+  sameAs?: string[];
 }
 
 export type Trend = "sube" | "estable" | "baja";
@@ -101,6 +112,34 @@ export interface RadarData {
 export interface PageSpeedData {
   mobile: number | null;
   desktop: number | null;
+  accesibilidad: number | null;
+  buenasPracticas: number | null;
+  seo: number | null;
+  /** Datos reales de usuarios de Chrome (CrUX). null si Google no tiene datos suficientes. */
+  campo: {
+    fuente: "url" | "origen";
+    lcpMs: number | null;
+    inpMs: number | null;
+    cls: number | null;
+    categoria: "FAST" | "AVERAGE" | "SLOW" | null;
+  } | null;
+  obtenidoEn: string;
+  error?: string;
+}
+
+/** Identidad legal que las webs españolas deben publicar (aviso legal, CIF, razón social…). */
+export interface LegalData {
+  avisoLegal: string | null;
+  privacidad: string | null;
+  cookies: string | null;
+  condiciones: string | null;
+  cif: string | null;
+  razonSocial: string | null;
+  email: string | null;
+  telefono: string | null;
+  direccion: string | null;
+  /** Campo → URL donde se encontró. */
+  fuentes: Record<string, string>;
 }
 
 export interface RdapData {
@@ -167,6 +206,7 @@ export interface RawData {
   hackernews: HackerNewsData | null;
   /** Páginas propias leídas en profundidad. null si no aplica o no se pudo. */
   paginas: PageDoc[] | null;
+  legal: LegalData | null;
   fuentes: Record<CollectedSource, SourceStatus>;
   /** Fuentes con estado "fallo". */
   unavailable: CollectedSource[];

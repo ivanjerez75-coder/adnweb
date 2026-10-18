@@ -3,7 +3,7 @@ import { aiOutputSchema } from "../../lib/engine/ai/schema";
 import { buildPrompt } from "../../lib/engine/ai/prompt";
 import { generateAiOutput, geminiModelNames, groqModel, AiUnavailableError, type JsonModel } from "../../lib/engine/ai/providers";
 import { validAiOutput } from "./ai-fixture";
-import { makeRaw, makeSite } from "./raw-fixture";
+import { makeRaw, makeSite, ps } from "./raw-fixture";
 import { computeAnchors } from "../../lib/engine/anchors";
 import { NOW } from "./fake-network";
 
@@ -43,7 +43,7 @@ describe("aiOutputSchema", () => {
 
 describe("buildPrompt", () => {
   it("incluye dominio, anclas y señales con sus ids", () => {
-    const raw = makeRaw({ pagespeed: { mobile: 30, desktop: 90 } });
+    const raw = makeRaw({ pagespeed: ps(30, 90) });
     const prompt = buildPrompt(raw, computeAnchors(raw, NOW), [
       { id: "pagespeed_movil_bajo", family: "tecnica", source: "pagespeed", label: "Rendimiento móvil bajo: 30/100", polarity: "negativa" },
     ]);

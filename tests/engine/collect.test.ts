@@ -17,14 +17,14 @@ describe("collect", () => {
     expect(raw.site?.pricesFound).toEqual(["9 €", "29 €"]);
     expect(raw.tranco).toEqual({ rank: 60000, trend: "baja" });
     expect(raw.radar).toEqual({ bucket: 100000, rank: null });
-    expect(raw.pagespeed).toEqual({ mobile: 34, desktop: 34 });
+    expect(raw.pagespeed).toMatchObject({ mobile: 34, desktop: 34, campo: null, obtenidoEn: NOW.toISOString() });
     expect(raw.rdap).toEqual({ registeredAt: "2015-03-02" });
     expect(raw.wayback).toEqual({ firstCapture: "2015-04-01", lastChange: "2025-11-01", changesLastYear: 0 });
     expect(raw.unavailable).toEqual([]);
     expect(raw.rootDomain).toBe("facturo.example");
     expect(raw.fuentes).toEqual({
       web: "ok", tecnologias: "ok", tranco: "ok", radar: "ok", pagespeed: "ok", rdap: "ok", wayback: "ok",
-      sitemap: "no_aplica", rutas: "ok", empleo: "no_aplica", appstore: "no_aplica", wikidata: "no_aplica", dns: "ok", hackernews: "ok", paginas: "ok",
+      sitemap: "no_aplica", rutas: "ok", empleo: "no_aplica", appstore: "no_aplica", wikidata: "no_aplica", dns: "ok", hackernews: "ok", paginas: "ok", legal: "ok",
     });
     expect(raw.dns).toEqual({ emailProvider: "Google Workspace", tools: [{ name: "Mailchimp", category: "email" }] });
     expect(raw.rutas).toEqual({ found: ["precios"], checked: ["blog", "precios", "empleo", "about"] });
@@ -344,6 +344,22 @@ describe("collect — redirecciones a otro dominio", () => {
     });
   });
 
+  it("extrae la identidad legal del HTML leído y no la guarda en bruto", async () => {
+    const raw = await collect(input, baseDeps);
+    expect(raw.legal?.email).toBe("hola@facturo.example");
+    expect(raw.legal?.fuentes.email).toBe("https://facturo.example/");
+    expect(JSON.stringify(raw)).not.toContain("<footer");
+  });
+
+  it("PageSpeed sin cuota: conserva el error y marca la fuente como caída", async () => {
+    const fetcher = fakeFetcher({ pagespeedonline: () => new Response("", { status: 429 }) });
+    const raw = await collect(input, { ...baseDeps, fetcher });
+    expect(raw.pagespeed).toMatchObject({ mobile: null, desktop: null, campo: null });
+    expect(raw.pagespeed?.error).toBeTruthy();
+    expect(raw.fuentes.pagespeed).toBe("fallo");
+    expect(raw.unavailable).toContain("pagespeed");
+  });
+
   it("notion.so → notion.com (adoptado): la web sigue siendo propia y PageSpeed se usa", async () => {
     const getPage: PageGetter = async (url) =>
       url === "https://notion.so/"
@@ -353,7 +369,7 @@ describe("collect — redirecciones a otro dominio", () => {
     expect(raw.site?.finalUrl).toBe("https://www.notion.com/");
     expect(raw.site?.hasAppLinks).toBe(true);
     expect(raw.foreignSite).toBeNull();
-    expect(raw.pagespeed).toEqual({ mobile: 34, desktop: 34 });
+    expect(raw.pagespeed).toMatchObject({ mobile: 34, desktop: 34, campo: null, obtenidoEn: NOW.toISOString() });
     expect(raw.fuentes.pagespeed).toBe("ok");
     expect(raw.fuentes.tecnologias).toBe("ok");
   });

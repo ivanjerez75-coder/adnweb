@@ -1,4 +1,9 @@
-import type { RawData, SiteData } from "../../lib/engine/types";
+import type { PageSpeedData, RawData, SiteData } from "../../lib/engine/types";
+
+/** PageSpeed de prueba: solo móvil y escritorio; el resto sin datos. */
+export const ps = (mobile: number | null, desktop: number | null): PageSpeedData => ({
+  mobile, desktop, accesibilidad: null, buenasPracticas: null, seo: null, campo: null, obtenidoEn: "2026-10-14T00:00:00.000Z",
+});
 
 export function makeSite(overrides: Partial<SiteData> = {}): SiteData {
   return {
@@ -23,6 +28,7 @@ export function makeSite(overrides: Partial<SiteData> = {}): SiteData {
     companyName: "Facturo",
     jobBoards: [],
     appStoreIds: [],
+    jsonLdOrg: null,
     ...overrides,
   };
 }
@@ -39,7 +45,7 @@ export function makeRaw(overrides: Partial<RawData> = {}): RawData {
     foreignSite: null,
     tranco: { rank: 5000, trend: "estable" },
     radar: { bucket: 10000, rank: null },
-    pagespeed: { mobile: 90, desktop: 95 },
+    pagespeed: ps(90, 95),
     rdap: { registeredAt: "2015-03-02" },
     wayback: { firstCapture: "2015-04-01", lastChange: "2026-08-01", changesLastYear: 6 },
     sitemap: null,
@@ -50,10 +56,11 @@ export function makeRaw(overrides: Partial<RawData> = {}): RawData {
     dns: null,
     hackernews: null,
     paginas: null,
+    legal: null,
     version: 3,
     fuentes: {
       web: "ok", tecnologias: "ok", tranco: "ok", radar: "ok", pagespeed: "ok", rdap: "ok", wayback: "ok",
-      sitemap: "no_aplica", rutas: "fallo", empleo: "no_aplica", appstore: "no_aplica", wikidata: "no_aplica", dns: "fallo", hackernews: "fallo", paginas: "no_aplica",
+      sitemap: "no_aplica", rutas: "fallo", empleo: "no_aplica", appstore: "no_aplica", wikidata: "no_aplica", dns: "fallo", hackernews: "fallo", paginas: "no_aplica", legal: "no_aplica",
     },
     unavailable: [],
     ...overrides,
