@@ -31,7 +31,7 @@ export const AdnIA = z.object({
       }),
     )
     .min(1)
-    .max(6),
+    .transform((ls) => ls.slice(0, 6)), // más de 6: se recorta en vez de gastar otro intento de IA
   comoFunciona: bloque,
 });
 export type AdnIA = z.infer<typeof AdnIA>;

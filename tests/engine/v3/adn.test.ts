@@ -77,3 +77,12 @@ describe("generarAdn", () => {
     expect(p).not.toContain("</x>");
   });
 });
+
+describe("generarAdn con muchas líneas", () => {
+  it("recorta a 6 líneas sin reintentar", async () => {
+    const { deps, prompts } = fake(salida(Array.from({ length: 8 }, (_, i) => linea({ nombre: `L${i}` }))));
+    const adn = await generarAdn(raw, reg, deps);
+    expect(adn.lineas).toHaveLength(6);
+    expect(prompts).toHaveLength(1);
+  });
+});
