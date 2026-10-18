@@ -1,5 +1,6 @@
 // Comprobación real contra Supabase: crea 2 usuarios de prueba, verifica
-// créditos, RLS, devoluciones, renovación y colgados, y los borra al final.
+// créditos, RLS, permisos, límites, devoluciones, renovación y colgados,
+// y los borra al final.
 // Solo imprime ✓/✗ por comprobación; nunca imprime claves ni contraseñas.
 import { randomBytes } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -117,6 +118,9 @@ async function main() {
 
     await check("(d) admin devolver_credito: true, luego false; 5 créditos", async () => {
       assert(idA, "no hay análisis de A");
+      // Solo se devuelven análisis fallidos: primero se marca como error.
+      const fallo = await admin.from("analyses").update({ estado: "error" }).eq("id", idA);
+      if (fallo.error) throw new Error(fallo.error.message);
       const r1 = await admin.rpc("devolver_credito", { p_id: idA });
       if (r1.error) throw new Error(r1.error.message);
       const r2 = await admin.rpc("devolver_credito", { p_id: idA });
@@ -158,6 +162,65 @@ async function main() {
       const despues = await perfil(a.client);
       assert(
         despues.creditos_restantes === antes.creditos_restantes + 1,
+        `créditos ${antes.creditos_restantes} → ${despues.creditos_restantes}`,
+      );
+    });
+
+    await check("(g) update directo de creditos_restantes = 99 no cambia nada", async () => {
+      const antes = await perfil(a.client);
+      const { data, error } = await a.client
+        .from("profiles")
+        .update({ creditos_restantes: 99 })
+        .eq("id", a.id)
+        .select();
+      assert(error || (data ?? []).length === 0, `filas afectadas = ${data?.length}`);
+      const despues = await perfil(a.client);
+      assert(
+        despues.creditos_restantes === antes.creditos_restantes,
+        `créditos ${antes.creditos_restantes} → ${despues.creditos_restantes}`,
+      );
+    });
+
+    await check("(h) un usuario no puede llamar a marcar_colgados", async () => {
+      const { error } = await a.client.rpc("marcar_colgados", { p_user: a.id });
+      assert(error, "el usuario ha podido llamar a marcar_colgados");
+    });
+
+    await check("(i) anon sin sesión no lee filas de profiles ni analyses", async () => {
+      const anon = createClient(url!, anonKey!, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      for (const tabla of ["profiles", "analyses"]) {
+        const { data, error } = await anon.from(tabla).select("id");
+        assert(error || (data ?? []).length === 0, `anon lee ${data?.length} filas de ${tabla}`);
+      }
+    });
+
+    await check("(j) iniciar_analisis con url de 3000 caracteres: url_invalida y sin cobro", async () => {
+      const antes = await perfil(a.client);
+      const { error } = await a.client.rpc("iniciar_analisis", {
+        p_url: `https://example.com/${"a".repeat(3000 - "https://example.com/".length)}`,
+        p_dominio: "example.com",
+      });
+      assert(error?.message.includes("url_invalida"), `error = ${error?.message ?? "ninguno"}`);
+      const despues = await perfil(a.client);
+      assert(
+        despues.creditos_restantes === antes.creditos_restantes,
+        `créditos ${antes.creditos_restantes} → ${despues.creditos_restantes}`,
+      );
+    });
+
+    await check("(k) devolver_credito sobre un análisis listo devuelve false", async () => {
+      const idK = await iniciar(a.client);
+      const listo = await admin.from("analyses").update({ estado: "listo" }).eq("id", idK);
+      if (listo.error) throw new Error(listo.error.message);
+      const antes = await perfil(a.client);
+      const { data, error } = await admin.rpc("devolver_credito", { p_id: idK });
+      if (error) throw new Error(error.message);
+      assert(data === false, `devolver_credito = ${data}`);
+      const despues = await perfil(a.client);
+      assert(
+        despues.creditos_restantes === antes.creditos_restantes,
         `créditos ${antes.creditos_restantes} → ${despues.creditos_restantes}`,
       );
     });
