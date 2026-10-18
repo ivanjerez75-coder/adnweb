@@ -87,6 +87,6 @@ DATOS_WEB>>>`;
  * Escapa < y > para que el texto de la web no pueda cerrar el delimitador DATOS_WEB.
  * Aplicado sobre JSON, el resultado sigue siendo JSON válido (\u003c y \u003e son escapes de cadena).
  */
-function escapeAngles(text: string): string {
+export function escapeAngles(text: string): string {
   return text.replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
 }

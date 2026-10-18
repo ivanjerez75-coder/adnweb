@@ -66,3 +66,6 @@ export function searchModelsFromEnv(env: {
   if (!key) return [];
   return geminiModelNames(env).map((m) => geminiSearchModel(key, m));
 }
+
+/** Dependencias comunes de las secciones del informe v3. */
+export type SectionDeps = { models: JsonModel[]; runOpts?: RunSectionOpts };
