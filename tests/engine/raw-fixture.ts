@@ -49,9 +49,11 @@ export function makeRaw(overrides: Partial<RawData> = {}): RawData {
     wikidata: null,
     dns: null,
     hackernews: null,
+    paginas: null,
+    version: 3,
     fuentes: {
       web: "ok", tecnologias: "ok", tranco: "ok", radar: "ok", pagespeed: "ok", rdap: "ok", wayback: "ok",
-      sitemap: "no_aplica", rutas: "fallo", empleo: "no_aplica", appstore: "no_aplica", wikidata: "no_aplica", dns: "fallo", hackernews: "fallo",
+      sitemap: "no_aplica", rutas: "fallo", empleo: "no_aplica", appstore: "no_aplica", wikidata: "no_aplica", dns: "fallo", hackernews: "fallo", paginas: "no_aplica",
     },
     unavailable: [],
     ...overrides,

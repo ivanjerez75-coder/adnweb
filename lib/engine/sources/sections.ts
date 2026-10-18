@@ -39,4 +39,17 @@ export function sectionOf(pathname: string): { section: SectionName; rest: strin
   return null;
 }
 
+/** Secciones de negocio que merece la pena leer en profundidad (primer segmento, o el segundo tras un idioma). */
+const PRIORITY_WORDS: readonly string[] = [
+  "servicios", "services", "productos", "products", "soluciones", "solutions", "empresas", "about",
+  "nosotros", "quienes-somos", "precios", "pricing", "casos", "clientes", "customers", "contacto",
+  "contact", "empleo", "careers",
+];
+
+export function isPriorityPath(pathname: string): boolean {
+  const segments = pathname.toLowerCase().split("/").filter(Boolean);
+  const candidates = LANG_PREFIX_RE.test(segments[0] ?? "") ? [0, 1] : [0];
+  return candidates.some((i) => PRIORITY_WORDS.includes(segments[i] ?? ""));
+}
+
 export const isSectionPath = (pathname: string, section: SectionName): boolean => sectionOf(pathname)?.section === section;

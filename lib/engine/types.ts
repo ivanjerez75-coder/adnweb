@@ -17,7 +17,8 @@ export type SourceId =
   | "appstore"
   | "wikidata"
   | "dns"
-  | "hackernews";
+  | "hackernews"
+  | "paginas";
 
 export type SignalPolarity = "positiva" | "negativa";
 
@@ -114,7 +115,23 @@ export interface WaybackData {
 
 export type CollectedSource = Exclude<SourceId, "mercado">;
 
+/** Pasaje literal de una página (≤ 200 caracteres), citable por id: "p3-e2". */
+export interface Extract {
+  id: string;
+  cita: string;
+}
+
+/** Página propia leída en profundidad. Ids "p1"…"p15". */
+export interface PageDoc {
+  id: string;
+  url: string;
+  titulo: string;
+  extractos: Extract[];
+}
+
 export interface RawData {
+  /** Versión del esquema de datos recogidos. */
+  version: 3;
   url: string;
   domain: string;
   /**
@@ -146,6 +163,8 @@ export interface RawData {
   wikidata: WikidataData | null;
   dns: DnsData | null;
   hackernews: HackerNewsData | null;
+  /** Páginas propias leídas en profundidad. null si no aplica o no se pudo. */
+  paginas: PageDoc[] | null;
   fuentes: Record<CollectedSource, SourceStatus>;
   /** Fuentes con estado "fallo". */
   unavailable: CollectedSource[];
@@ -184,6 +203,8 @@ export interface SitemapData {
    * un tope) y tiene URLs. Si es false, urlCount es un mínimo y una sección ausente no prueba nada.
    */
   complete: boolean;
+  /** Hasta 100 URLs del dominio propio, con las secciones de negocio primero. */
+  candidatas: string[];
 }
 
 export interface PathProbeData {

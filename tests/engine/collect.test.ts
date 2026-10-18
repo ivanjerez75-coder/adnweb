@@ -24,10 +24,21 @@ describe("collect", () => {
     expect(raw.rootDomain).toBe("facturo.example");
     expect(raw.fuentes).toEqual({
       web: "ok", tecnologias: "ok", tranco: "ok", radar: "ok", pagespeed: "ok", rdap: "ok", wayback: "ok",
-      sitemap: "no_aplica", rutas: "ok", empleo: "no_aplica", appstore: "no_aplica", wikidata: "no_aplica", dns: "ok", hackernews: "ok",
+      sitemap: "no_aplica", rutas: "ok", empleo: "no_aplica", appstore: "no_aplica", wikidata: "no_aplica", dns: "ok", hackernews: "ok", paginas: "ok",
     });
     expect(raw.dns).toEqual({ emailProvider: "Google Workspace", tools: [{ name: "Mailchimp", category: "email" }] });
     expect(raw.rutas).toEqual({ found: ["precios"], checked: ["blog", "precios", "empleo", "about"] });
+  });
+
+  it("lee en profundidad las páginas propias en extractos numerados (versión 3)", async () => {
+    const raw = await collect(input, baseDeps);
+    expect(raw.version).toBe(3);
+    expect(raw.fuentes.paginas).toBe("ok");
+    const home = raw.paginas?.find((p) => p.url === "https://facturo.example/");
+    expect(home?.id).toMatch(/^p\d+$/);
+    expect(home?.extractos.length).toBeGreaterThan(0);
+    expect(home?.extractos[0].id).toBe(`${home?.id}-e1`);
+    for (const e of home?.extractos ?? []) expect(e.cita.length).toBeLessThanOrEqual(200);
   });
 
   it("marca Radar como no aplicable si no hay token", async () => {

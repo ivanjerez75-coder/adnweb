@@ -10,7 +10,7 @@ describe("buildEmpresa", () => {
       wikidata: { id: "Q1", description: null, inception: 2016, founders: ["Ana"], headquarters: "Madrid", employees: 80, employeesYear: 2024, revenue: null },
       empleo: { platform: "lever", token: "f", openings: 7, byArea: { Ventas: 7 }, linkedFromSite: true },
       dns: { emailProvider: "Google Workspace", tools: [] },
-      sitemap: { urlCount: 120, sections: [], languages: ["fr"], lastModified: "2026-10-01", recentBlogPosts: 0, complete: true },
+      sitemap: { urlCount: 120, sections: [], languages: ["fr"], lastModified: "2026-10-01", recentBlogPosts: 0, complete: true, candidatas: [] },
       hackernews: { total: 2, lastYear: 1, top: { title: "Show HN", points: 10 } },
     });
     const e = buildEmpresa(raw);
@@ -34,7 +34,7 @@ describe("buildEmpresa", () => {
   });
 
   it("web: completo false si el sitemap no se leyó entero (la UI muestra «≥ N»)", () => {
-    const raw = makeRaw({ sitemap: { urlCount: 1500, sections: [], languages: [], lastModified: null, recentBlogPosts: 0, complete: false } });
+    const raw = makeRaw({ sitemap: { urlCount: 1500, sections: [], languages: [], lastModified: null, recentBlogPosts: 0, complete: false, candidatas: [] } });
     expect(buildEmpresa(raw).web?.valor).toMatchObject({ paginas: 1500, completo: false });
   });
 

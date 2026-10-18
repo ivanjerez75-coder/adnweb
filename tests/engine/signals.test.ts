@@ -17,6 +17,7 @@ const sitemap = (over: Partial<NonNullable<RawData["sitemap"]>> = {}) => ({
   lastModified: "2026-10-01",
   recentBlogPosts: 0,
   complete: true,
+  candidatas: [] as string[],
   ...over,
 });
 

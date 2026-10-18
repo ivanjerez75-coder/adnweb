@@ -50,7 +50,31 @@ describe("summarizeSitemap", () => {
       lastModified: "2026-10-01",
       recentBlogPosts: 1,
       complete: true,
+      candidatas: [
+        "https://acme.example/es/precios",
+        "https://acme.example/careers",
+        "https://acme.example/",
+        "https://acme.example/blog/post-1?a=1&b=2",
+        "https://acme.example/blog/post-2",
+        "https://acme.example/go/app",
+      ],
     });
+  });
+
+  it("candidatas: solo el dominio propio, sin duplicados ni hash, secciones de negocio primero y máximo 100", () => {
+    const urls = [
+      "https://acme.example/blog/a",
+      "https://otra.example/servicios",
+      "https://acme.example/blog/a#x",
+      "https://www.acme.example/servicios",
+      "ftp://acme.example/contacto",
+      ...Array.from({ length: 150 }, (_, i) => `https://acme.example/p/${i}`),
+    ].map((loc) => ({ loc, lastmod: null, hreflangs: [] }));
+    const c = summarizeSitemap(urls, NOW, true, "acme.example").candidatas;
+    expect(c).toHaveLength(100);
+    expect(c[0]).toBe("https://www.acme.example/servicios");
+    expect(c[1]).toBe("https://acme.example/blog/a");
+    expect(c.some((u) => u.includes("otra.example") || u.startsWith("ftp:"))).toBe(false);
   });
 
   const sectionsOf = (...paths: string[]) =>

@@ -8,6 +8,7 @@ import { fetchPageSpeed } from "./sources/pagespeed";
 import { fetchRdap } from "./sources/rdap";
 import { fetchWayback } from "./sources/wayback";
 import { fetchSitemap } from "./sources/sitemap";
+import { fetchPages, selectPages } from "./sources/pages";
 import { probePaths } from "./sources/paths";
 import { fetchJobs, jobCandidates } from "./sources/jobs";
 import { fetchAppStore } from "./sources/appstore";
@@ -39,6 +40,8 @@ export interface CollectDeps {
 export type StepReporter = (step: string) => void | Promise<void>;
 
 const DEFAULT_DEADLINE_MS = 40_000;
+/** Tope de la lectura en profundidad: lo que no llegue se descarta, el resto sigue dentro del plazo total. */
+const PAGES_TIMEOUT_MS = 20_000;
 
 const defaultSleep = (ms: number) =>
   new Promise<void>((resolve) => {
@@ -90,20 +93,36 @@ export async function collect(
   const baseUrl = ownSite?.finalUrl ?? input.url;
 
   await onStep("Analizando tráfico y presencia…");
-  const [trancoR, radarR, rdapR, dnsR, hnR, sitemapR, rutasR, empleoR, appR, wikiR, pagespeedR, waybackR] = await Promise.all([
+  // El sitemap de la página final sería el de la plataforma.
+  const sitemapP = foreign ? notApplicable<never>() : run(fetchSitemap(baseUrl, deps.getPage, now));
+  // La lectura en profundidad usa las URLs candidatas del sitemap, pero no espera al resto de fuentes.
+  const paginasP = ownSite
+    ? sitemapP.then((sm) =>
+        run(
+          (async () => {
+            const docs = await fetchPages(selectPages(ownSite, sm.status === "ok" ? sm.value : null), deps.getPage, {
+              timeoutMs: PAGES_TIMEOUT_MS,
+            });
+            if (docs.length === 0) throw new Error("No se pudo leer ninguna página");
+            return docs;
+          })(),
+        ),
+      )
+    : notApplicable<never>();
+  const [trancoR, radarR, rdapR, dnsR, hnR, sitemapR, rutasR, empleoR, appR, wikiR, pagespeedR, waybackR, paginasR] = await Promise.all([
     run(fetchTranco(rootDomain, deps.fetcher)),
     deps.radarToken ? run(fetchRadar(rootDomain, deps.fetcher, deps.radarToken)) : notApplicable<never>(),
     run(fetchRdap(rootDomain, deps.fetcher)),
     run(fetchDns(rootDomain, deps.fetcher)),
     run(fetchHackerNews(rootDomain, deps.fetcher, now)),
-    // El sitemap de la página final sería el de la plataforma.
-    foreign ? notApplicable<never>() : run(fetchSitemap(baseUrl, deps.getPage, now)),
+    sitemapP,
     run(probePaths(baseUrl, deps.getPage)),
     run(fetchJobs(jobCandidates(ownSite, rootDomain), deps.fetcher)),
     run(fetchAppStore({ appIds: ownSite?.appStoreIds ?? [], companyName, domains }, deps.fetcher)),
     run(fetchWikidata({ companyName, domains }, deps.fetcher)),
     pagespeed,
     wayback,
+    paginasP,
   ]);
 
   const fuentes = {} as Record<CollectedSource, SourceStatus>;
@@ -114,6 +133,7 @@ export async function collect(
 
   const pageRead = take(siteR, "web", "tecnologias");
   const raw: RawData = {
+    version: 3,
     url: input.url,
     domain: input.domain,
     rootDomain,
@@ -135,6 +155,7 @@ export async function collect(
     wikidata: take(wikiR, "wikidata"),
     dns: take(dnsR, "dns"),
     hackernews: take(hnR, "hackernews"),
+    paginas: take(paginasR, "paginas"),
     fuentes,
     unavailable: [],
   };
