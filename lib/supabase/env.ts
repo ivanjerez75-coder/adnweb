@@ -1,8 +1,16 @@
 type Env = Record<string, string | undefined>;
 
+/** Falta una variable de entorno necesaria: el servicio no está configurado. */
+export class MissingEnvError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MissingEnvError";
+  }
+}
+
 function required(env: Env, name: string): string {
   const value = env[name];
-  if (!value) throw new Error(`Falta la variable de entorno ${name}.`);
+  if (!value) throw new MissingEnvError(`Falta la variable de entorno ${name}.`);
   return value;
 }
 

@@ -1,15 +1,16 @@
-import type { PageGetter } from "@/lib/engine/safe-fetch";
 import type { UserRepo, WorkerRepo } from "@/lib/server/analyses/repo";
 import { MAX_URL, startAnalysis } from "@/lib/server/analyses/start";
 import { runAnalysis, type RunDeps } from "@/lib/server/analyses/run";
+import { MissingEnvError } from "@/lib/supabase/env";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface HandlerDeps {
   user: () => Promise<{ userId: string; repo: UserRepo } | null>;
-  worker: WorkerRepo;
-  getPage: PageGetter;
-  engine: RunDeps["engine"];
+  /** Se construye solo cuando hace falta (cliente con service role). */
+  worker: () => WorkerRepo;
+  /** Se construye solo cuando hace falta (motor de análisis). */
+  engine: () => RunDeps["engine"];
   schedule: (task: () => Promise<void>) => void;
   now: () => Date;
 }
@@ -28,52 +29,67 @@ function origenPermitido(req: Request): boolean {
   }
 }
 
+/** Si faltan variables de entorno, 503 con JSON en lugar de un 500 vacío. */
+async function conServicio(fn: () => Promise<Response>): Promise<Response> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (error instanceof MissingEnvError) {
+      console.error("API de análisis:", error.message);
+      return json({ error: "El servicio no está configurado." }, 503);
+    }
+    throw error;
+  }
+}
+
 export function createHandlers(deps: HandlerDeps) {
   return {
-    async crear(req: Request): Promise<Response> {
-      if (!origenPermitido(req)) return json({ error: "Origen no permitido." }, 403);
+    crear: (req: Request): Promise<Response> =>
+      conServicio(async () => {
+        if (!origenPermitido(req)) return json({ error: "Origen no permitido." }, 403);
 
-      const sesion = await deps.user();
-      if (!sesion) return json({ error: "Inicia sesión para continuar." }, 401);
+        const sesion = await deps.user();
+        if (!sesion) return json({ error: "Inicia sesión para continuar." }, 401);
 
-      let url: unknown;
-      try {
-        url = ((await req.json()) as { url?: unknown } | null)?.url;
-      } catch {
-        url = undefined;
-      }
-      if (typeof url !== "string" || url.length > MAX_URL) {
-        return json({ error: "La URL no es válida." }, 400);
-      }
+        let url: unknown;
+        try {
+          url = ((await req.json()) as { url?: unknown } | null)?.url;
+        } catch {
+          url = undefined;
+        }
+        if (typeof url !== "string" || url.length > MAX_URL) {
+          return json({ error: "La URL no es válida." }, 400);
+        }
 
-      // Un análisis colgado no debe bloquear uno nuevo.
-      await deps.worker.marcarColgados(sesion.userId);
+        // Un análisis colgado no debe bloquear uno nuevo.
+        const worker = deps.worker();
+        await worker.marcarColgados(sesion.userId);
 
-      const r = await startAnalysis(url, { user: sesion.repo, getPage: deps.getPage });
-      if (!r.ok) return json({ error: r.mensaje }, r.status);
+        const engine = deps.engine();
+        const r = await startAnalysis(url, { user: sesion.repo, getPage: engine.getPage });
+        if (!r.ok) return json({ error: r.mensaje }, r.status);
 
-      const { id, normalized } = r;
-      deps.schedule(() =>
-        runAnalysis(id, normalized, { worker: deps.worker, engine: deps.engine, now: deps.now }),
-      );
-      return json({ id }, 202);
-    },
+        const { id, normalized } = r;
+        deps.schedule(() => runAnalysis(id, normalized, { worker, engine, now: deps.now }));
+        return json({ id }, 202);
+      }),
 
-    async estado(id: string): Promise<Response> {
-      const sesion = await deps.user();
-      if (!sesion) return json({ error: "Inicia sesión para continuar." }, 401);
-      if (!UUID.test(id)) return json({ error: "No encontrado." }, 404);
+    estado: (id: string): Promise<Response> =>
+      conServicio(async () => {
+        const sesion = await deps.user();
+        if (!sesion) return json({ error: "Inicia sesión para continuar." }, 401);
+        if (!UUID.test(id)) return json({ error: "No encontrado." }, 404);
 
-      await deps.worker.marcarColgados(sesion.userId);
-      const a = await sesion.repo.obtener(id);
-      if (!a) return json({ error: "No encontrado." }, 404);
-      return json({
-        id: a.id,
-        estado: a.estado,
-        pasoActual: a.pasoActual,
-        error: a.error,
-        informe: a.informe,
-      });
-    },
+        await deps.worker().marcarColgados(sesion.userId);
+        const a = await sesion.repo.obtener(id);
+        if (!a) return json({ error: "No encontrado." }, 404);
+        return json({
+          id: a.id,
+          estado: a.estado,
+          pasoActual: a.pasoActual,
+          error: a.error,
+          informe: a.informe,
+        });
+      }),
   };
 }

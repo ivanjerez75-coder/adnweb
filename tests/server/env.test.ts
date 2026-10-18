@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { serviceRoleKey, supabaseEnv } from "@/lib/supabase/env";
+import { MissingEnvError, serviceRoleKey, supabaseEnv } from "@/lib/supabase/env";
+
+describe("MissingEnvError", () => {
+  it("es el error que lanzan supabaseEnv y serviceRoleKey", () => {
+    expect(() => supabaseEnv({})).toThrow(MissingEnvError);
+    expect(() => serviceRoleKey({})).toThrow(MissingEnvError);
+  });
+});
 
 describe("supabaseEnv", () => {
   it("lanza si faltan las variables", () => {

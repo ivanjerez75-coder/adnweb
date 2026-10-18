@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { createHandlers } from "@/lib/server/analyses/handlers";
+import { createHandlers, type HandlerDeps } from "@/lib/server/analyses/handlers";
+import { MissingEnvError } from "@/lib/supabase/env";
 import { createFakeRepos } from "./fake-repo";
 import { fakeFetcher, fakeGetPage, NOW } from "../engine/fake-network";
 import { validAiOutput } from "../engine/ai-fixture";
@@ -10,18 +11,91 @@ const okModel: JsonModel = { name: "fake", generate: async () => JSON.stringify(
 function setup(opts: { sesion?: boolean } = {}) {
   const repos = createFakeRepos({ now: () => NOW });
   const tareas: Array<() => Promise<void>> = [];
+  const worker = vi.fn(() => repos.worker);
+  const engine = vi.fn(() => ({
+    getPage: fakeGetPage,
+    fetcher: fakeFetcher(),
+    now: () => NOW,
+    models: [okModel],
+  }));
   const handlers = createHandlers({
     user: async () => (opts.sesion === false ? null : { userId: "u1", repo: repos.user }),
-    worker: repos.worker,
-    getPage: fakeGetPage,
-    engine: { getPage: fakeGetPage, fetcher: fakeFetcher(), now: () => NOW, models: [okModel] },
+    worker,
+    engine,
     schedule: (t) => {
       tareas.push(t);
     },
     now: () => NOW,
   });
-  return { ...repos, tareas, handlers };
+  return { ...repos, tareas, handlers, deps: { worker, engine } };
 }
+
+describe("dependencias perezosas y servicio sin configurar", () => {
+  const sinEnv = () => {
+    throw new MissingEnvError("Falta la variable de entorno NEXT_PUBLIC_SUPABASE_URL.");
+  };
+  const handlersCon = (over: Partial<HandlerDeps>) => {
+    const { worker, user } = createFakeRepos({ now: () => NOW });
+    return createHandlers({
+      user: async () => ({ userId: "u1", repo: user }),
+      worker: () => worker,
+      engine: () => ({ getPage: fakeGetPage, fetcher: fakeFetcher(), now: () => NOW, models: [okModel] }),
+      schedule: () => {},
+      now: () => NOW,
+      ...over,
+    });
+  };
+
+  it("sin sesión no construye ni el worker ni el motor", async () => {
+    const { handlers, deps } = setup({ sesion: false });
+    await handlers.crear(post({ url: "facturo.example" }));
+    await handlers.estado(crypto.randomUUID());
+    expect(deps.worker).not.toHaveBeenCalled();
+    expect(deps.engine).not.toHaveBeenCalled();
+  });
+
+  it("estado no construye el motor", async () => {
+    const { handlers, deps } = setup();
+    await handlers.estado(crypto.randomUUID());
+    expect(deps.engine).not.toHaveBeenCalled();
+  });
+
+  it("crear con origen ajeno o url inválida no construye nada", async () => {
+    const { handlers, deps } = setup();
+    await handlers.crear(post({ url: "x" }, { origin: "https://malo.example", host: "a.example" }));
+    await handlers.crear(post({ url: 3 }));
+    expect(deps.worker).not.toHaveBeenCalled();
+    expect(deps.engine).not.toHaveBeenCalled();
+  });
+
+  it("503 JSON si faltan las variables de Supabase al obtener la sesión", async () => {
+    const handlers = handlersCon({ user: async () => sinEnv() });
+    for (const res of [await handlers.crear(post({ url: "facturo.example" })), await handlers.estado("a1")]) {
+      expect(res.status).toBe(503);
+      expect(await res.json()).toEqual({ error: "El servicio no está configurado." });
+    }
+  });
+
+  it("503 JSON si falta la service role al construir el worker", async () => {
+    const handlers = handlersCon({ worker: sinEnv });
+    for (const res of [
+      await handlers.crear(post({ url: "facturo.example" })),
+      await handlers.estado(crypto.randomUUID()),
+    ]) {
+      expect(res.status).toBe(503);
+      expect(await res.json()).toEqual({ error: "El servicio no está configurado." });
+    }
+  });
+
+  it("otros errores se siguen propagando", async () => {
+    const handlers = handlersCon({
+      worker: () => {
+        throw new Error("boom");
+      },
+    });
+    await expect(handlers.estado(crypto.randomUUID())).rejects.toThrow("boom");
+  });
+});
 
 const post = (body: unknown, headers: Record<string, string> = {}) =>
   new Request("http://x/api/analisis", {
