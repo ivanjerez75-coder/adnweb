@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Component, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { Evidence } from "@/lib/engine/v3/evidence";
 import type { Estimacion } from "@/lib/engine/v3/estimates";
@@ -36,7 +36,7 @@ function Evidencias({ lista }: { lista: Evidence[] | undefined }) {
   if (!lista || lista.length === 0) return null;
   return (
     <ul>
-      {lista.map((e) =>
+      {arr<Evidence>(lista).map((e) =>
         e.tipo === "pagina" ? (
           <li key={e.id}>
             {esHttp(e.url) ? (
@@ -109,7 +109,7 @@ function Datos({ c }: { c: unknown }) {
               Páginas analizadas con título: {seo.titulosYDescripciones.conTitulo} de {seo.titulosYDescripciones.total}; con descripción:{" "}
               {seo.titulosYDescripciones.conDescripcion}
             </li>
-            <li>Idiomas: {seo.idiomas.length ? seo.idiomas.join(", ") : "—"}</li>
+            <li>Idiomas: {arr(seo.idiomas).length ? arr<string>(seo.idiomas).join(", ") : "—"}</li>
             <li>Blog activo: {seo.blogActivo === null ? "—" : seo.blogActivo ? "Sí" : "No"}</li>
           </ul>
         </>
@@ -118,8 +118,8 @@ function Datos({ c }: { c: unknown }) {
         <>
           <h3>Datos publicados</h3>
           <ul>
-            {d.publicados.map((p) => (
-              <li key={p.evidencia}>
+            {arr<NonNullable<typeof d.publicados>[number]>(d.publicados).map((p, n) => (
+              <li key={`${p.evidencia}-${n}`}>
                 {p.etiqueta}: {p.valor} <small>({p.fuente})</small>
               </li>
             ))}
@@ -148,11 +148,11 @@ function AdnVista({ c }: { c: unknown }) {
       <Bloque titulo="Qué es" b={a.queEs} />
       <Bloque titulo="Propuesta de valor" b={a.propuestaValor} />
       <p>Tipo de negocio: {a.tipoNegocio}</p>
-      {(a.lineas ?? []).map((l, i) => (
+      {arr<Adn["lineas"][number]>(a.lineas).map((l, i) => (
         <section key={i}>
           <h3>{l.nombre}</h3>
           <ul>
-            <li>Qué ofrece: {(l.queOfrece ?? []).join(", ")}</li>
+            <li>Qué ofrece: {arr<string>(l.queOfrece).join(", ")}</li>
             <li>Público: {l.publico}</li>
             <li>Cómo se contrata: {l.comoSeContrata}</li>
             <li>Ingresos: {l.ingresos}</li>
@@ -168,7 +168,7 @@ function AdnVista({ c }: { c: unknown }) {
 function Saber({ c }: { c: unknown }) {
   return (
     <ul>
-      {(c as string[]).map((t, i) => (
+      {arr<string>(c).map((t, i) => (
         <li key={i}>{t}</li>
       ))}
     </ul>
@@ -184,11 +184,11 @@ function ScoreVista({ c, cierre }: { c: unknown; cierre: unknown }) {
         Puntuación global: <strong>{s.global === null ? "No puntuable" : `${s.global} / 100`}</strong>
       </p>
       <ul>
-        {(s.criterios ?? []).map((k) => (
+        {arr<DnaScore["criterios"][number]>(s.criterios).map((k) => (
           <li key={k.clave}>
             <strong>{k.nombre}:</strong> {k.valor === null ? "No puntuable" : `${k.valor} / 100`}
-            {k.motivos.length > 0 && <small> ({k.motivos.join("; ")})</small>}
-            {motivos[k.clave]?.map((m, i) => (
+            {arr(k.motivos).length > 0 && <small> ({arr<string>(k.motivos).join("; ")})</small>}
+            {arr<string>(motivos[k.clave]).map((m, i) => (
               <p key={i}>{m}</p>
             ))}
             <Evidencias lista={k.evidencias} />
@@ -205,7 +205,7 @@ function RevisionVista({ c }: { c: unknown }) {
     <>
       <h3>Qué hace bien</h3>
       <ul>
-        {(r.bien ?? []).map((b, i) => (
+        {arr<Revision["bien"][number]>(r.bien).map((b, i) => (
           <li key={i}>
             {b.texto}
             <Evidencias lista={b.evidencias} />
@@ -214,7 +214,7 @@ function RevisionVista({ c }: { c: unknown }) {
       </ul>
       <h3>Problemas</h3>
       <ul>
-        {(r.problemas ?? []).map((p, i) => (
+        {arr<Revision["problemas"][number]>(r.problemas).map((p, i) => (
           <li key={i}>
             <strong>{p.linea}:</strong> {p.problema}
             <br />
@@ -230,7 +230,7 @@ function RevisionVista({ c }: { c: unknown }) {
 function CompetidoresVista({ c }: { c: unknown }) {
   return (
     <ul>
-      {(c as Competidor[]).map((k, i) => (
+      {arr<Competidor>(c).map((k, i) => (
         <li key={i}>
           <strong>{k.nombre}</strong>
           {esHttp(k.web) && (
@@ -245,9 +245,9 @@ function CompetidoresVista({ c }: { c: unknown }) {
           )}
           {!k.verificado && <em> — sin verificar</em>}
           <p>{k.ofrece}</p>
-          {k.diferencias?.length > 0 && (
+          {arr(k.diferencias).length > 0 && (
             <ul>
-              {k.diferencias.map((d, j) => (
+              {arr<string>(k.diferencias).map((d, j) => (
                 <li key={j}>{d}</li>
               ))}
             </ul>
@@ -261,7 +261,7 @@ function CompetidoresVista({ c }: { c: unknown }) {
 function AprenderVista({ c }: { c: unknown }) {
   return (
     <ul>
-      {(c as ItemAprender[]).map((i, n) => (
+      {arr<ItemAprender>(c).map((i, n) => (
         <li key={n}>
           {i.texto}
           <Evidencias lista={i.evidencias} />
@@ -272,7 +272,7 @@ function AprenderVista({ c }: { c: unknown }) {
 }
 
 function CierreVista({ c }: { c: unknown }) {
-  const acciones = (c as Cierre).acciones ?? [];
+  const acciones = arr<Cierre["acciones"][number]>((c as Cierre | null)?.acciones);
   return (
     <ol>
       {acciones.map((a, i) => (
@@ -282,7 +282,7 @@ function CierreVista({ c }: { c: unknown }) {
           <p>
             Impacto: {a.impacto}. Esfuerzo: {a.esfuerzo}.
           </p>
-          {a.datosQueFaltan?.length > 0 && <p>Datos que faltan: {a.datosQueFaltan.join("; ")}</p>}
+          {arr(a.datosQueFaltan).length > 0 && <p>Datos que faltan: {arr<string>(a.datosQueFaltan).join("; ")}</p>}
           <Evidencias lista={a.evidencias} />
         </li>
       ))}
@@ -398,10 +398,25 @@ export function Secciones({ id, createdAt, inicial }: { id: string; createdAt: s
       {vistas.map((s) => (
         <section key={s.clave} aria-labelledby={`sec-${s.clave}`}>
           <h2 id={`sec-${s.clave}`}>{s.titulo}</h2>
-          <Cuerpo s={s} todas={vistas} />
+          <ErrorBoundary><Cuerpo s={s} todas={vistas} /></ErrorBoundary>
           {s.clave === "score" && <p>{AVISO}</p>}
         </section>
       ))}
     </div>
   );
+}
+
+function arr<T>(x: unknown): T[] {
+  return Array.isArray(x) ? (x as T[]) : [];
+}
+
+/** Una sección con contenido mal formado no debe tumbar el resto de la página. */
+class ErrorBoundary extends Component<{ children: ReactNode }, { fallo: boolean }> {
+  state = { fallo: false };
+  static getDerivedStateFromError() {
+    return { fallo: true };
+  }
+  render() {
+    return this.state.fallo ? <p>No hemos podido generar esta sección.</p> : this.props.children;
+  }
 }
