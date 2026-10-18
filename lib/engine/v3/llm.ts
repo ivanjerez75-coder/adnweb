@@ -12,17 +12,18 @@ export function limitarConcurrencia(n: number): <T>(fn: () => Promise<T>) => Pro
   const max = Math.max(1, Math.floor(n));
   let active = 0;
   const queue: (() => void)[] = [];
-  const next = () => {
-    active--;
-    queue.shift()?.();
+  const release = () => {
+    const waiter = queue.shift();
+    if (waiter) waiter(); // el hueco pasa directamente al siguiente: active no cambia
+    else active--;
   };
   return async <T>(fn: () => Promise<T>): Promise<T> => {
     if (active >= max) await new Promise<void>((resolve) => queue.push(resolve));
-    active++;
+    else active++;
     try {
       return await fn();
     } finally {
-      next();
+      release();
     }
   };
 }

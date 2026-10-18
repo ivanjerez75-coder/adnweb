@@ -119,6 +119,48 @@ export function groqModel(apiKey: string, model = "llama-3.3-70b-versatile", fet
 
 const stripFences = (text: string) => text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
 
+/** Primer objeto/array JSON balanceado dentro de un texto (respeta cadenas con llaves). */
+function balancedJson(text: string): string | null {
+  const start = text.search(/[{[]/);
+  if (start < 0) return null;
+  let depth = 0;
+  let inString = false;
+  for (let i = start; i < text.length; i++) {
+    const c = text[i];
+    if (inString) {
+      if (c === "\\") i++;
+      else if (c === '"') inString = false;
+    } else if (c === '"') inString = true;
+    else if (c === "{" || c === "[") depth++;
+    else if (c === "}" || c === "]") {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
+/** Parseo directo; si falla, JSON dentro de un bloque con vallas o embebido en prosa. */
+function parseJsonLoose(text: string): unknown {
+  try {
+    return JSON.parse(stripFences(text));
+  } catch (error) {
+    const candidates: string[] = [];
+    const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(text);
+    if (fenced) candidates.push(fenced[1]);
+    const bare = balancedJson(text);
+    if (bare) candidates.push(bare);
+    for (const c of candidates) {
+      try {
+        return JSON.parse(c.trim());
+      } catch {
+        // probar el siguiente candidato
+      }
+    }
+    throw error;
+  }
+}
+
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 // Solo se aplican a errores lanzados por generate(), nunca a errores de parseo.
@@ -187,7 +229,7 @@ export async function generateWithSchema<T>(
       }
       lastReason = "invalid";
       try {
-        const parsed = schema.safeParse(JSON.parse(stripFences(text)));
+        const parsed = schema.safeParse(parseJsonLoose(text));
         if (parsed.success) return parsed.data;
         errors.push(`${model.name}: JSON con forma incorrecta`);
       } catch (error) {

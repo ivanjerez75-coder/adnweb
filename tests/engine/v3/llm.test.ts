@@ -35,6 +35,34 @@ describe("limitarConcurrencia", () => {
     expect(max).toBe(2);
   });
 
+  it("no excede n cuando llega una tarea nueva justo al liberarse un hueco", async () => {
+    const limit = limitarConcurrencia(1);
+    let inFlight = 0;
+    let max = 0;
+    const work = async (ms: number) => {
+      inFlight++;
+      max = Math.max(max, inFlight);
+      await new Promise((r) => setTimeout(r, ms));
+      inFlight--;
+    };
+    const late: Promise<void>[] = [];
+    // A termina con un thenable: una microtarea de la prueba se cuela justo
+    // entre la liberación del hueco y la reanudación del que espera.
+    const a = limit(async () => {
+      await work(5);
+      return {
+        then(resolve: (v: number) => void) {
+          resolve(1);
+          queueMicrotask(() => late.push(limit(() => work(1))));
+        },
+      } as unknown as number;
+    });
+    const b = limit(() => work(1));
+    await Promise.all([a, b]);
+    await Promise.all(late);
+    expect(max).toBe(1);
+  });
+
   it("una tarea fallida libera su hueco", async () => {
     const limit = limitarConcurrencia(1);
     await expect(limit(async () => { throw new Error("x"); })).rejects.toThrow("x");
@@ -48,6 +76,15 @@ describe("runSection", () => {
     const m = model("m", ["no json", '{"a":"x"}', '```json\n{"a":1}\n```']);
     await expect(runSection("sec", "p", schema, [m], { sleep: async () => {} })).resolves.toEqual({ a: 1 });
     expect(m.calls).toBe(3);
+  });
+  it("extrae JSON de un bloque con vallas rodeado de prosa", async () => {
+    const m = model("m", ['Aquí tienes:\n```json\n{"a":3}\n```\nEspero que sirva.']);
+    await expect(runSection("sec", "p", schema, [m], { sleep: async () => {} })).resolves.toEqual({ a: 3 });
+    expect(m.calls).toBe(1);
+  });
+  it("extrae un objeto suelto embebido en prosa", async () => {
+    const m = model("m", ['Resultado: {"a":4,"t":"}"} fin.']);
+    await expect(runSection("sec", "p", schema, [m], { sleep: async () => {} })).resolves.toEqual({ a: 4 });
   });
   it("lanza AiUnavailableError invalid si nunca valida", async () => {
     const m = model("m", ["{}"]);
