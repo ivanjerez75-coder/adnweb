@@ -23,9 +23,10 @@ function setup(opts: { sesion?: boolean } = {}) {
   return { ...repos, tareas, handlers };
 }
 
-const post = (body: unknown) =>
+const post = (body: unknown, headers: Record<string, string> = {}) =>
   new Request("http://x/api/analisis", {
     method: "POST",
+    headers,
     body: typeof body === "string" ? body : JSON.stringify(body),
   });
 
@@ -44,6 +45,48 @@ describe("crear", () => {
       expect(res.status).toBe(400);
       expect(await res.json()).toEqual({ error: "La URL no es válida." });
     }
+  });
+
+  it("400 con una url de 2049 caracteres, sin llegar a startAnalysis", async () => {
+    const { handlers, state } = setup();
+    const url = `https://example.com/${"a".repeat(2049 - "https://example.com/".length)}`;
+    expect(url).toHaveLength(2049);
+    const res = await handlers.crear(post({ url }));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "La URL no es válida." });
+    expect(state.analisis).toHaveLength(0);
+    expect(state.creditos).toBe(5);
+  });
+
+  it("403 si el Origin no coincide con el Host", async () => {
+    const { handlers, state, tareas } = setup();
+    const res = await handlers.crear(
+      post({ url: "facturo.example" }, { origin: "https://malo.example", host: "dnaweb.example" }),
+    );
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "Origen no permitido." });
+    expect(state.analisis).toHaveLength(0);
+    expect(tareas).toHaveLength(0);
+  });
+
+  it("403 si el Origin es 'null'", async () => {
+    const { handlers } = setup();
+    const res = await handlers.crear(post({ url: "facturo.example" }, { origin: "null", host: "dnaweb.example" }));
+    expect(res.status).toBe(403);
+  });
+
+  it("202 si el Origin coincide con el Host", async () => {
+    const { handlers } = setup();
+    const res = await handlers.crear(
+      post({ url: "facturo.example" }, { origin: "https://dnaweb.example", host: "dnaweb.example" }),
+    );
+    expect(res.status).toBe(202);
+  });
+
+  it("202 sin cabecera Origin", async () => {
+    const { handlers } = setup();
+    const res = await handlers.crear(post({ url: "facturo.example" }, { host: "dnaweb.example" }));
+    expect(res.status).toBe(202);
   });
 
   it("devuelve el error de startAnalysis", async () => {

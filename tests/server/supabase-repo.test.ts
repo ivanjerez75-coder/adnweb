@@ -61,6 +61,11 @@ describe("createUserRepo", () => {
     });
   });
 
+  it("iniciar: url_invalida lanza (no es sin_creditos ni en_curso)", async () => {
+    const s = stub({}, { error: { message: "url_invalida" } });
+    await expect(createUserRepo(s.client).iniciar("u", "d")).rejects.toThrow("url_invalida");
+  });
+
   it("iniciar: relanza otros errores", async () => {
     const s = stub({}, { error: { message: "boom" } });
     await expect(createUserRepo(s.client).iniciar("u", "d")).rejects.toThrow("boom");
