@@ -54,8 +54,8 @@ export interface WorkerRepo {
   paso(id: string, texto: string): Promise<void>;
   /** Guarda los datos recogidos (alimenta la caché de 24 h aunque fallen las secciones). */
   guardarDatosBrutos(id: string, raw: RawData): Promise<void>;
-  /** Guarda (o sobrescribe) una sección del informe v3. */
-  guardarSeccion(id: string, clave: string, contenido: unknown | null, estado: SeccionGuardada["estado"]): Promise<void>;
+  /** Guarda (o sobrescribe) una sección del informe v3. false si la fila ya no está procesando/listo. */
+  guardarSeccion(id: string, clave: string, contenido: unknown | null, estado: SeccionGuardada["estado"]): Promise<boolean>;
   /** procesando -> listo, version 3. */
   marcarListo(id: string): Promise<void>;
   completar(id: string, raw: RawData, informe: Report): Promise<void>;

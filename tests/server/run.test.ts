@@ -60,8 +60,9 @@ describe("runAnalysis v3", () => {
     const orig = worker.guardarSeccion;
     const vistas: Array<[string, string]> = [];
     worker.guardarSeccion = async (id, clave, c, e) => {
-      await orig(id, clave, c, e);
+      const r = await orig(id, clave, c, e);
       vistas.push([clave, mine.estado]);
+      return r;
     };
     await runAnalysis(a.id, normalized, deps);
     const iAdn = vistas.findIndex(([c]) => c === "adn");
@@ -192,5 +193,53 @@ describe("runAnalysis v3", () => {
     await runAnalysis(a.id, normalized, deps);
     err.mockRestore();
     expect(getPage).toHaveBeenCalled();
+  });
+
+  it("la caché encadena: B reutiliza la de A y C la de B sin volver a recoger", async () => {
+    const getPage = vi.fn<PageGetter>(v3GetPage);
+    const { state, worker, a: b, deps } = setup([fakeV3Model()], getPage);
+    const origen = state.insertarAnalisis({
+      userId: "u2",
+      dominio: normalized.domain,
+      estado: "listo",
+      datosBrutos: rawV3,
+      createdAt: new Date(NOW.getTime() - 7_200_000),
+    });
+    await runAnalysis(b.id, normalized, deps);
+    expect(b.datosBrutos?.version).toBe(3);
+    // La fila original deja de ser utilizable: C solo puede apoyarse en B.
+    origen.datosBrutos = null;
+    b.createdAt = new Date(NOW.getTime() - 3_600_000);
+    const c = state.insertarAnalisis({ userId: "u1", dominio: normalized.domain, url: normalized.url });
+    await runAnalysis(c.id, normalized, { ...deps, worker });
+    expect(getPage).not.toHaveBeenCalledWith("https://facturo.example/");
+    expect(c.estado).toBe("listo");
+    expect(c.datosBrutos?.version).toBe(3);
+  });
+
+  it("buscarCache ignora filas listas sin datos brutos", async () => {
+    const { state, worker } = setup([fakeV3Model()]);
+    state.insertarAnalisis({ userId: "u2", dominio: normalized.domain, estado: "listo", createdAt: new Date(NOW.getTime() - 1000) });
+    expect(await worker.buscarCache(normalized.domain, new Date(NOW.getTime() - 86_400_000))).toBeNull();
+  });
+
+  it("si la fila ya está en estado final (guardarSeccion false), aborta sin fallar ni devolver", async () => {
+    const { worker, state, a, deps } = setup([fakeV3Model()]);
+    conCache(state, rawV3);
+    const orig = worker.guardarSeccion;
+    const guardadas: string[] = [];
+    worker.guardarSeccion = async (id, clave, c, e) => {
+      const r = await orig(id, clave, c, e);
+      guardadas.push(clave);
+      // Simula marcar_colgados tras la primera sección.
+      if (clave === "datos") a.estado = "error";
+      return a.estado === "error" ? false : r;
+    };
+    const fallar = vi.spyOn(worker, "fallar");
+    const refund = vi.spyOn(worker, "devolverCredito");
+    await expect(runAnalysis(a.id, normalized, deps)).resolves.toBeUndefined();
+    expect(fallar).not.toHaveBeenCalled();
+    expect(refund).not.toHaveBeenCalled();
+    expect(guardadas).toEqual(["datos"]);
   });
 });

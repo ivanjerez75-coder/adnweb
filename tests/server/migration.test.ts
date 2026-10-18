@@ -174,6 +174,12 @@ describe("migración 0002_secciones.sql", () => {
     expect(def).toContain("jsonb_set(");
     expect(def).toContain("jsonb_build_object('estado', p_estado, 'contenido', p_contenido)");
     expect(def).toContain("updated_at = now()");
+    expect(def).toContain("raise exception 'estado_invalido'");
+    expect(def).toContain("not in ('pendiente', 'lista', 'error')");
+    expect(def).toContain("p_clave is null or p_clave = ''");
+    expect(def).toContain("returns boolean");
+    expect(def).toContain("return found");
+    expect(sql2).toContain("drop function if exists public.guardar_seccion(uuid, text, jsonb, text)");
     expect(def).toMatch(/estado in \('procesando', ?'listo'\)/);
   });
 

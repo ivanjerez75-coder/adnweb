@@ -9,6 +9,9 @@ import { describirFallo } from "@/lib/server/analyses/errors";
 
 const DIA_MS = 24 * 3_600_000;
 
+/** La fila ya está en su estado final (p. ej. marcada como colgada): se aborta sin fallar ni devolver otra vez. */
+class FilaFinalError extends Error {}
+
 export interface RunDeps {
   worker: WorkerRepo;
   engine: CollectDeps & { models: JsonModel[]; searchModels: JsonModel[]; runOpts?: RunSectionOpts };
@@ -37,19 +40,19 @@ export async function runAnalysis(id: string, normalized: NormalizedUrl, deps: R
     let raw: RawData | null = null;
     try {
       const cached = await worker.buscarCache(normalized.domain, new Date(now().getTime() - DIA_MS));
-      // Los datos de análisis antiguos (v2) no sirven para el informe v3.
+      // Las filas antiguas (v2) llegan de la BD sin el campo version: no sirven para el informe v3.
       if (cached && cached.version === 3) raw = cached;
     } catch (e) {
       console.error("runAnalysis: fallo al buscar en caché, se recoge de nuevo", e);
     }
 
-    if (!raw) {
-      raw = await collect(normalized, engine, onStep);
-      // Antes de generar nada: la caché de 24 h sirve aunque fallen las secciones.
-      await worker.guardarDatosBrutos(id, raw);
-    }
+    if (!raw) raw = await collect(normalized, engine, onStep);
+    // Antes de generar nada y en ambas ramas: así la caché de 24 h encadena y sirve aunque fallen las secciones.
+    await worker.guardarDatosBrutos(id, raw);
 
     await onStep("Analizando el negocio…");
+    // buildReportV3 ignora los fallos de onSection salvo en adn: este indicador evita seguir guardando.
+    let abortado = false;
     await buildReportV3(
       raw,
       {
@@ -61,11 +64,17 @@ export async function runAnalysis(id: string, normalized: NormalizedUrl, deps: R
       },
       async (clave: SeccionClave, contenido, estado) => {
         // buildReportV3 solo propaga el fallo de guardar adn (y las demás se ignoran).
-        await worker.guardarSeccion(id, clave, contenido, estado);
+        if (abortado) throw new FilaFinalError();
+        const guardada = await worker.guardarSeccion(id, clave, contenido, estado);
+        if (!guardada) {
+          abortado = true;
+          throw new FilaFinalError();
+        }
         if (clave === "adn" && estado === "lista") await worker.marcarListo(id);
       },
     );
   } catch (e) {
+    if (e instanceof FilaFinalError) return;
     const { mensaje, kind } = describirFallo(e);
     try {
       await worker.fallar(id, mensaje, kind);

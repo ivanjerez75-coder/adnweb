@@ -128,13 +128,14 @@ export function createWorkerRepo(admin: SupabaseClient): WorkerRepo {
     },
 
     async guardarSeccion(id, clave, contenido, estado) {
-      const { error } = await admin.rpc("guardar_seccion", {
+      const { data, error } = await admin.rpc("guardar_seccion", {
         p_id: id,
         p_clave: clave,
         p_contenido: contenido,
         p_estado: estado,
       });
       lanzarSiError(error);
+      return data === true;
     },
 
     async marcarListo(id) {
@@ -170,6 +171,7 @@ export function createWorkerRepo(admin: SupabaseClient): WorkerRepo {
         .from("analyses")
         .select("datos_brutos")
         .eq("estado", "listo")
+        .not("datos_brutos", "is", null)
         .eq("dominio", dominio)
         .gte("created_at", desde.toISOString())
         .order("created_at", { ascending: false })

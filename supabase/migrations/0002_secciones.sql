@@ -16,19 +16,30 @@ alter table public.analyses
 -- ---------------------------------------------------------------------
 -- guardar_seccion(): fusiona una sección en analyses.secciones.
 -- Solo actúa sobre análisis 'procesando' o 'listo'. Solo service_role.
+-- Devuelve false si no ha actualizado ninguna fila (p. ej. el análisis
+-- ya se marcó como error por timeout).
 -- ---------------------------------------------------------------------
+drop function if exists public.guardar_seccion(uuid, text, jsonb, text);
+
 create or replace function public.guardar_seccion(
   p_id uuid,
   p_clave text,
   p_contenido jsonb,
   p_estado text
 )
-returns void
+returns boolean
 language plpgsql
 security definer
 set search_path = public
 as $$
 begin
+  if p_clave is null or p_clave = '' then
+    raise exception 'clave_invalida';
+  end if;
+  if p_estado is null or p_estado not in ('pendiente', 'lista', 'error') then
+    raise exception 'estado_invalido';
+  end if;
+
   update public.analyses
      set secciones = jsonb_set(
            coalesce(secciones, '{}'::jsonb),
@@ -38,6 +49,8 @@ begin
          updated_at = now()
    where id = p_id
      and estado in ('procesando', 'listo');
+
+  return found;
 end;
 $$;
 

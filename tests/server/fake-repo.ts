@@ -188,9 +188,10 @@ export function createFakeRepos(opts?: {
 
     async guardarSeccion(id, clave, contenido, estado) {
       const a = state.analisis.find((x) => x.id === id && (x.estado === "procesando" || x.estado === "listo"));
-      if (!a) return;
+      if (!a) return false;
       a.secciones = { ...a.secciones, [clave]: { estado, contenido } };
       a.updatedAt = state.now();
+      return true;
     },
 
     async marcarListo(id) {
@@ -232,6 +233,7 @@ export function createFakeRepos(opts?: {
         .filter(
           (a) =>
             a.estado === "listo" &&
+            a.datosBrutos !== null &&
             a.dominio === dominio &&
             a.createdAt.getTime() >= desde.getTime(),
         )
