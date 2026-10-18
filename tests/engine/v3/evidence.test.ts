@@ -5,7 +5,7 @@ import type { Signal } from "../../../lib/engine/types";
 
 const signal: Signal = { id: "sin_blog", family: "contenido", source: "web", label: "No tiene blog", polarity: "negativa" };
 const paginas = [
-  { id: "p1", url: "https://facturo.example/", titulo: "Inicio", extractos: [{ id: "p1-e1", cita: "  Facturas en 1 minuto. " }, { id: "p1-e2", cita: "Sin permanencia" }] },
+  { id: "p1", url: "https://facturo.example/", titulo: "Inicio", tieneDescripcion: true, extractos: [{ id: "p1-e1", cita: "  Facturas en 1 minuto. " }, { id: "p1-e2", cita: "Sin permanencia" }] },
 ];
 
 describe("buildEvidence", () => {

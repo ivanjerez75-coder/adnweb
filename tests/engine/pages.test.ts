@@ -109,6 +109,15 @@ describe("fetchPages", () => {
     expect(docs[1].extractos).toEqual([{ id: "p2-e1", cita: "Texto literal de https://a.example/x suficientemente largo." }]);
   });
 
+  it("marca tieneDescripcion solo con meta description no vacía", async () => {
+    const get: PageGetter = async (url) =>
+      ok(url, url.endsWith("/con")
+        ? '<head><meta name="description" content="Algo"></head><body></body>'
+        : '<head><meta name="description" content="  "></head><body></body>');
+    const docs = await fetchPages(["https://a.example/con", "https://a.example/sin"], get, { timeoutMs: 1000 });
+    expect(docs.map((d) => d.tieneDescripcion)).toEqual([true, false]);
+  });
+
   it("descarta las páginas que acaban en otro dominio tras una redirección", async () => {
     const get: PageGetter = async (url) =>
       ok(url.endsWith("/go") ? "https://otra.example/landing" : url, "<body><p>Contenido suficientemente largo para citar.</p></body>");

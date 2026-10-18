@@ -126,6 +126,8 @@ export interface PageDoc {
   id: string;
   url: string;
   titulo: string;
+  /** true si la página tiene meta description no vacía. */
+  tieneDescripcion: boolean;
   extractos: Extract[];
 }
 

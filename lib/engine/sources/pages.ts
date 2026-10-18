@@ -112,7 +112,12 @@ export async function fetchPages(
       if (page.status >= 400) return;
       if (!sameSite(page.url || url)) return; // redirección a otro dominio: no es la web analizada
       const $ = cheerio.load(page.text);
-      done[i] = { url: page.url || url, titulo: clean($("title").first().text()), passages: extractPassages(page.text) };
+      done[i] = {
+        url: page.url || url,
+        titulo: clean($("title").first().text()),
+        tieneDescripcion: clean($('meta[name="description" i]').first().attr("content") ?? "").length > 0,
+        passages: extractPassages(page.text),
+      };
     } catch {
       // página que falla: se omite
     }
@@ -129,7 +134,7 @@ export async function fetchPages(
   for (const d of done) {
     if (!d) continue;
     const id = `p${docs.length + 1}`;
-    docs.push({ id, url: d.url, titulo: d.titulo, extractos: d.passages.map((cita, k) => ({ id: `${id}-e${k + 1}`, cita })) });
+    docs.push({ id, url: d.url, titulo: d.titulo, tieneDescripcion: d.tieneDescripcion, extractos: d.passages.map((cita, k) => ({ id: `${id}-e${k + 1}`, cita })) });
   }
   return docs;
 }
