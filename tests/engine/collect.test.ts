@@ -351,6 +351,22 @@ describe("collect — redirecciones a otro dominio", () => {
     expect(JSON.stringify(raw)).not.toContain("<footer");
   });
 
+  it("no pide el aviso legal de otro dominio ni le atribuye su CIF", async () => {
+    const asked: string[] = [];
+    const getPage: PageGetter = async (url) => {
+      asked.push(url);
+      if (url === "https://facturo.example/")
+        return { url, status: 200, headers: {}, text: `<html><head><title>Facturo</title></head><body><a href="https://gestoria.example/aviso-legal">Aviso legal</a></body></html>` };
+      if (url === "https://gestoria.example/aviso-legal")
+        return { url, status: 200, headers: {}, text: "<body>Ajena S.L. CIF: B12345674</body>" };
+      return { url, status: 404, headers: {}, text: "" };
+    };
+    const raw = await collect(input, { ...baseDeps, getPage });
+    expect(asked.some((u) => u.includes("gestoria.example"))).toBe(false);
+    expect(raw.legal?.avisoLegal).toBeNull();
+    expect(raw.legal?.cif).toBeNull();
+  });
+
   it("PageSpeed sin cuota: conserva el error y marca la fuente como caída", async () => {
     const fetcher = fakeFetcher({ pagespeedonline: () => new Response("", { status: 429 }) });
     const raw = await collect(input, { ...baseDeps, fetcher });

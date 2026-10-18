@@ -78,6 +78,9 @@ export async function fetchPageSpeed(url: string, fetcher: Fetcher, now: Date, a
     campo: m?.campo ?? null,
     obtenidoEn: now.toISOString(),
   };
+  if (!m && d && mobile.status === "rejected") {
+    result.error = `móvil no disponible: ${(mobile.reason as Error).message}`;
+  }
   if (!m && !d) {
     const quota = [mobile, desktop].find((r) => r.status === "rejected" && r.reason instanceof QuotaError);
     if (quota && quota.status === "rejected") return { ...result, error: (quota.reason as Error).message };

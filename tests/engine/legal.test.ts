@@ -119,6 +119,39 @@ describe("extractLegal", () => {
     expect(l.direccion).toBe("Gran Vía 5, Madrid");
   });
 
+  it("dirección: 'dirección'/'sede' solo con calle o código postal", () => {
+    const run = (t: string) => extractLegal(home, null, new Map([[HOME, `<p>${t}</p>`]])).direccion;
+    expect(run("Dirección de correo electrónico: x@y.com")).toBeNull();
+    expect(run("Accede a la sede electrónica de la empresa")).toBeNull();
+    expect(run("Sede social: nuestras oficinas centrales")).toBeNull();
+    expect(run("Dirección: Calle Mayor 1, Madrid")).toBe("Calle Mayor 1, Madrid");
+    expect(run("Sede social: Polígono Norte 3, 08001 Barcelona")).toBe("Polígono Norte 3, 08001 Barcelona");
+    expect(run("Domicilio social: en nuestras oficinas")).toBe("nuestras oficinas");
+  });
+
+  it("teléfono: 'hotel' e 'Intel' no son etiquetas", () => {
+    const run = (t: string) => extractLegal(home, null, new Map([[HOME, `<p>${t}</p>`]])).telefono;
+    expect(run("Hotel 912345678 reservas")).toBeNull();
+    expect(run("Intel 912345678")).toBeNull();
+    expect(run("Tel: 912 345 678")).toBe("912345678");
+  });
+
+  it("ignora enlaces y páginas de otro dominio registrable", () => {
+    const h = `<a href="https://otra.example/aviso-legal">Aviso legal</a><a href="/cookies">Cookies</a>`;
+    const l = extractLegal(
+      home,
+      null,
+      new Map([
+        [HOME, h],
+        ["https://otra.example/aviso-legal", "<p>Ajena S.L. CIF: B12345674</p>"],
+      ]),
+    );
+    expect(l.avisoLegal).toBeNull();
+    expect(l.cookies).toBe("https://facturo.example/cookies");
+    expect(l.cif).toBeNull();
+    expect(l.razonSocial).toBeNull();
+  });
+
   it("sin datos devuelve todo null", () => {
     expect(extractLegal(null, null, new Map())).toEqual({
       avisoLegal: null, privacidad: null, cookies: null, condiciones: null, cif: null,

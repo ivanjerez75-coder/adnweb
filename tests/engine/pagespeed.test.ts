@@ -83,6 +83,13 @@ describe("fetchPageSpeed", () => {
     expect(data.error).toBeUndefined();
   });
 
+  it("móvil falla pero escritorio responde: conserva la nota y la puntuación", async () => {
+    const data = await fetchPageSpeed("https://x.example/", async (url) =>
+      url.includes("strategy=mobile") ? new Response("", { status: 429 }) : Response.json({ lighthouseResult: { categories: { performance: { score: 0.7 } } } }), NOW);
+    expect(data).toMatchObject({ mobile: null, desktop: 70, seo: null });
+    expect(data.error).toMatch(/^móvil no disponible: /);
+  });
+
   it("error de cuota: devuelve error y puntuaciones null", async () => {
     const data = await fetchPageSpeed("https://x.example/", async () => new Response("quota", { status: 429 }), NOW);
     expect(data.error).toMatch(/cuota|429/i);

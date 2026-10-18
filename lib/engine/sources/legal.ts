@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { registrableDomain } from "../redirect";
 import type { LegalData, PageDoc, SiteData } from "../types";
 
 const NIF_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE";
@@ -72,11 +73,21 @@ const ENTITY_RE = new RegExp(
 );
 const CIF_LABEL_RE =
   /(?<![A-Za-z])(?:C\.?I\.?F\.?|N\.?I\.?F\.?|N\.?I\.?E\.?|VAT)[ \t:.\-/]*(?:ES[ \t-]?)?([A-Za-z]?[ .-]?\d(?:[ .-]?\d){6,7}[ .-]?[A-Za-z0-9])/gi;
+// "domicilio" basta; "sede social" y "dirección" solo cuentan si lo que sigue parece una dirección
+// (calle/avenida/plaza… o código postal de 5 dígitos): evita "dirección de correo electrónico".
 const ADDRESS_RE =
-  /(?:domicilio(?:\s+social)?|direcci[oó]n|sede(?:\s+social)?)[ \t]*:?[ \t]*(?:es[ \t]+)?(?:en[ \t]+)?([^\n]{8,140}?)(?=[ \t][-–·|][ \t]|\.[ \t\n]|\.?\s*$|[ \t](?:CIF|NIF|Tel|Email|E-mail|Correo)\b)/im;
+  /(domicilio(?:\s+social)?|sede\s+social|direcci[oó]n)[ \t]*:?[ \t]*(?:es[ \t]+)?(?:en[ \t]+)?([^\n]{8,140}?)(?=[ \t][-–·|][ \t]|\.[ \t\n]|\.?\s*$|[ \t](?:CIF|NIF|Tel|Email|E-mail|Correo)\b)/gim;
+const STREET_RE = /^(?:calle|c\/|avda|avenida|plaza|pl\.|carrer|passeig)(?![\p{L}])|(?<!\d)\d{5}(?!\d)/iu;
+function findAddress(text: string): string | null {
+  for (const m of text.matchAll(ADDRESS_RE)) {
+    const trigger = m[1].toLowerCase();
+    if (trigger.startsWith("domicilio") || STREET_RE.test(m[2].trim())) return m[2].trim();
+  }
+  return null;
+}
 const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9-]+(?:\.[A-Z0-9-]+)*\.[A-Z]{2,}/gi;
 const IMAGE_EXT = /\.(?:png|jpe?g|gif|webp|svg|avif)$/i;
-const PHONE_RE = /(?:tel[ée]fono|tel\.?|tlf\.?|phone)[ \t:.]*(\+?\d[\d .\-]{7,14}\d)/i;
+const PHONE_RE = /\b(?:tel[ée]fono|tel\.?|tlf\.?|phone)[ \t:.]*(\+?\d[\d .\-]{7,14}\d)/i;
 
 interface Doc {
   url: string;
@@ -112,9 +123,27 @@ export function extractLegal(home: SiteData | null, paginas: PageDoc[] | null, h
   };
 
   // Documentos: la home primero, luego las páginas legales y el resto; texto plano solo si no hay HTML.
+  // Solo cuenta lo publicado en el dominio registrable propio: un aviso legal de un tercero
+  // (gestoría, plantilla, plataforma) no identifica a este negocio. Sus enlaces tampoco se registran.
+  const ownRoot = (() => {
+    try {
+      return home ? registrableDomain(new URL(home.finalUrl).hostname) : null;
+    } catch {
+      return null;
+    }
+  })();
+  const isOwn = (url: string) => {
+    if (!ownRoot) return true;
+    try {
+      return registrableDomain(new URL(url).hostname) === ownRoot;
+    } catch {
+      return false;
+    }
+  };
   const docs: Doc[] = [];
   const seen = new Set<string>();
   for (const [url, html] of htmlByUrl) {
+    if (!isOwn(url)) continue;
     seen.add(url);
     const $ = cheerio.load(html);
     docs.push({ url, $, text: docText($) });
@@ -153,6 +182,7 @@ export function extractLegal(home: SiteData | null, paginas: PageDoc[] | null, h
         return;
       }
       if (abs.protocol !== "http:" && abs.protocol !== "https:") return;
+      if (!isOwn(abs.toString())) return;
       abs.hash = "";
       const label = `${a.text()} ${a.attr("title") ?? ""} ${a.attr("aria-label") ?? ""}`.replace(/\s+/g, " ").trim();
       for (const rule of LINK_RULES) {
@@ -180,8 +210,8 @@ export function extractLegal(home: SiteData | null, paginas: PageDoc[] | null, h
       if (m) set("razonSocial", m[1].replace(/[ \t]+/g, " ").trim(), d.url);
     }
     if (!out.direccion) {
-      const m = d.text.match(ADDRESS_RE);
-      if (m) set("direccion", m[1].trim(), d.url);
+      const addr = findAddress(d.text);
+      if (addr) set("direccion", addr, d.url);
     }
     if (!out.email) {
       const m = [...d.text.matchAll(EMAIL_RE)].find((x) => !IMAGE_EXT.test(x[0]));

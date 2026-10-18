@@ -17,7 +17,7 @@ import { fetchWikidata } from "./sources/wikidata";
 import { fetchDns } from "./sources/dns";
 import { fetchHackerNews } from "./sources/hackernews";
 import { radarRank, validRank } from "./anchors";
-import { resolveDomains } from "./redirect";
+import { registrableDomain, resolveDomains } from "./redirect";
 
 export class InsufficientDataError extends Error {
   constructor(message = "No hemos podido reunir datos suficientes sobre esta web.") {
@@ -127,7 +127,7 @@ export async function collect(
             const docs = pg.status === "ok" ? pg.value : null;
             let legal = extractLegal(ownSite, docs, htmlByUrl);
             const aviso = legal.avisoLegal;
-            if (aviso && !htmlByUrl.has(aviso) && !legal.cif) {
+            if (aviso && !htmlByUrl.has(aviso) && !legal.cif && registrableDomain(new URL(aviso).hostname) === registrableDomain(new URL(ownSite.finalUrl).hostname)) {
               try {
                 await recordingGetPage(aviso);
                 legal = extractLegal(ownSite, docs, htmlByUrl);
@@ -199,8 +199,8 @@ export async function collect(
     fuentes.pagespeed = "no_aplica";
     fuentes.tecnologias = "no_aplica";
   }
-  // Cuota agotada: se conserva el resultado (con su error) pero la fuente cuenta como caída.
-  if (raw.pagespeed?.error) fuentes.pagespeed = "fallo";
+  // Sin ninguna puntuación (p. ej. cuota agotada): se conserva el error pero la fuente cuenta como caída.
+  if (raw.pagespeed?.error && raw.pagespeed.mobile === null && raw.pagespeed.desktop === null) fuentes.pagespeed = "fallo";
   raw.unavailable = (Object.keys(fuentes) as CollectedSource[]).filter((k) => fuentes[k] === "fallo");
 
   const hasTraffic = validRank(raw.tranco?.rank) !== null || radarRank(raw.radar) !== null;
