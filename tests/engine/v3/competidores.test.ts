@@ -82,3 +82,13 @@ describe("generarCompetidores", () => {
     expect(normalizarTexto("  Facturación\n\tÁÉ  ")).toBe("facturacion ae");
   });
 });
+
+describe("contienePalabra", () => {
+  it("coincide con palabras o frases completas, no dentro de otra palabra", async () => {
+    const { contienePalabra } = await import("../../../lib/engine/v3/sections/competidores");
+    expect(contienePalabra("software de facturacion online", "facturacion")).toBe(true);
+    expect(contienePalabra("software de facturacion online", "facturacion online")).toBe(true);
+    expect(contienePalabra("autofacturacion", "facturacion")).toBe(false);
+    expect(contienePalabra("precio (c++) aqui", "c++")).toBe(true);
+  });
+});

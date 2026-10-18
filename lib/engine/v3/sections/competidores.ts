@@ -33,6 +33,12 @@ const MAX_COMPETIDORES = 5;
 const MIN_TERMINOS = 2;
 const TIMEOUT_MS = 8000;
 const MAX_TEXTO = 20_000;
+const MIN_LARGO_TERMINO = 4; // términos muy cortos ("app", "web") coinciden con cualquier cosa
+
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** El término aparece como palabra (o frase) completa, no dentro de otra palabra. */
+export const contienePalabra = (texto: string, termino: string) =>
+  new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRegExp(termino)}($|[^\\p{L}\\p{N}])`, "u").test(texto);
 
 const CandidatoIA = z.object({
   nombre: z.string().min(1),
@@ -182,8 +188,8 @@ export async function generarCompetidores(
 
   const lista: Competidor[] = filtrados.map(({ c, web }, i) => {
     const texto = textos[i];
-    const terminos = [...new Set(c.terminos.map(normalizarTexto).filter(Boolean))];
-    const verificado = texto !== null && terminos.filter((t) => texto.includes(t)).length >= MIN_TERMINOS;
+    const terminos = [...new Set(c.terminos.map(normalizarTexto).filter((t) => t.length >= MIN_LARGO_TERMINO))];
+    const verificado = texto !== null && terminos.filter((t) => contienePalabra(texto, t)).length >= MIN_TERMINOS;
     return { nombre: c.nombre.trim(), web, ofrece: c.ofrece.trim(), diferencias: [], verificado };
   });
   const textosVerificados = textos.filter((t, i): t is string => t !== null && lista[i].verificado);
