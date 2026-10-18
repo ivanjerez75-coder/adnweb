@@ -6,12 +6,13 @@ import type {
   AnalisisResumen,
   EstadoAnalisis,
   Perfil,
+  SeccionesGuardadas,
   UserRepo,
   WorkerRepo,
 } from "./repo";
 
 const COLS_RESUMEN = "id,url,dominio,estado,created_at";
-const COLS_DETALLE = `${COLS_RESUMEN},paso_actual,informe,error`;
+const COLS_DETALLE = `${COLS_RESUMEN},paso_actual,informe,version,secciones,error`;
 
 interface FilaResumen {
   id: string;
@@ -23,6 +24,8 @@ interface FilaResumen {
 interface FilaDetalle extends FilaResumen {
   paso_actual: string | null;
   informe: Report | null;
+  version: number;
+  secciones: SeccionesGuardadas | null;
   error: string | null;
 }
 
@@ -82,6 +85,8 @@ export function createUserRepo(client: SupabaseClient): UserRepo {
         ...aResumen(f),
         pasoActual: f.paso_actual,
         informe: f.informe,
+        version: f.version ?? 2,
+        secciones: f.secciones ?? {},
         error: f.error,
       };
     },
@@ -116,6 +121,24 @@ export function createWorkerRepo(admin: SupabaseClient): WorkerRepo {
   return {
     async paso(id, texto) {
       await actualizar(id, { paso_actual: texto });
+    },
+
+    async guardarDatosBrutos(id, raw: RawData) {
+      await actualizar(id, { datos_brutos: raw });
+    },
+
+    async guardarSeccion(id, clave, contenido, estado) {
+      const { error } = await admin.rpc("guardar_seccion", {
+        p_id: id,
+        p_clave: clave,
+        p_contenido: contenido,
+        p_estado: estado,
+      });
+      lanzarSiError(error);
+    },
+
+    async marcarListo(id) {
+      await actualizar(id, { estado: "listo", version: 3, paso_actual: null });
     },
 
     async completar(id, raw: RawData, informe: Report) {

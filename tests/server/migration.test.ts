@@ -146,3 +146,42 @@ describe("migración 0001_cuentas.sql", () => {
     }
   });
 });
+
+const sql2 = readFileSync(
+  fileURLToPath(new URL("../../supabase/migrations/0002_secciones.sql", import.meta.url)),
+  "utf8",
+)
+  .split("\n")
+  .map((l) => l.replace(/--.*$/, ""))
+  .join("\n")
+  .replace(/\s+/g, " ")
+  .toLowerCase();
+
+describe("migración 0002_secciones.sql", () => {
+  it("es idempotente", () => {
+    expect(sql2).toContain("add column if not exists secciones jsonb not null default '{}'::jsonb");
+    expect(sql2).toContain("add column if not exists version int not null default 2");
+    expect(sql2).toContain("create or replace function public.guardar_seccion(");
+    expect(sql2).not.toMatch(/create function/);
+  });
+
+  it("guardar_seccion es security definer con search_path fijo y fusiona con jsonb_set", () => {
+    const inicio = sql2.indexOf("create or replace function public.guardar_seccion(");
+    const def = sql2.slice(inicio, sql2.indexOf("$$;", sql2.indexOf("$$", inicio) + 2));
+    expect(def).toContain("p_id uuid, p_clave text, p_contenido jsonb, p_estado text");
+    expect(def).toContain("security definer");
+    expect(def).toContain("set search_path = public");
+    expect(def).toContain("jsonb_set(");
+    expect(def).toContain("jsonb_build_object('estado', p_estado, 'contenido', p_contenido)");
+    expect(def).toContain("updated_at = now()");
+    expect(def).toMatch(/estado in \('procesando', ?'listo'\)/);
+  });
+
+  it("guardar_seccion se revoca a public, anon y authenticated y solo se concede a service_role", () => {
+    expect(sql2).toMatch(
+      /revoke execute on function public\.guardar_seccion\([^)]*\) from public, anon, authenticated/,
+    );
+    expect(sql2).toMatch(/grant execute on function public\.guardar_seccion\([^)]*\) to service_role;/);
+    expect(sql2).not.toMatch(/grant execute on function public\.guardar_seccion\([^)]*\) to [^;]*authenticated/);
+  });
+});

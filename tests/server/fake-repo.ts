@@ -3,6 +3,7 @@ import type { RawData } from "@/lib/engine/types";
 import type {
   AnalisisDetalle,
   EstadoAnalisis,
+  SeccionesGuardadas,
   UserRepo,
   WorkerRepo,
 } from "@/lib/server/analyses/repo";
@@ -20,6 +21,9 @@ export interface FakeAnalisis {
   pasoActual: string | null;
   datosBrutos: RawData | null;
   informe: Report | null;
+  /** 2 = informe antiguo (columna informe); 3 = secciones. */
+  version: number;
+  secciones: SeccionesGuardadas;
   error: string | null;
   errorKind: string | null;
   creditoDevuelto: boolean;
@@ -64,6 +68,8 @@ export function createFakeRepos(opts?: {
         pasoActual: null,
         datosBrutos: null,
         informe: null,
+        version: 2,
+        secciones: {},
         error: null,
         errorKind: null,
         creditoDevuelto: false,
@@ -141,6 +147,8 @@ export function createFakeRepos(opts?: {
         createdAt: a.createdAt.toISOString(),
         pasoActual: a.pasoActual,
         informe: a.informe,
+        version: a.version,
+        secciones: a.secciones,
         error: a.error,
       };
       return d;
@@ -168,6 +176,29 @@ export function createFakeRepos(opts?: {
       const a = procesando(id);
       if (!a) return;
       a.pasoActual = texto;
+      a.updatedAt = state.now();
+    },
+
+    async guardarDatosBrutos(id, raw) {
+      const a = procesando(id);
+      if (!a) return;
+      a.datosBrutos = raw;
+      a.updatedAt = state.now();
+    },
+
+    async guardarSeccion(id, clave, contenido, estado) {
+      const a = state.analisis.find((x) => x.id === id && (x.estado === "procesando" || x.estado === "listo"));
+      if (!a) return;
+      a.secciones = { ...a.secciones, [clave]: { estado, contenido } };
+      a.updatedAt = state.now();
+    },
+
+    async marcarListo(id) {
+      const a = procesando(id);
+      if (!a) return;
+      a.estado = "listo";
+      a.version = 3;
+      a.pasoActual = null;
       a.updatedAt = state.now();
     },
 

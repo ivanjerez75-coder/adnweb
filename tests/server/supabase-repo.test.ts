@@ -130,6 +130,8 @@ describe("createUserRepo", () => {
         created_at: "2026-01-01T00:00:00Z",
         paso_actual: "Leyendo",
         informe: null,
+        version: 3,
+        secciones: { adn: { estado: "lista", contenido: { a: 1 } } },
         error: null,
       },
     });
@@ -142,6 +144,8 @@ describe("createUserRepo", () => {
       createdAt: "2026-01-01T00:00:00Z",
       pasoActual: "Leyendo",
       informe: null,
+      version: 3,
+      secciones: { adn: { estado: "lista", contenido: { a: 1 } } },
       error: null,
     });
     expect(s.fromCalls).toEqual(["analyses"]);
@@ -199,6 +203,32 @@ describe("createWorkerRepo", () => {
     expect(upd(s).informe).toBe(informe);
     expect(typeof upd(s).updated_at).toBe("string");
     expect(eqs(s)).toContainEqual(["estado", "procesando"]);
+  });
+
+  it("guardarDatosBrutos: solo datos_brutos, filas procesando", async () => {
+    const s = stub({});
+    await createWorkerRepo(s.client).guardarDatosBrutos("id1", raw);
+    expect(upd(s).datos_brutos).toBe(raw);
+    expect(upd(s).estado).toBeUndefined();
+    expect(eqs(s)).toContainEqual(["estado", "procesando"]);
+  });
+
+  it("marcarListo: listo, version 3, filtra por estado procesando", async () => {
+    const s = stub({});
+    await createWorkerRepo(s.client).marcarListo("id1");
+    expect(upd(s)).toMatchObject({ estado: "listo", version: 3, paso_actual: null });
+    expect(upd(s).informe).toBeUndefined();
+    expect(eqs(s)).toContainEqual(["id", "id1"]);
+    expect(eqs(s)).toContainEqual(["estado", "procesando"]);
+  });
+
+  it("guardarSeccion: llama a la rpc guardar_seccion y relanza errores", async () => {
+    const s = stub({});
+    await createWorkerRepo(s.client).guardarSeccion("id1", "adn", { x: 1 }, "lista");
+    expect(s.rpcCalls[0][0]).toBe("guardar_seccion");
+    expect(s.rpcCalls[0][1][0]).toEqual({ p_id: "id1", p_clave: "adn", p_contenido: { x: 1 }, p_estado: "lista" });
+    const e = stub({}, { error: { message: "boom" } });
+    await expect(createWorkerRepo(e.client).guardarSeccion("id1", "adn", null, "error")).rejects.toThrow("boom");
   });
 
   it("fallar: error, filtra por estado procesando", async () => {

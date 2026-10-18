@@ -89,6 +89,8 @@ export function createHandlers(deps: HandlerDeps) {
           pasoActual: a.pasoActual,
           error: a.error,
           informe: a.informe,
+          version: a.version,
+          secciones: a.secciones,
         });
       }),
   };
