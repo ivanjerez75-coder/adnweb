@@ -1,5 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import type { Fetcher } from "../types";
+import type { z } from "zod";
 import { aiOutputSchema, type AiOutput } from "./schema";
 
 export interface JsonModel {
@@ -59,6 +60,41 @@ export function geminiModel(apiKey: string, model = DEFAULT_GEMINI_MODELS[0]): J
   };
 }
 
+/** Subconjunto del SDK que usa el modelo con búsqueda; inyectable para tests. */
+export interface GeminiSearchClient {
+  models: {
+    generateContent: (args: {
+      model: string;
+      contents: string;
+      config: Record<string, unknown>;
+    }) => Promise<{ text?: string }>;
+  };
+}
+
+/** Gemini con Google Search grounding. Sin responseMimeType (el grounding no siempre admite modo JSON). */
+export function geminiSearchModel(
+  apiKey: string,
+  model = DEFAULT_GEMINI_MODELS[0],
+  client?: GeminiSearchClient,
+): JsonModel {
+  const ai: GeminiSearchClient = client ?? (new GoogleGenAI({ apiKey }) as unknown as GeminiSearchClient);
+  return {
+    name: `gemini-search:${model}`,
+    generate: async (prompt, opts) => {
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          tools: [{ googleSearch: {} }],
+          temperature: 0.3,
+          abortSignal: AbortSignal.timeout(callTimeout(opts)),
+        },
+      });
+      return response.text ?? "";
+    },
+  };
+}
+
 export function groqModel(apiKey: string, model = "llama-3.3-70b-versatile", fetcher: Fetcher = fetch): JsonModel {
   return {
     name: `groq:${model}`,
@@ -98,14 +134,15 @@ function failureKind(lastReasons: FailureReason[]): AiFailureKind {
   return "unavailable";
 }
 
-export async function generateAiOutput(
+export async function generateWithSchema<T>(
   prompt: string,
+  schema: z.ZodType<T, z.ZodTypeDef, unknown>,
   models: JsonModel[],
   attemptsPerModel = 3,
   sleep: (ms: number) => Promise<void> = defaultSleep,
   budgetMs = AI_BUDGET_MS,
   now: () => number = () => Date.now(),
-): Promise<AiOutput> {
+): Promise<T> {
   const errors: string[] = [];
   const lastReasons: FailureReason[] = [];
   const started = now();
@@ -150,7 +187,7 @@ export async function generateAiOutput(
       }
       lastReason = "invalid";
       try {
-        const parsed = aiOutputSchema.safeParse(JSON.parse(stripFences(text)));
+        const parsed = schema.safeParse(JSON.parse(stripFences(text)));
         if (parsed.success) return parsed.data;
         errors.push(`${model.name}: JSON con forma incorrecta`);
       } catch (error) {
@@ -172,4 +209,15 @@ export async function generateAiOutput(
     kind === "unconfigured" ? "No hay ningún proveedor de IA configurado." : errors.join(" | "),
     kind,
   );
+}
+
+export function generateAiOutput(
+  prompt: string,
+  models: JsonModel[],
+  attemptsPerModel = 3,
+  sleep: (ms: number) => Promise<void> = defaultSleep,
+  budgetMs = AI_BUDGET_MS,
+  now: () => number = () => Date.now(),
+): Promise<AiOutput> {
+  return generateWithSchema(prompt, aiOutputSchema, models, attemptsPerModel, sleep, budgetMs, now);
 }
