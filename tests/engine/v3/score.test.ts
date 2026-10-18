@@ -68,6 +68,7 @@ describe("calcularScore", () => {
 
   it("confianza y madurez: suma, resta y mínimo de 2 inputs", () => {
     const raw = makeRaw({
+      fuentes: { ...makeRaw().fuentes, wikidata: "ok" },
       dns: { emailProvider: "Google Workspace", tools: [] },
       wikidata: { id: "Q1", description: null, inception: 2000, founders: [], headquarters: null, employees: null, employeesYear: null, revenue: null },
     });
@@ -75,6 +76,14 @@ describe("calcularScore", () => {
     expect(val(score(raw, { signals: [sig("dominio_reciente")] }), "confianza")).toBe(50); // testimonios + wikidata + email - reciente
     const pocos = makeRaw({ site: null, rdap: null, wikidata: null, dns: null, fuentes: { ...makeRaw().fuentes, wikidata: "fallo" } });
     expect(val(score(pocos), "confianza")).toBeNull();
+    const soloWikidata = makeRaw({
+      site: null,
+      rdap: null,
+      dns: null,
+      fuentes: { ...makeRaw().fuentes, wikidata: "ok" },
+      wikidata: { id: "Q1", description: null, inception: 2000, founders: [], headquarters: null, employees: null, employeesYear: null, revenue: null },
+    });
+    expect(val(score(soloWikidata, { signals: [sig("empresa_consolidada")] }), "confianza")).toBeNull();
   });
 
   it("presencia digital: redes, blog, app y actividad reciente", () => {
@@ -97,6 +106,13 @@ describe("calcularScore", () => {
     expect(val(score(makeRaw(), { adn, comp: ["solo facturas aqui"] }), "novedad")).toBeNull();
     expect(val(score(makeRaw(), { adn, comp: ["vendemos facturas", "tambien facturas y nominas"] }), "novedad")).toBe(60);
     const muchos = mkAdn([lineaAdn({ queOfrece: Array.from({ length: 8 }, (_, i) => `cosa${i} rara`) })]);
+    const sinNuevos = score(makeRaw(), { adn: mkAdn([lineaAdn({ queOfrece: ["facturas"] })]), comp: ["facturas", "mas facturas"] });
+    expect(sinNuevos.criterios.find((c) => c.clave === "novedad")!.motivos.some((m) => m.includes("+0"))).toBe(false);
+    const futura = makeRaw({
+      site: makeSite({ socialLinks: {}, hasBlog: false, hasAppLinks: false }),
+      sitemap: { urlCount: 1, sections: [], languages: [], lastModified: "2027-01-01", recentBlogPosts: 0, complete: true, candidatas: [] },
+    });
+    expect(val(score(futura), "presencia")).toBe(0);
     expect(val(score(makeRaw(), { adn: muchos, comp: ["a", "b"] }), "novedad")).toBe(100);
   });
 

@@ -10,7 +10,7 @@
 | Visibilidad | Ranking (Tranco, o Radar si no hay): top 10k → 85, 100k → 65, 1M → 45, fuera → 25; +10 `blog_activo`; −10 `pagespeed_movil_bajo`; límite 0-100 | no hay datos de ranking (ni Tranco ni Radar) |
 | Monetización | 30 base; +30 precios detectados o `paginaPrecios = si`; +20 alguna línea con `comoSeContrata` no vacío y evidencia de página; +20 tecnología de categoría `pagos` | no hay web propia |
 | Confianza y madurez | +25 `empresa_consolidada`; +25 testimonios o casos; +25 datos en Wikidata; +25 correo corporativo ≠ Ninguno; −25 `dominio_reciente` | menos de 2 de estos 5 inputs tienen dato |
-| Presencia digital | Redes ≥ 3 → +30, 1-2 → +15; blog `si` → +20; app `si` → +20; lastmod del sitemap ≤ 90 días → +30 | no hay web propia |
+| Presencia digital | Redes ≥ 3 → +30, 1-2 → +15; blog `si` → +20; app `si` → +20; lastmod del sitemap entre 0 y 90 días antes de la recogida (fechas futuras no cuentan) → +30 | no hay web propia |
 | Novedad | 50 + 10 × (items de `queOfrece` cuyo texto no aparece en ningún competidor verificado), máx. 100 | < 2 competidores verificados, o sin items |
 | Global | Media redondeada de los criterios no nulos | menos de 3 criterios con valor |
 
@@ -22,7 +22,7 @@
   - Testimonios: `raw.site.hasTestimonials` o `revision.lineas[].checks.muestraCasos === "si"`.
   - Wikidata: `raw.wikidata`; correo: `raw.dns.emailProvider`.
   - Señales por id: `empresa_consolidada`, `dominio_reciente`, `blog_activo`, `pagespeed_movil_bajo`.
-- **Disponibilidad en Confianza:** un input "tiene dato" si su fuente se recogió (p. ej. Wikidata no `fallo`, DNS presente, RDAP presente, web presente o checks de casos aplicables). Con dato y sin positivo suma 0.
+- **Disponibilidad en Confianza:** un input "tiene dato" si su fuente se recogió (p. ej. Wikidata solo con estado `ok`, DNS presente, RDAP presente (único origen de `empresa_consolidada` y `dominio_reciente`), web presente o checks de casos aplicables). Con dato y sin positivo suma 0.
 - **Novedad:** los items se normalizan con `normalizarTexto` y se buscan como palabra o frase completa (`contienePalabra`) en los textos de portada de los competidores verificados.
 - **Cierre (`generarCierre`):** la IA devuelve una frase por criterio (`motivos`, solo para claves conocidas; explica, no cambia números) y acciones. Cada acción necesita ≥ 2 evidencias válidas, `impacto` y `esfuerzo` en alto/medio/bajo (si no, se descarta solo esa acción). Se ordenan por impacto descendente y esfuerzo ascendente y se recortan a 3. Si sobreviven menos de 3, se devuelven las que haya: sin relleno.
 - **Qué aprender (`generarAprender`):** 2-4 items, cada uno con ≥ 1 evidencia. Admite opcionalmente `competidores` (solo los verificados entran en el prompt). Si sobreviven menos de 2 se devuelven los que haya; si no sobrevive ninguno lanza `SeccionVaciaError`.

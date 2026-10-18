@@ -111,7 +111,7 @@ function confianza(raw: RawData, ids: Set<string>, revision: Revision | null, re
   const motivos: string[] = [];
   const evId: (string | false)[] = [];
 
-  if (raw.rdap || raw.wikidata) {
+  if (raw.rdap) {
     inputs++;
     if (ids.has("empresa_consolidada")) {
       v += 25;
@@ -128,7 +128,7 @@ function confianza(raw: RawData, ids: Set<string>, revision: Revision | null, re
       motivos.push("+25: testimonios o casos de éxito");
     }
   }
-  if (raw.fuentes.wikidata !== "fallo") {
+  if (raw.fuentes.wikidata === "ok") {
     inputs++;
     if (raw.wikidata) {
       v += 25;
@@ -178,7 +178,7 @@ function presencia(raw: RawData, facts: Facts, reg: Map<string, Evidence>): Parc
   }
   const lm = raw.sitemap?.lastModified ? Date.parse(raw.sitemap.lastModified) : NaN;
   const ref = Date.parse(raw.collectedAt);
-  if (Number.isFinite(lm) && Number.isFinite(ref) && ref - lm <= 90 * DAY_MS) {
+  if (Number.isFinite(lm) && Number.isFinite(ref) && ref - lm >= 0 && ref - lm <= 90 * DAY_MS) {
     v += 30;
     motivos.push("+30: actividad reciente (últimos 90 días)");
   }
@@ -193,7 +193,7 @@ function novedad(adn: Adn, textosCompetidores: string[]): Parcial {
   const nuevos = items.filter((i) => !textos.some((t) => contienePalabra(t, i)));
   return {
     valor: clamp(50 + 10 * nuevos.length),
-    motivos: [`50: base`, `+${10 * nuevos.length}: ${nuevos.length} oferta(s) que no aparecen en ${textos.length} competidores verificados`],
+    motivos: nuevos.length > 0 ? ["50: base", `+${10 * nuevos.length}: ${nuevos.length} oferta(s) que no aparecen en ${textos.length} competidores verificados`] : ["50: base"],
     evidencias: [],
   };
 }
