@@ -41,7 +41,7 @@ export type StepReporter = (step: string) => void | Promise<void>;
 
 const DEFAULT_DEADLINE_MS = 40_000;
 /** Tope de la lectura en profundidad: lo que no llegue se descarta, el resto sigue dentro del plazo total. */
-const PAGES_TIMEOUT_MS = 20_000;
+const PAGES_TIMEOUT_MS = 25_000;
 
 const defaultSleep = (ms: number) =>
   new Promise<void>((resolve) => {

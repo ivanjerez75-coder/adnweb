@@ -7,7 +7,7 @@ import { isPriorityPath } from "./sections";
 const MAX_CITA = 200;
 const MIN_CITA = 30;
 const MAX_PAGES = 15;
-const NOISE = "script, style, noscript, template, svg, nav, footer, header, aside, form, iframe, [hidden], [aria-hidden='true']";
+const NOISE = "script, style, noscript, template, svg, nav, footer, form, iframe, [hidden], [aria-hidden='true']";
 const BLOCKS = "p, li, h1, h2, h3, h4, blockquote, figcaption, dd";
 
 const clean = (s: string) => s.replace(/\s+/g, " ").trim();
@@ -91,11 +91,26 @@ export async function fetchPages(
   get: PageGetter,
   opts: { timeoutMs: number },
 ): Promise<PageDoc[]> {
+  const ownRoot = (() => {
+    try {
+      return registrableDomain(new URL(urls[0]).hostname);
+    } catch {
+      return null;
+    }
+  })();
+  const sameSite = (u: string) => {
+    try {
+      return ownRoot === null || registrableDomain(new URL(u).hostname) === ownRoot;
+    } catch {
+      return false;
+    }
+  };
   const done: (Omit<PageDoc, "id" | "extractos"> & { passages: string[] } | null)[] = urls.map(() => null);
   const reads = urls.map(async (url, i) => {
     try {
       const page = await get(url);
       if (page.status >= 400) return;
+      if (!sameSite(page.url || url)) return; // redirección a otro dominio: no es la web analizada
       const $ = cheerio.load(page.text);
       done[i] = { url: page.url || url, titulo: clean($("title").first().text()), passages: extractPassages(page.text) };
     } catch {

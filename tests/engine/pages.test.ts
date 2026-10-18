@@ -39,6 +39,12 @@ describe("extractPassages", () => {
     expect(out[0]).toBe("Primera frase con contenido suficiente para ser citada.");
   });
 
+  it("conserva el texto de un hero dentro de header y descarta los enlaces de nav", () => {
+    const out = extractPassages(`<body><header><nav><a href="/x">Enlace de navegación largo del menú</a><p>Menú de navegación dentro del nav largo.</p></nav>
+      <h1>Facturación sencilla para autónomos y pymes</h1><p>Emite y cobra tus facturas en menos de un minuto.</p></header></body>`);
+    expect(out).toEqual(["Facturación sencilla para autónomos y pymes", "Emite y cobra tus facturas en menos de un minuto."]);
+  });
+
   it("usa body si no hay main y limita el resultado a 25", () => {
     const body = Array.from({ length: 40 }, (_, i) => `<p>Párrafo número ${i} con texto suficiente para pasar el filtro.</p>`).join("");
     expect(extractPassages(`<body>${body}</body>`)).toHaveLength(25);
@@ -101,6 +107,13 @@ describe("fetchPages", () => {
     expect(docs[1].url).toBe("https://a.example/x");
     expect(docs[1].titulo).toBe("T https://a.example/x");
     expect(docs[1].extractos).toEqual([{ id: "p2-e1", cita: "Texto literal de https://a.example/x suficientemente largo." }]);
+  });
+
+  it("descarta las páginas que acaban en otro dominio tras una redirección", async () => {
+    const get: PageGetter = async (url) =>
+      ok(url.endsWith("/go") ? "https://otra.example/landing" : url, "<body><p>Contenido suficientemente largo para citar.</p></body>");
+    const docs = await fetchPages(["https://a.example/", "https://a.example/go", "https://www.a.example/b"], get, { timeoutMs: 1000 });
+    expect(docs.map((d) => [d.id, d.url])).toEqual([["p1", "https://a.example/"], ["p2", "https://www.a.example/b"]]);
   });
 
   it("deja de esperar en timeoutMs y devuelve lo terminado", async () => {
