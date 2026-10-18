@@ -5,9 +5,9 @@
 - **Tráfico:** se reutiliza la tabla ranking → visitas de la decisión 0003 y su confianza.
 - **Ingresos mensuales**, por orden de prioridad:
   1. Ingresos públicos de Wikidata: rango del ancla (±10 %) dividido entre 12, confianza alta.
-  2. Empleados de Wikidata × ingresos por empleado del sector (×0,5–×1,5) dividido entre 12, confianza media (se reutiliza el ancla ya existente en `anchors.ts`).
-  3. Fórmula propia: visitas mín. × conversión mín. × precio … visitas máx. × conversión máx. × precio, confianza baja. Precio = mediana de los precios detectados, pasados a euros (USD 0,92; GBP 1,17).
-  4. Si falta tráfico, precios o una conversión para ese tipo: no estimable.
+  2. Fórmula propia: visitas mín. × conversión mín. × precio … visitas máx. × conversión máx. × precio, confianza baja. Precio = mediana de los precios detectados, pasados a euros (USD 0,92; GBP 1,17).
+  3. Si falta tráfico, precios o una conversión para ese tipo: no estimable.
+- **Solo dos fuentes (spec §8b.1):** no se usa el ingreso por empleado ni ninguna otra heurística; empleados sin ingresos ni precios da "No estimable".
 - **Valoración:** ingresos anuales (mensuales × 12) × múltiplo del tipo de negocio. Su confianza nunca supera la de los ingresos y, al ser un múltiplo genérico, nunca pasa de "media". Sin ingresos o sin múltiplo para el tipo: no estimable.
 
 | Tipo | Conversión de referencia | Múltiplo de valoración (× ingresos anuales) |

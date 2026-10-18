@@ -1,9 +1,7 @@
 import {
   FX_TO_EUR,
-  employeeRevenueAnchor,
   publicRevenueAnchor,
   type Anchors,
-  type RevenueAnchor,
   type TipoNegocio,
 } from "../anchors";
 import type { Confidence, Range, RawData } from "../types";
@@ -93,16 +91,12 @@ export function estimarIngresosMensuales(
   precios: string[],
 ): Estimacion {
   const unidad = "€/mes";
-  const ancla: RevenueAnchor | null =
-    anchors.ingresosPublicos ??
-    publicRevenueAnchor(raw.wikidata) ??
-    employeeRevenueAnchor(anchors.empleados ?? raw.wikidata?.employees ?? null, tipo);
+  const ancla = anchors.ingresosPublicos ?? publicRevenueAnchor(raw.wikidata);
   if (ancla) {
-    const publico = ancla.confianza === "alta";
     return {
       valor: { min: Math.round(ancla.range.min / 12), max: Math.round(ancla.range.max / 12) },
       unidad,
-      fuente: publico ? "Wikidata (ingresos públicos)" : "Wikidata (empleados × ingresos por empleado del sector)",
+      fuente: "Wikidata (ingresos públicos)",
       metodologia: `${ancla.base}, dividido entre 12 meses.`,
       confianza: ancla.confianza,
     };
@@ -128,7 +122,7 @@ export function estimarIngresosMensuales(
     fuente,
     metodologia:
       `Visitas mensuales (${v.min}–${v.max}) × conversión de referencia del tipo ${tipo} ` +
-      `(${Math.round(conv.min * 100)}–${Math.round(conv.max * 100)} %) × precio medio de ${eur(precio)} (mediana de ${parseados.length} precio(s) detectados).`,
+      `(${Math.round(conv.min * 100)}–${Math.round(conv.max * 100)} %) × precio medio de ${eur(precio)} (mediana de ${parseados.length} precio(s) detectados). Se asume que los precios detectados son mensuales.`,
     confianza: "baja",
   };
 }
@@ -180,6 +174,7 @@ export function metricasSeo(raw: RawData): {
 const ETIQUETAS: [clave: string, etiqueta: string][] = [
   ["fundacion", "Fundación"],
   ["empleados", "Empleados"],
+  ["ingresos", "Ingresos anuales"],
   ["sede", "Sede"],
   ["empleo", "Ofertas de empleo"],
   ["app", "App móvil"],

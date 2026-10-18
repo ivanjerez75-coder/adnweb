@@ -32,6 +32,10 @@ export function buildEvidence(raw: RawData, signals: Signal[]): Map<string, Evid
     const anio = wd.employeesYear != null ? ` (${wd.employeesYear})` : "";
     dato("empleados", `${wd.employees} empleados${anio}`, "wikidata");
   }
+  if (wd?.revenue) {
+    const anio = wd.revenue.year != null ? ` (${wd.revenue.year})` : "";
+    dato("ingresos", `Ingresos anuales de ${Math.round(wd.revenue.amount)} ${wd.revenue.currency}${anio} según Wikidata`, "wikidata");
+  }
   if (wd?.headquarters) dato("sede", `Sede en ${wd.headquarters}`, "wikidata");
 
   if (raw.empleo) dato("empleo", `${raw.empleo.openings} ofertas de empleo abiertas`, "empleo");

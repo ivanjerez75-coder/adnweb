@@ -61,6 +61,7 @@ describe("estimarIngresosMensuales", () => {
     expect(ing.confianza).toBe("baja");
     expect(ing.unidad).toBe("€/mes");
     expect(ing.metodologia).toMatch(/conversión/i);
+    expect(ing.metodologia).toMatch(/se asume que los precios detectados son mensuales/i);
   });
 
   it("con ingresos de Wikidata usa el ancla / 12 con confianza alta", () => {
@@ -73,6 +74,16 @@ describe("estimarIngresosMensuales", () => {
     expect(v.max).toBeCloseTo(1_100_000, -2);
     expect(ing.confianza).toBe("alta");
     expect(ing.fuente).toMatch(/Wikidata/);
+  });
+
+  it("solo empleados en Wikidata (sin ingresos ni precios): no estimable", () => {
+    const raw = makeRaw({
+      tranco: null, radar: null,
+      wikidata: { id: "Q1", description: null, inception: null, founders: [], headquarters: null, employees: 500, employeesYear: 2024, revenue: null },
+    });
+    const ing = estimarIngresosMensuales(raw, computeAnchors(raw, NOW), "saas", []);
+    expect(ing.valor).toBeNull();
+    expect(ing.motivoNoEstimable).toBeTruthy();
   });
 
   it("sin precios válidos no estima aunque haya tráfico", () => {
@@ -144,7 +155,7 @@ describe("metricasSeo", () => {
 describe("datosPublicados", () => {
   it("cada dato apunta a un id dato:* del registro de evidencias", () => {
     const raw = makeRaw({
-      wikidata: { id: "Q1", description: null, inception: 2012, founders: [], headquarters: "Madrid", employees: 80, employeesYear: 2024, revenue: null },
+      wikidata: { id: "Q1", description: null, inception: 2012, founders: [], headquarters: "Madrid", employees: 80, employeesYear: 2024, revenue: { amount: 12_000_000, currency: "EUR", year: 2023 } },
     });
     const datos = datosPublicados(raw);
     const reg = buildEvidence(raw, []);
@@ -154,6 +165,7 @@ describe("datosPublicados", () => {
       expect(reg.has(d.evidencia)).toBe(true);
       expect(d.etiqueta && d.valor && d.fuente).toBeTruthy();
     }
+    expect(datos.find((d) => d.evidencia === "dato:ingresos")?.valor).toMatch(/2023.*Wikidata/);
     expect(datos.find((d) => d.evidencia === "dato:fundacion")?.valor).toMatch(/2012/);
   });
 });
