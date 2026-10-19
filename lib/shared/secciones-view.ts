@@ -17,8 +17,7 @@ export const TIEMPO_MAX_SECCION_MS = 3 * 60 * 1000;
 const ORDEN: [ClaveSeccion, string][] = [
   ["datos", "Datos y métricas"],
   ["anatomia", "Anatomía del negocio"],
-  ["saber", "Qué sabemos y qué no"],
-  ["score", "DNA Score"],
+  ["rendimiento", "Rendimiento y presencia digital"],
   ["revision", "Qué hace bien y problemas"],
   ["competencia", "Competencia y posicionamiento"],
   ["aprender", "Qué aprender"],

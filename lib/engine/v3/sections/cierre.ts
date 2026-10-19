@@ -7,7 +7,7 @@ import { limpiarAfirmacionesNoRespaldadas as limpiar } from "../filtro";
 import type { DnaScore } from "../score";
 import type { Adn } from "./anatomia";
 import type { Revision } from "./revision";
-import { resumenAdn } from "./saber";
+import { resumenAdn } from "./comun";
 import { escapeAngles } from "../../ai/prompt";
 
 export type Nivel = "alto" | "medio" | "bajo";

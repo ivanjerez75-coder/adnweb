@@ -5,6 +5,7 @@ import { registrableDomain } from "../../redirect";
 import type { FetchedPage, PageGetter } from "../../safe-fetch";
 import type { JsonModel } from "../../ai/providers";
 import { escapeAngles } from "../../ai/prompt";
+import { resumenAnatomia } from "./comun";
 import { extractPassages, extractPricePassages } from "../../sources/pages";
 import { citar, type Evidence } from "../evidence";
 import { preciosPublicados } from "../estimates";
@@ -232,15 +233,6 @@ const CandidatoIA = z.object({
   terminos: z.array(z.string()).catch([]),
 });
 const CompetidoresIA = z.object({ competidores: z.array(CandidatoIA).min(1) });
-
-/** Resumen compacto de la anatomía para los prompts. Texto de la IA derivado de la web: escapado. */
-function resumenAnatomia(a: Anatomia): string {
-  const tipos = a.tipologias.map((t) => t.tipo).join(", ") || "desconocido";
-  const lineas = a.lineas.map((l) => `- ${l.nombre}: ${l.queOfrece.join(", ")}${l.publico ? ` (para ${l.publico})` : ""}`).join("\n");
-  return escapeAngles(
-    `Negocio analizado: ${a.nombre || "(sin nombre)"}\nResumen: ${a.fraseResumen.texto}\nTipología: ${tipos}\nLíneas de negocio:\n${lineas || "- (ninguna)"}`,
-  );
-}
 
 function promptCandidatos(raw: RawData, a: Anatomia, conBusqueda: boolean): string {
   return `Eres un analista de mercado. Encuentra de 3 a 5 competidores reales del negocio analizado${

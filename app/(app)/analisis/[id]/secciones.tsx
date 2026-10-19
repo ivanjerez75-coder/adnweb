@@ -8,6 +8,7 @@ import type { Metrica } from "@/lib/engine/v3/estimates";
 import type { AdnBloque, AdnCanal, Anatomia, ClaveIdentidad, FuenteMonetizacion, LineaAnatomia, TipologiaAnatomia } from "@/lib/engine/v3/sections/anatomia";
 import type { AfirmacionCompetidor, Competencia, CompetidorV4, FilaMatriz, GanaPierde, PrecioCompetidor } from "@/lib/engine/v3/sections/competencia";
 import type { Revision } from "@/lib/engine/v3/sections/revision";
+import type { Rendimiento } from "@/lib/engine/v3/sections/rendimiento";
 import type { ItemAprender } from "@/lib/engine/v3/sections/aprender";
 import type { Cierre } from "@/lib/engine/v3/sections/cierre";
 import { decidirSondeo, siguienteSondeo } from "@/lib/shared/polling";
@@ -347,13 +348,25 @@ function AnatomiaVista({ c }: { c: unknown }) {
   );
 }
 
-function Saber({ c }: { c: unknown }) {
+/** Vista mínima de rendimiento (la Tarea 7 la rehace): interpretaciones, score y qué no se puede saber. */
+function RendimientoVista({ c }: { c: unknown }) {
+  const r = c as Rendimiento;
   return (
-    <ul>
-      {arr<string>(c).map((t, i) => (
-        <li key={i}>{t}</li>
+    <>
+      {arr<Rendimiento["dimensiones"][number]>(r.dimensiones).map((d) => (
+        <div key={d.clave}>
+          <h3>{d.nombre}</h3>
+          <p>{d.interpretacion}</p>
+        </div>
       ))}
-    </ul>
+      {r.score ? <ScoreVista c={r.score} /> : null}
+      <h3>Qué no se puede saber</h3>
+      <ul>
+        {arr<string>(r.noSePuedeSaber).map((t, i) => (
+          <li key={i}>{t}</li>
+        ))}
+      </ul>
+    </>
   );
 }
 
@@ -653,10 +666,8 @@ function Cuerpo({ s }: { s: SeccionVista }) {
       return <Datos c={s.contenido} />;
     case "anatomia":
       return <AnatomiaVista c={s.contenido} />;
-    case "saber":
-      return <Saber c={s.contenido} />;
-    case "score":
-      return <ScoreVista c={s.contenido} />;
+    case "rendimiento":
+      return <RendimientoVista c={s.contenido} />;
     case "revision":
       return <RevisionVista c={s.contenido} />;
     case "competencia":

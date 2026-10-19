@@ -67,7 +67,7 @@ describe("Secciones (render): sin duplicados", () => {
   };
 
   it("el aviso del score aparece una vez y se muestra el resumen calculado en código", () => {
-    const html = render({ score: { estado: "lista", contenido: scoreContenido }, cierre: { estado: "lista", contenido: { oportunidades: [], motivos: { propuesta: ["Texto de la IA"] } } } });
+    const html = render({ rendimiento: { estado: "lista", contenido: { dimensiones: [], score: scoreContenido, noSePuedeSaber: [] } }, cierre: { estado: "lista", contenido: { oportunidades: [], motivos: { propuesta: ["Texto de la IA"] } } } });
     expect(veces(html, "Resume indicadores públicos")).toBe(1);
     expect(html).toContain("Puntos fuertes: Se explica qué es el negocio (25/25).");
     expect(html).not.toContain("Texto de la IA");

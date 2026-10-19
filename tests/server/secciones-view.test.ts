@@ -7,12 +7,11 @@ const en = (ms: number) => new Date(Date.parse(t0) + ms);
 describe("ordenSecciones", () => {
   it("devuelve el orden y los títulos fijos", () => {
     const r = ordenSecciones({}, t0, en(0));
-    expect(r.map((s) => s.clave)).toEqual(["datos", "anatomia", "saber", "score", "revision", "competencia", "aprender", "cierre"]);
+    expect(r.map((s) => s.clave)).toEqual(["datos", "anatomia", "rendimiento", "revision", "competencia", "aprender", "cierre"]);
     expect(r.map((s) => s.titulo)).toEqual([
       "Datos y métricas",
       "Anatomía del negocio",
-      "Qué sabemos y qué no",
-      "DNA Score",
+      "Rendimiento y presencia digital",
       "Qué hace bien y problemas",
       "Competencia y posicionamiento",
       "Qué aprender",
@@ -25,22 +24,22 @@ describe("ordenSecciones", () => {
   });
 
   it("conserva estado y contenido de las guardadas", () => {
-    const r = ordenSecciones({ saber: { estado: "lista", contenido: ["a"] } }, t0, en(0));
-    expect(r.find((s) => s.clave === "saber")).toMatchObject({ estado: "lista", contenido: ["a"] });
+    const r = ordenSecciones({ rendimiento: { estado: "lista", contenido: ["a"] } }, t0, en(0));
+    expect(r.find((s) => s.clave === "rendimiento")).toMatchObject({ estado: "lista", contenido: ["a"] });
   });
 
   it("pendiente pasados 3 min desde createdAt pasa a error", () => {
-    const secs = { anatomia: { estado: "pendiente" as const, contenido: null }, saber: { estado: "lista" as const, contenido: [] } };
+    const secs = { anatomia: { estado: "pendiente" as const, contenido: null }, rendimiento: { estado: "lista" as const, contenido: [] } };
     const antes = ordenSecciones(secs, t0, en(TIEMPO_MAX_SECCION_MS - 1));
     expect(antes.find((s) => s.clave === "anatomia")!.estado).toBe("pendiente");
     const despues = ordenSecciones(secs, t0, en(TIEMPO_MAX_SECCION_MS + 1));
     expect(despues.find((s) => s.clave === "anatomia")!.estado).toBe("error");
-    expect(despues.find((s) => s.clave === "saber")!.estado).toBe("lista");
+    expect(despues.find((s) => s.clave === "rendimiento")!.estado).toBe("lista");
   });
 
   it("ignora claves desconocidas y estados inválidos", () => {
     const r = ordenSecciones({ raro: { estado: "lista", contenido: 1 }, anatomia: { estado: "x" as never, contenido: 1 } }, t0, en(0));
-    expect(r).toHaveLength(8);
+    expect(r).toHaveLength(7);
     expect(r.find((s) => s.clave === "anatomia")!.estado).toBe("pendiente");
   });
 

@@ -19,7 +19,7 @@ export const rawV3 = makeRaw({
   ],
 });
 
-type Fail = Partial<Record<"anatomia" | "saber" | "competidores" | "revision" | "aprender" | "cierre", boolean>>;
+type Fail = Partial<Record<"anatomia" | "rendimiento" | "competidores" | "revision" | "aprender" | "cierre", boolean>>;
 
 const cands = [{ nombre: "Alfa", web: "https://alfa.com", ofrece: "Facturas", terminos: ["facturacion", "presupuestos"] }];
 
@@ -30,8 +30,8 @@ export function fakeV3Model(fail: Fail = {}): JsonModel {
     generate: async (p) => {
       const sec = p.includes("anatomía del negocio")
         ? "anatomia"
-        : p.includes("qué NO se puede saber")
-          ? "saber"
+        : p.includes("Pule las interpretaciones")
+          ? "rendimiento"
           : p.includes("Encuentra de 3 a 5")
             ? "competidores"
             : p.includes("Compara el negocio")
@@ -52,8 +52,8 @@ export function fakeV3Model(fail: Fail = {}): JsonModel {
             tipologias: [{ tipo: "saas", certeza: "alta", explicacion: "Online", evidencias: ev }],
             lineas: [{ nombre: "Facturas", queOfrece: ["x"], publico: "pymes", comoSeContrata: "web", evidencias: ev }],
           });
-        case "saber":
-          return JSON.stringify({ items: ["Márgenes"] });
+        case "rendimiento":
+          return JSON.stringify({ interpretaciones: {}, noSePuedeSaber: ["Márgenes"] });
         case "competidores":
           return JSON.stringify({ competidores: cands });
         case "dif":

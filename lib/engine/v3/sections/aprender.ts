@@ -13,7 +13,7 @@ export interface CompetidorResumen {
   verificado: boolean;
 }
 import type { Revision } from "./revision";
-import { resumenAdn } from "./saber";
+import { resumenAdn } from "./comun";
 // Lo que viene de la IA (bien, competidores) se escapa: inyección de segundo orden.
 import { escapeAngles } from "../../ai/prompt";
 

@@ -11,11 +11,12 @@ import { adnDesdeAnatomia, generarAnatomia } from "./sections/anatomia";
 import { generarAprender } from "./sections/aprender";
 import { generarCierre } from "./sections/cierre";
 import { generarCompetencia } from "./sections/competencia";
-import { generarRevision, type Revision } from "./sections/revision";
-import { generarNoSabemos, quitarIdsEvidencia } from "./sections/saber";
+import { generarRevision } from "./sections/revision";
+import { generarRendimiento } from "./sections/rendimiento";
+import { quitarIdsEvidencia } from "./sections/comun";
 
 /** Secciones escritas por la IA: sus textos pueden traer ids de evidencia sueltos ("[p8-e7]"). */
-const SECCIONES_IA: readonly SeccionClave[] = ["anatomia", "saber", "competencia", "revision", "aprender", "cierre"];
+const SECCIONES_IA: readonly SeccionClave[] = ["anatomia", "rendimiento", "competencia", "revision", "aprender", "cierre"];
 
 const esEvidencia = (v: object): boolean => "id" in v && "tipo" in v && "texto" in v && "fuente" in v;
 
@@ -30,7 +31,8 @@ export function limpiarTextos(v: unknown): unknown {
   return v;
 }
 
-export type SeccionClave = "datos" | "anatomia" | "saber" | "competencia" | "revision" | "aprender" | "score" | "cierre";
+/** El DNA Score va dentro de rendimiento. */
+export type SeccionClave = "datos" | "anatomia" | "rendimiento" | "competencia" | "revision" | "aprender" | "cierre";
 export type EstadoSeccion = "pendiente" | "lista" | "error";
 
 export interface ReportV3 {
@@ -68,11 +70,10 @@ export async function buildReportV3(raw: RawData, deps: ReportV3Deps, onSection:
   const estados: ReportV3["estados"] = {
     datos: "pendiente",
     anatomia: "pendiente",
-    saber: "pendiente",
+    rendimiento: "pendiente",
     competencia: "pendiente",
     revision: "pendiente",
     aprender: "pendiente",
-    score: "pendiente",
     cierre: "pendiente",
   };
 
@@ -124,50 +125,42 @@ export async function buildReportV3(raw: RawData, deps: ReportV3Deps, onSection:
   // Fase 3: en paralelo (el limitador reparte los huecos de IA).
   // aprender no espera a competencia ni a revision (recibe [] y null): así no queda en la cola
   // detrás de la sección más lenta y el tiempo total es el mínimo. Pierde algo de contexto.
-  let revision: Revision | null = null;
-
-  const tarea = async <T>(clave: SeccionClave, fn: () => Promise<T>, ok: (v: T) => void = () => {}) => {
+  // rendimiento lanza su llamada de IA en seguida y espera al score (código) para cerrar.
+  /** Ejecuta una sección aislada: si falla queda en error y devuelve null. */
+  const tarea = async <T>(clave: SeccionClave, fn: () => Promise<T>, emitido: (v: T) => unknown = (v) => v): Promise<T | null> => {
     let valor: T;
     try {
       valor = await fn();
     } catch {
       // SeccionVaciaError y cualquier otro fallo: la sección queda en error.
       await emitir(clave, null, "error");
-      return;
+      return null;
     }
-    ok(valor);
-    await emitir(clave, clave === "competencia" ? (valor as { competencia: unknown }).competencia : valor, "lista");
+    await emitir(clave, emitido(valor), "lista");
+    return valor;
   };
 
-  await Promise.all([
-    tarea("saber", () => generarNoSabemos(raw, adn, sectionDeps)),
+  const pRevision = tarea("revision", () => generarRevision(raw, adn, reg, sectionDeps));
+  // Fase 4: score (código puro), en cuanto hay revisión (o su fallo).
+  const pScore: Promise<DnaScore> = pRevision.then((revision) => calcularScore(raw, facts, signals, tipologias, adn, revision, metricas, reg));
+  pScore.catch(() => {}); // el fallo lo recoge rendimiento (y cierre)
+
+  const [, revision] = await Promise.all([
     // regCompetidores (extractos c<n>-e<k>) lo usarán diagnóstico y oportunidades (Tareas 4-5).
-    tarea("competencia", () =>
-      generarCompetencia(raw, anatomia, reg, { searchModels, models, getPage: deps.getPage, runOpts: deps.runOpts, now: deps.now }),
+    tarea(
+      "competencia",
+      () => generarCompetencia(raw, anatomia, reg, { searchModels, models, getPage: deps.getPage, runOpts: deps.runOpts, now: deps.now }),
+      (v) => v.competencia,
     ),
-    tarea("revision", () => generarRevision(raw, adn, reg, sectionDeps), (r) => {
-      revision = r;
-    }),
+    pRevision,
+    tarea("rendimiento", () => generarRendimiento(raw, metricas, anatomia, pScore, sectionDeps)),
     tarea("aprender", () => generarAprender(raw, adn, null, reg, sectionDeps, [])),
   ]);
-
-  // Fase 4: score (código puro).
-  let score: DnaScore | null = null;
-  try {
-    score = calcularScore(raw, facts, signals, tipologias, adn, revision, metricas, reg);
-  } catch {
-    score = null;
-  }
-  if (score) await emitir("score", score, "lista");
-  else await emitir("score", null, "error");
+  const score: DnaScore | null = await pScore.catch(() => null);
 
   // Fase 5: cierre (necesita el score).
-  if (score) {
-    const s = score;
-    await tarea("cierre", () => generarCierre(raw, adn, revision, s, reg, sectionDeps));
-  } else {
-    await emitir("cierre", null, "error");
-  }
+  if (score) await tarea("cierre", () => generarCierre(raw, adn, revision, score, reg, sectionDeps));
+  else await emitir("cierre", null, "error");
 
   return { version: 3, dominio: raw.domain, generadoEn, secciones, estados };
 }
