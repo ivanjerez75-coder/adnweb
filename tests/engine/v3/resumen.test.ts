@@ -3,7 +3,9 @@ import { construirResumen, type CoberturaInforme } from "../../../lib/engine/v3/
 import type { Anatomia } from "../../../lib/engine/v3/sections/anatomia";
 import type { Diagnostico } from "../../../lib/engine/v3/sections/diagnostico";
 import type { Oportunidad } from "../../../lib/engine/v3/sections/oportunidades";
-import type { Metrica } from "../../../lib/engine/v3/estimates";
+import { construirMetricas, preciosPublicados, type Metrica } from "../../../lib/engine/v3/estimates";
+import { makeRaw } from "../raw-fixture";
+import { anatomiaBase } from "./fixtures-v4";
 
 const anatomia = {
   nombre: "Facturo",
@@ -72,5 +74,13 @@ describe("construirResumen", () => {
     expect(r).toMatchObject({ nombre: "Facturo", dominio: meta.dominio, fecha: meta.fecha, categoria: ["saas"], frase: anatomia.fraseResumen, cobertura });
     expect(r.modelo.estado).toBe("probable");
     expect(r.oportunidad?.id).toBe("o2");
+  });
+
+  it("datosClave: los de la tipología con el contexto de datos; sin contexto, vacío", () => {
+    const raw = makeRaw();
+    const metricas = construirMetricas(raw, new Date("2026-10-19"));
+    const r = construirResumen(anatomiaBase(["saas"]), null, null, metricas, cobertura, meta, { raw, precios: preciosPublicados(raw) });
+    expect(r.datosClave.map((d) => d.clave)).toEqual(["planes_publicados", "prueba_gratuita", "pagespeed_movil"]);
+    expect(construirResumen(anatomia, null, null, [], cobertura, meta).datosClave).toEqual([]);
   });
 });

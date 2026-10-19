@@ -104,8 +104,9 @@ export async function buildReportV4(raw: RawData, deps: ReportV4Deps, onSection:
 
   // Fase 1: datos desde código (métricas etiquetadas, precios publicados y escenario hipotético).
   let metricas: Metrica[] = [];
+  let precios: ReturnType<typeof preciosPublicados> = [];
   try {
-    const precios = preciosPublicados(raw);
+    precios = preciosPublicados(raw);
     metricas = construirMetricas(raw, now);
     await emitir("datos", { metricas, precios, escenario: escenarioIngresos(precios) }, "lista");
   } catch {
@@ -181,7 +182,11 @@ export async function buildReportV4(raw: RawData, deps: ReportV4Deps, onSection:
   // Fase 6: resumen y cobertura (código). La cobertura se evalúa sin el resumen, que la incluye.
   const cobertura = evaluarCobertura({ raw, secciones, estados });
   await tarea("resumen", async () =>
-    construirResumen(anatomia, diagnostico, oportunidades, metricas, cobertura, { dominio: raw.domain, fecha: generadoEn }),
+    construirResumen(anatomia, diagnostico, oportunidades, metricas, cobertura, { dominio: raw.domain, fecha: generadoEn }, {
+      raw,
+      precios,
+      competencia: competencia?.competencia ?? null,
+    }),
   );
   await emitir("cobertura", cobertura, "lista");
 

@@ -1,6 +1,9 @@
+import type { RawData } from "../../types";
 import type { Tipologia } from "../clases";
+import { seleccionarDatosClave, type DatoClave } from "../datos-clave";
+import type { Competencia } from "./competencia";
 import type { ComponenteCobertura, EstadoComponente } from "../cobertura";
-import type { Metrica } from "../estimates";
+import type { Metrica, PrecioPublicado } from "../estimates";
 import type { Evidence } from "../evidence";
 import type { Anatomia, AdnBloque, ModeloEstado, TipologiaAnatomia } from "./anatomia";
 import type { Debilidad, Diagnostico, Fortaleza } from "./diagnostico";
@@ -27,6 +30,8 @@ export interface Resumen {
   modelo: { tipologias: TipologiaAnatomia[]; estado: ModeloEstado };
   /** Solo métricas disponibles, como mucho 4, en el orden de PRIORIDAD_INDICADORES. */
   indicadores: Metrica[];
+  /** Datos clave según la tipología (bloque 2), solo con fuente verificable. */
+  datosClave: DatoClave[];
   /** Hasta 3: la primera debilidad, la primera fortaleza y el primer riesgo (o fricción). */
   hallazgos: Hallazgo[];
   /** Una fortaleza y una debilidad más, sin repetir las de los hallazgos cuando hay otra. */
@@ -92,6 +97,7 @@ export function construirResumen(
   metricas: Metrica[],
   cobertura: CoberturaInforme,
   meta: { dominio: string; fecha: string },
+  contexto?: { raw: RawData; precios: PrecioPublicado[]; competencia?: Competencia | null },
 ): Resumen {
   const destacado: Resumen["destacado"] = {};
   const fortaleza = diagnostico ? segundaOPrimera(diagnostico.fortalezas) : undefined;
@@ -106,6 +112,16 @@ export function construirResumen(
     frase: anatomia.fraseResumen,
     modelo: { tipologias: anatomia.tipologias, estado: anatomia.modeloEstado },
     indicadores: elegirIndicadores(metricas),
+    datosClave: contexto
+      ? seleccionarDatosClave({
+          tipologias: anatomia.tipologias.map((t) => t.tipo),
+          anatomia,
+          metricas,
+          precios: contexto.precios,
+          raw: contexto.raw,
+          competencia: contexto.competencia ?? null,
+        })
+      : [],
     hallazgos: elegirHallazgos(diagnostico),
     destacado,
     oportunidad: elegirOportunidad(oportunidades),

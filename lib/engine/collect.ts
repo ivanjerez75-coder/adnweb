@@ -10,6 +10,7 @@ import { fetchWayback } from "./sources/wayback";
 import { fetchSitemap } from "./sources/sitemap";
 import { fetchPages, selectPages } from "./sources/pages";
 import { extractLegal } from "./sources/legal";
+import { extractComercio, extractLocal } from "./sources/comercio";
 import { probePaths } from "./sources/paths";
 import { fetchJobs, jobCandidates } from "./sources/jobs";
 import { fetchAppStore } from "./sources/appstore";
@@ -189,9 +190,20 @@ export async function collect(
     hackernews: take(hnR, "hackernews"),
     paginas: take(paginasR, "paginas"),
     legal: take(legalR, "legal"),
+    comercio: null,
+    local: null,
     fuentes,
     unavailable: [],
   };
+  // Tienda y negocio local: solo con lo ya leído de la web propia (sin peticiones nuevas).
+  if (raw.site) {
+    try {
+      raw.comercio = extractComercio(raw.site, raw.paginas, htmlByUrl, raw.sitemap);
+      raw.local = extractLocal(raw.site, raw.paginas, htmlByUrl);
+    } catch {
+      // un HTML raro no tumba la recogida
+    }
+  }
   if (foreign) {
     // Tras una redirección no adoptada, PageSpeed y las tecnologías detectadas son las de la
     // plataforma (Instagram, Linktree…), no las del negocio: no aplican.

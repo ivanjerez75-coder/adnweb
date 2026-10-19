@@ -49,6 +49,7 @@ describe("summarizeSitemap", () => {
       languages: ["es", "fr"],
       lastModified: "2026-10-01",
       recentBlogPosts: 1,
+      productos: 0,
       complete: true,
       candidatas: [
         "https://acme.example/es/precios",

@@ -148,6 +148,23 @@ export interface RdapData {
   registeredAt: string | null;
 }
 
+/** Señales de tienda online, sacadas de lo ya leído. */
+export interface ComercioData {
+  /** URL de la página propia de envíos, o null. */
+  envios: string | null;
+  /** URL de la página propia de devoluciones, o null. */
+  devoluciones: string | null;
+  /** Medios de pago visibles en el texto o en las tecnologías, sin repetir. */
+  pagos: string[];
+  /** Aproximación: URLs del sitemap con ruta de ficha de producto. null sin sitemap. */
+  catalogoAprox: number | null;
+}
+
+export interface LocalData {
+  /** Horario de apertura (JSON-LD o línea "Horario:"), ≤ 120 caracteres. */
+  horario: string | null;
+}
+
 export interface WaybackData {
   firstCapture: string | null;
   lastChange: string | null;
@@ -209,6 +226,10 @@ export interface RawData {
   /** Páginas propias leídas en profundidad. null si no aplica o no se pudo. */
   paginas: PageDoc[] | null;
   legal: LegalData | null;
+  /** Datos de tienda deducidos de lo ya leído (home, páginas, sitemap). Ausente en datos antiguos. */
+  comercio?: ComercioData | null;
+  /** Datos de negocio local (horario). Ausente en datos antiguos. */
+  local?: LocalData | null;
   fuentes: Record<CollectedSource, SourceStatus>;
   /** Fuentes con estado "fallo". */
   unavailable: CollectedSource[];
@@ -249,6 +270,8 @@ export interface SitemapData {
   complete: boolean;
   /** Hasta 100 URLs del dominio propio, con las secciones de negocio primero. */
   candidatas: string[];
+  /** URLs propias con ruta de ficha de producto (/product/, /tienda/…). Ausente en datos antiguos. */
+  productos?: number;
 }
 
 export interface PathProbeData {

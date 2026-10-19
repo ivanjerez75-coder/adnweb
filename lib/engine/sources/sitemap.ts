@@ -11,7 +11,10 @@ const POSSIBLY_TRUNCATED_CHARS = 1_999_000;
 const MAX_CANDIDATES = 100;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const SECTIONS: SitemapSection[] = ["blog", "ayuda", "precios", "empleo", "docs"];
+/** Ruta de ficha de producto: /product/x, /productos/x, /p/x, /tienda/x, /shop/x, /item/x. */
+export const PRODUCT_PATH_RE = /\/(?:products?|productos?|p|tienda|shop|item)\/[^/]+/i;
+
+const SECTIONS: SitemapSection[] =["blog", "ayuda", "precios", "empleo", "docs"];
 
 const LANGUAGE_CODES = new Set([
   "es", "en", "fr", "de", "it", "pt", "nl", "pl", "ru", "ja", "zh", "ko", "sv", "da", "no", "fi",
@@ -135,6 +138,7 @@ export function summarizeSitemap(urls: SitemapUrl[], now: Date, complete = true,
   const languages = new Set<string>();
   let latest = 0;
   let recentBlogPosts = 0;
+  let productos = 0;
 
   for (const u of urls) {
     let path: string;
@@ -147,6 +151,7 @@ export function summarizeSitemap(urls: SitemapUrl[], now: Date, complete = true,
       if ((parsed.protocol === "http:" || parsed.protocol === "https:") && own && !seenUrls.has(href)) {
         seenUrls.add(href);
         (isPriorityPath(path) ? priority : rest).push(href);
+        if (PRODUCT_PATH_RE.test(path)) productos++;
       }
     } catch {
       continue;
@@ -178,6 +183,7 @@ export function summarizeSitemap(urls: SitemapUrl[], now: Date, complete = true,
     recentBlogPosts,
     complete: complete && urls.length > 0,
     candidatas: [...priority, ...rest].slice(0, MAX_CANDIDATES),
+    productos,
   };
 }
 
