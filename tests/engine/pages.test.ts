@@ -75,11 +75,56 @@ describe("selectPages", () => {
     expect(urls).toEqual([
       "https://acme.example/",
       "https://acme.example/precios",
-      "https://acme.example/es/servicios",
       "https://acme.example/quienes-somos",
       "https://www.acme.example/contact",
       "https://acme.example/careers",
+      "https://acme.example/es/servicios",
     ]);
+  });
+
+  describe("duplicados por idioma (caso teb.org)", () => {
+    const nav = [
+      "https://teb.example/serveis-a-persones/",
+      "https://teb.example/es/servicios-a-personas/",
+      "https://teb.example/en/services-for-people/",
+      "https://teb.example/serveis-a-empreses/",
+      "https://teb.example/es/servicio-a-empresas/",
+      "https://teb.example/en/services-for-companies/",
+      "https://teb.example/contacta/",
+      "https://teb.example/es/contacto/",
+    ];
+    const tebHome = (finalUrl: string, extra: string[] = nav) =>
+      makeSite({ finalUrl, navLinks: extra, pages: [{ url: finalUrl, title: "", description: "", headings: [], text: "" }] });
+
+    it("con la home sin prefijo, las URLs con prefijo de idioma van después de todas las demás", () => {
+      const urls = selectPages(tebHome("https://teb.example/"), null);
+      expect(urls).toEqual([
+        "https://teb.example/",
+        "https://teb.example/serveis-a-persones",
+        "https://teb.example/serveis-a-empreses",
+        "https://teb.example/contacta",
+        "https://teb.example/es/servicios-a-personas",
+        "https://teb.example/en/services-for-people",
+        "https://teb.example/es/servicio-a-empresas",
+        "https://teb.example/en/services-for-companies",
+        "https://teb.example/es/contacto",
+      ]);
+    });
+
+    it("con un límite ajustado, no se gastan las lecturas en copias en otro idioma", () => {
+      const urls = selectPages(tebHome("https://teb.example/"), null, 4);
+      expect(urls).toEqual(["https://teb.example/", "https://teb.example/serveis-a-persones", "https://teb.example/serveis-a-empreses", "https://teb.example/contacta"]);
+    });
+
+    it("con la home bajo un prefijo, prefiere ese mismo prefijo", () => {
+      const urls = selectPages(tebHome("https://teb.example/es/"), null, 4);
+      expect(urls).toEqual([
+        "https://teb.example/es",
+        "https://teb.example/es/servicios-a-personas",
+        "https://teb.example/es/servicio-a-empresas",
+        "https://teb.example/es/contacto",
+      ]);
+    });
   });
 
   it("limita a max", () => {

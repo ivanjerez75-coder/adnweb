@@ -2,7 +2,7 @@ import * as cheerio from "cheerio";
 import type { PageGetter } from "../safe-fetch";
 import type { PageDoc, SiteData, SitemapData } from "../types";
 import { registrableDomain } from "../redirect";
-import { isPriorityPath, isSectionPath } from "./sections";
+import { isPriorityPath, isSectionPath, langPrefixOf } from "./sections";
 
 const MAX_CITA = 200;
 const MIN_CITA = 30;
@@ -64,12 +64,20 @@ export function selectPages(home: SiteData, sitemap: SitemapData | null, max = M
   const own = registrableDomain(homeUrl.hostname);
   const out: string[] = [];
   const seen = new Set<string>();
-  const push = (u: string) => {
+  // Idioma de la home: las URLs de otro idioma suelen ser copias de las mismas páginas, así que se
+  // dejan para el final (home sin prefijo: las que tienen prefijo; home con prefijo: las de otro prefijo).
+  const homeLang = langPrefixOf(homeUrl.pathname);
+  const deferred: string[] = [];
+  const push = (u: string, force = false) => {
     if (out.length >= max) return;
     const url = stripUrl(u);
     if (!url || registrableDomain(url.hostname) !== own) return;
     const key = url.toString();
     if (seen.has(key)) return;
+    if (!force && langPrefixOf(url.pathname) !== homeLang) {
+      deferred.push(key);
+      return;
+    }
     seen.add(key);
     out.push(key);
   };
@@ -86,6 +94,7 @@ export function selectPages(home: SiteData, sitemap: SitemapData | null, max = M
   for (const u of [...nav, ...read, ...candidates]) if (isPriority(u)) push(u);
   for (const u of nav) if (isMenuPage(u)) push(u);
   for (const u of read) push(u);
+  for (const u of deferred) push(u, true);
   return out;
 }
 

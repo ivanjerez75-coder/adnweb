@@ -1,6 +1,12 @@
 /** Segmento de idioma que puede preceder a la sección: "es", "en-us". */
 const LANG_PREFIX_RE = /^[a-z]{2}(-[a-z]{2})?$/;
 
+/** Prefijo de idioma de una ruta ("/es/precios" → "es"), o null si no lo tiene. */
+export function langPrefixOf(pathname: string): string | null {
+  const first = pathname.toLowerCase().split("/").filter(Boolean)[0] ?? "";
+  return LANG_PREFIX_RE.test(first) ? first : null;
+}
+
 export const SECTION_WORDS = {
   blog: ["blog", "blogs", "noticias", "news", "articulos", "recursos"],
   ayuda: ["help", "ayuda", "support", "soporte", "faq"],
