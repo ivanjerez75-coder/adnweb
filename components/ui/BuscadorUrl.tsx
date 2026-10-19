@@ -16,6 +16,8 @@ type Props = {
   valorInicial?: string;
   placeholder?: string;
   ejemplos?: { nombre: string; dominio: string }[];
+  /** id del campo, para enlazarlo (p. ej. el botón de la landing). */
+  idCampo?: string;
 };
 
 export function BuscadorUrl({
@@ -23,6 +25,7 @@ export function BuscadorUrl({
   valorInicial = "",
   placeholder,
   ejemplos = EJEMPLOS_POR_DEFECTO,
+  idCampo,
 }: Props) {
   const [valor, setValor] = useState(valorInicial);
   const ref = useRef<HTMLInputElement>(null);
@@ -53,6 +56,7 @@ export function BuscadorUrl({
         <span aria-hidden="true" className="h-6 w-px shrink-0 bg-borde" />
         <input
           ref={ref}
+          id={idCampo}
           name="url"
           type="text"
           required

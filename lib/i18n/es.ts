@@ -6,21 +6,43 @@ export const es = {
       "Analiza cualquier negocio a partir de su URL: qué vende, cuánto factura y dónde hay oportunidades.",
   },
   landing: {
-    subtitulo: "ANTES DE LANZAR TU WEB, ANALIZA LAS QUE YA GANAN DINERO",
+    // Las palabras entre *asteriscos* se pintan en teal (components/ui/Destacado.tsx).
+    subtitulo: "ANTES DE *LANZAR* TU WEB, *ANALIZA* LAS QUE YA GANAN DINERO",
     titular1: "DESCUBRE CUÁNTO FACTURA",
     titular2: "CUALQUIER WEB",
     placeholder: "Pega la URL de una web",
     explicacion:
-      "Pega la dirección de cualquier negocio y obtén un informe con su modelo, sus cifras y las pruebas que lo respaldan.",
+      "Descubre cómo crecen otros negocios digitales. Entiende cómo ganan dinero, analiza su modelo de negocio y encuentra oportunidades para diferenciarte antes de lanzar o escalar tu proyecto.",
     ejemplosEtiqueta: "Prueba con",
-    oportunidadesTitulo: "DESCUBRE OPORTUNIDADES",
+    oportunidadesTitulo: "DESCUBRE *OPORTUNIDADES*",
     oportunidadesTexto:
-      "Mira cómo gana dinero un negocio, qué ofrece y dónde falla, antes de invertir en el tuyo.",
-    cierreTitulo: "TODO GRAN NEGOCIO EMPEZÓ CON UNA INVESTIGACIÓN",
+      "Mira cómo gana dinero un negocio, qué ofrece y dónde falla, antes de invertir en el tuyo. Cada conclusión del informe enlaza a la frase o al dato público que la respalda.",
+    ilustracionAlt:
+      "Ventana de navegador con varias líneas de una web resaltadas como pruebas",
+    comoTitulo: "CÓMO FUNCIONA",
+    paso1Titulo: "Pegas una URL",
+    paso1Texto:
+      "La de cualquier negocio: una tienda, un SaaS, un curso o un servicio.",
+    paso2Titulo: "Leemos la web y las fuentes públicas",
+    paso2Texto:
+      "Revisamos sus páginas, sus precios y lo que se publica sobre el negocio.",
+    paso3Titulo: "Recibes el informe con pruebas",
+    paso3Texto:
+      "Cada afirmación muestra de dónde sale, para que puedas comprobarla.",
+    cierreTitulo: "TODO GRAN NEGOCIO EMPEZÓ CON UNA *INVESTIGACIÓN*.",
     cierreBoton: "COMIENZA A ANALIZAR",
+    pieCopyright: "© 2026 ADNweb",
+    pieNavegacion: "Enlaces legales y contacto",
     piePrivacidad: "Privacidad",
     pieCondiciones: "Condiciones",
     pieContacto: "Contacto",
+    pieContactoEnlace: "mailto:contacto@adnweb.com",
+  },
+  legal: {
+    privacidadTitulo: "PRIVACIDAD",
+    condicionesTitulo: "CONDICIONES",
+    enPreparacion: "Página en preparación.",
+    volverInicio: "Volver al inicio",
   },
   auth: {
     titulo: "ADNweb: analiza cualquier web",

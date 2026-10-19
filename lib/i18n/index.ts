@@ -23,3 +23,18 @@ export function t(
     k in vars ? String(vars[k]) : m,
   );
 }
+
+/** Trocea un texto con *marcas*: los trozos impares van destacados. */
+export function trozosDestacados(
+  texto: string,
+): { texto: string; destacado: boolean }[] {
+  return texto
+    .split("*")
+    .map((parte, i) => ({ texto: parte, destacado: i % 2 === 1 }))
+    .filter((p) => p.texto !== "");
+}
+
+/** El texto tal y como se lee, sin las *marcas* de destacado. */
+export function sinMarcas(texto: string): string {
+  return texto.replaceAll("*", "");
+}
