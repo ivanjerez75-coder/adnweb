@@ -109,6 +109,25 @@ describe("runAnalysis v3", () => {
     }
   });
 
+  it("caché v3 caducada (collectedAt > 24 h) o sin el campo legal (pre v3.1): se recoge de nuevo", async () => {
+    const { legal: _sinLegal, ...preV31 } = rawV3;
+    void _sinLegal;
+    const viejas = [{ ...rawV3, collectedAt: new Date(NOW.getTime() - 25 * 3_600_000).toISOString() }, { ...rawV3, collectedAt: "no es fecha" }, preV31];
+    for (const vieja of viejas) {
+      const getPage = vi.fn<PageGetter>(v3GetPage);
+      const { state, a, deps } = setup([badModel], getPage);
+      conCache(state, vieja);
+      await runAnalysis(a.id, normalized, deps);
+      expect(getPage.mock.calls.some(([u]) => u === "https://facturo.example/"), JSON.stringify(vieja.collectedAt)).toBe(true);
+    }
+    // Recogida hace 23 h y con legal: se reutiliza.
+    const getPage = vi.fn<PageGetter>(v3GetPage);
+    const { state, a, deps } = setup([badModel], getPage);
+    conCache(state, { ...rawV3, collectedAt: new Date(NOW.getTime() - 23 * 3_600_000).toISOString() });
+    await runAnalysis(a.id, normalized, deps);
+    expect(getPage.mock.calls.some(([u]) => u === "https://facturo.example/")).toBe(false);
+  });
+
   it("caché v3: no llama a collect y pide desde now-24h", async () => {
     // collect pide la home del negocio; la verificación de competidores usa otras URL.
     const getPage = vi.fn<PageGetter>(v3GetPage);

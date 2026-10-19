@@ -9,6 +9,17 @@ import { describirFallo } from "@/lib/server/analyses/errors";
 
 const DIA_MS = 24 * 3_600_000;
 
+/**
+ * Unos datos en caché solo se reutilizan si son v3 (las filas v2 llegan sin version), tienen el campo
+ * legal (v3.1) y se recogieron hace menos de 24 h. La fila puede ser reciente aunque los datos no:
+ * la caché encadena, así que manda raw.collectedAt.
+ */
+export function cacheFresca(raw: RawData | null | undefined, ahora: Date): raw is RawData {
+  if (!raw || raw.version !== 3 || !("legal" in raw)) return false;
+  const t = Date.parse(raw.collectedAt);
+  return Number.isFinite(t) && t >= ahora.getTime() - DIA_MS;
+}
+
 /** La fila ya está en su estado final (p. ej. marcada como colgada): se aborta sin fallar ni devolver otra vez. */
 class FilaFinalError extends Error {}
 
@@ -40,8 +51,7 @@ export async function runAnalysis(id: string, normalized: NormalizedUrl, deps: R
     let raw: RawData | null = null;
     try {
       const cached = await worker.buscarCache(normalized.domain, new Date(now().getTime() - DIA_MS));
-      // Las filas antiguas (v2) llegan de la BD sin el campo version: no sirven para el informe v3.
-      if (cached && cached.version === 3) raw = cached;
+      if (cacheFresca(cached, now())) raw = cached;
     } catch (e) {
       console.error("runAnalysis: fallo al buscar en caché, se recoge de nuevo", e);
     }
