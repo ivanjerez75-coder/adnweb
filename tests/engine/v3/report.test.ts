@@ -21,7 +21,7 @@ const raw = makeRaw({
 
 const cands = [{ nombre: "Alfa", web: "https://alfa.com", ofrece: "Facturas", terminos: ["facturacion", "presupuestos"] }];
 
-type Fail = Partial<Record<"adn" | "saber" | "competidores" | "revision" | "aprender" | "cierre", boolean>>;
+type Fail = Partial<Record<"anatomia" | "saber" | "competidores" | "revision" | "aprender" | "cierre", boolean>>;
 
 /** Modelo falso que responde según el prompt, cuenta llamadas simultáneas y puede fallar por sección. */
 function fakeModels(fail: Fail = {}, tracker = { cur: 0, max: 0 }): JsonModel {
@@ -32,8 +32,8 @@ function fakeModels(fail: Fail = {}, tracker = { cur: 0, max: 0 }): JsonModel {
       tracker.max = Math.max(tracker.max, tracker.cur);
       try {
         await new Promise((r) => setTimeout(r, 5));
-        const sec = p.includes("Explica qué es el negocio")
-          ? "adn"
+        const sec = p.includes("anatomía del negocio")
+          ? "anatomia"
           : p.includes("qué NO se puede saber")
             ? "saber"
             : p.includes("Encuentra de 3 a 5")
@@ -48,13 +48,13 @@ function fakeModels(fail: Fail = {}, tracker = { cur: 0, max: 0 }): JsonModel {
         if (sec !== "dif" && fail[sec]) throw new Error("boom");
         const ev = ["p1-e1", "p1-e2"];
         switch (sec) {
-          case "adn":
+          case "anatomia":
             return JSON.stringify({
-              queEs: { texto: "Facturación", evidencias: ev },
-              propuestaValor: { texto: "Fácil", evidencias: ev },
-              tipoNegocio: "saas",
-              lineas: [{ nombre: "Facturas", queOfrece: ["x"], publico: "pymes", comoSeContrata: "web", ingresos: "suscripción", evidencias: ev }],
-              comoFunciona: { texto: "Online", evidencias: ev },
+              nombre: "Facturo",
+              fraseResumen: { texto: "Facturación online para pymes", evidencias: ev },
+              identidad: { producto: { declara: { texto: "Facturación", evidencias: ev }, interpretamos: null } },
+              tipologias: [{ tipo: "saas", certeza: "alta", explicacion: "Online", evidencias: ev }],
+              lineas: [{ nombre: "Facturas", queOfrece: ["x"], publico: "pymes", comoSeContrata: "web", evidencias: ev }],
             });
           case "saber":
             return JSON.stringify({ items: ["Márgenes"] });
@@ -84,7 +84,7 @@ function deps(m: JsonModel) {
 }
 
 describe("buildReportV3", () => {
-  it("emite datos, adn, ... y cierre al final; version 3", async () => {
+  it("emite datos, anatomia, ... y cierre al final; version 3", async () => {
     const calls: [SeccionClave, string][] = [];
     const r = await buildReportV3(raw, deps(fakeModels()), async (c, _x, e) => {
       calls.push([c, e]);
@@ -93,7 +93,7 @@ describe("buildReportV3", () => {
     expect(r.dominio).toBe(raw.domain);
     expect(r.generadoEn).toBe("2026-10-18T10:00:00.000Z");
     expect(calls[0]).toEqual(["datos", "lista"]);
-    expect(calls[1]).toEqual(["adn", "lista"]);
+    expect(calls[1]).toEqual(["anatomia", "lista"]);
     expect(calls[calls.length - 1][0]).toBe("cierre");
     expect(calls.filter(([c]) => c === "datos")).toHaveLength(1);
     expect(Object.values(r.estados).every((e) => e === "lista")).toBe(true);
@@ -112,14 +112,14 @@ describe("buildReportV3", () => {
     expect(Array.isArray(d.precios)).toBe(true);
   });
 
-  it("datos se emite antes que adn, con el escenario", async () => {
+  it("datos se emite antes que anatomia, con el escenario", async () => {
     const orden: string[] = [];
     let escenarioPresente = false;
     await buildReportV3(raw, deps(fakeModels()), async (c, x) => {
       orden.push(c);
       if (c === "datos") escenarioPresente = "escenario" in (x as object);
     });
-    expect(orden.indexOf("datos")).toBeLessThan(orden.indexOf("adn"));
+    expect(orden.indexOf("datos")).toBeLessThan(orden.indexOf("anatomia"));
     expect(orden.filter((c) => c === "datos")).toHaveLength(1);
     expect(escenarioPresente).toBe(true);
   });
@@ -128,7 +128,7 @@ describe("buildReportV3", () => {
     const r = await buildReportV3(raw, deps(fakeModels({ competidores: true })), async () => {});
     expect(r.estados.competidores).toBe("error");
     expect(r.secciones.competidores).toBeUndefined();
-    for (const k of ["datos", "adn", "saber", "revision", "aprender", "score", "cierre"] as const) {
+    for (const k of ["datos", "anatomia", "saber", "revision", "aprender", "score", "cierre"] as const) {
       expect(r.estados[k]).toBe("lista");
     }
   });
@@ -144,14 +144,14 @@ describe("buildReportV3", () => {
     expect(r.estados.cierre).toBe("error");
   });
 
-  it("adn fallido rechaza", async () => {
-    await expect(buildReportV3(raw, deps(fakeModels({ adn: true })), async () => {})).rejects.toThrow();
+  it("anatomia fallida rechaza", async () => {
+    await expect(buildReportV3(raw, deps(fakeModels({ anatomia: true })), async () => {})).rejects.toThrow();
   });
 
-  it("si onSection rechaza en adn, se propaga; en otras secciones se ignora", async () => {
+  it("si onSection rechaza en anatomia, se propaga; en otras secciones se ignora", async () => {
     await expect(
       buildReportV3(raw, deps(fakeModels()), async (c) => {
-        if (c === "adn") throw new Error("db");
+        if (c === "anatomia") throw new Error("db");
       }),
     ).rejects.toThrow("db");
     const r = await buildReportV3(raw, deps(fakeModels()), async (c) => {

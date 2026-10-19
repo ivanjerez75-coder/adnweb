@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Evidence } from "@/lib/engine/v3/evidence";
 import type { DnaScore, Indicador } from "@/lib/engine/v3/score";
 import type { Metrica } from "@/lib/engine/v3/estimates";
-import type { Adn, AdnBloque } from "@/lib/engine/v3/sections/adn";
+import type { AdnBloque, AdnCanal, Anatomia, ClaveIdentidad, FuenteMonetizacion, LineaAnatomia, TipologiaAnatomia } from "@/lib/engine/v3/sections/anatomia";
 import type { Competidor } from "@/lib/engine/v3/sections/competidores";
 import type { Revision } from "@/lib/engine/v3/sections/revision";
 import type { ItemAprender } from "@/lib/engine/v3/sections/aprender";
@@ -222,33 +222,106 @@ function Bloque({ titulo, b }: { titulo: string; b: AdnBloque | null | undefined
   );
 }
 
-function AdnVista({ c }: { c: unknown }) {
-  const a = c as Adn;
+const IDENTIDAD: [ClaveIdentidad, string][] = [
+  ["producto", "Producto o servicio"],
+  ["problema", "Problema que resuelve"],
+  ["paraQuien", "Para quién"],
+  ["beneficio", "Beneficio prometido"],
+  ["argumento", "Argumento de venta"],
+  ["diferenciacion", "Diferenciación declarada"],
+];
+const NIVEL: Record<string, string> = { confirmado: "Confirmado", inferido: "Inferido", desconocido: "Desconocido" };
+const CERTEZA: Record<string, string> = { alta: "certeza alta", media: "certeza media", baja: "certeza baja" };
+
+/** Sección 02 (provisional hasta la Tarea 7): lo que la empresa declara frente a lo que ADNweb interpreta. */
+function AnatomiaVista({ c }: { c: unknown }) {
+  const a = c as Partial<Anatomia>;
+  const id = a.identidad;
+  const cl = a.cliente;
   return (
     <>
-      <Bloque titulo="Qué es" b={a.queEs} />
-      <Bloque titulo="Propuesta de valor" b={a.propuestaValor} />
-      <p>
-        Modelo de negocio: {a.tipoNegocio} ({a.modeloEstado ?? "desconocido"})
-      </p>
-      {arr<Adn["lineas"][number]>(a.lineas).map((l, i) => (
+      {a.fraseResumen && <Bloque titulo={a.nombre ?? "Resumen"} b={a.fraseResumen} />}
+      {id &&
+        IDENTIDAD.map(([k, titulo]) => {
+          const campo = id[k];
+          if (!campo || (!campo.declara && !campo.interpretamos)) return null;
+          return (
+            <section key={k}>
+              <h3>{titulo}</h3>
+              {campo.declara && (
+                <>
+                  <p>La empresa declara: {campo.declara.texto}</p>
+                  <Evidencias lista={campo.declara.evidencias} />
+                </>
+              )}
+              {campo.interpretamos && (
+                <>
+                  <p>
+                    ADNweb interpreta: {campo.interpretamos.texto} <small>({TIPO[campo.interpretamos.clase] ?? campo.interpretamos.clase})</small>
+                  </p>
+                  <Evidencias lista={campo.interpretamos.evidencias} />
+                </>
+              )}
+            </section>
+          );
+        })}
+      <h3>Modelo de negocio ({a.modeloEstado ?? "desconocido"})</h3>
+      <ul>
+        {arr<TipologiaAnatomia>(a.tipologias).map((t, i) => (
+          <li key={i}>
+            {t.tipo} ({CERTEZA[t.certeza] ?? t.certeza}){t.explicacion ? `: ${t.explicacion}` : ""}
+            <Evidencias lista={t.evidencias} />
+          </li>
+        ))}
+      </ul>
+      {arr<FuenteMonetizacion>(a.monetizacion).length > 0 && (
+        <>
+          <h3>Monetización</h3>
+          <ul>
+            {arr<FuenteMonetizacion>(a.monetizacion).map((m, i) => (
+              <li key={i}>
+                {m.fuente} ({NIVEL[m.nivel] ?? m.nivel})
+                {arr<string>(m.precios).length > 0 ? ` · Precios publicados: ${arr<string>(m.precios).join(", ")}` : ""}
+                <Evidencias lista={m.evidencias} />
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {arr<LineaAnatomia>(a.lineas).map((l, i) => (
         <section key={i}>
           <h3>{l.nombre}</h3>
           <ul>
             <li>Qué ofrece: {arr<string>(l.queOfrece).join(", ")}</li>
             <li>Público: {l.publico}</li>
             <li>Cómo se contrata: {l.comoSeContrata}</li>
-            {l.ingresos ? <li>Fuente de ingresos: {l.ingresos}</li> : null}
           </ul>
           <Evidencias lista={l.evidencias} />
         </section>
       ))}
-      <Bloque titulo="Cómo funciona" b={a.comoFunciona} />
-      {arr<Adn["canales"][number]>(a.canales).length > 0 && (
+      {cl && (
+        <>
+          <Bloque titulo="Cliente objetivo" b={cl.explicito} />
+          {arr<string>(cl.necesidades).length > 0 && <p>Necesidades: {arr<string>(cl.necesidades).join(", ")}</p>}
+          {arr<string>(cl.sectores).length > 0 && <p>Sectores prioritarios: {arr<string>(cl.sectores).join(", ")}</p>}
+          <Bloque titulo="Mensaje comercial" b={cl.mensaje} />
+          {arr<{ texto: string }>(cl.segmentosAlternativos).length > 0 && (
+            <>
+              <h3>Segmentos alternativos por investigar (hipótesis)</h3>
+              <ul>
+                {arr<{ texto: string }>(cl.segmentosAlternativos).map((s, i) => (
+                  <li key={i}>{s.texto}</li>
+                ))}
+              </ul>
+            </>
+          )}
+        </>
+      )}
+      {arr<AdnCanal>(a.canales).length > 0 && (
         <>
           <h3>Canales de conversión</h3>
           <ul>
-            {arr<Adn["canales"][number]>(a.canales).map((k, i) => (
+            {arr<AdnCanal>(a.canales).map((k, i) => (
               <li key={i}>
                 {k.tipo}
                 <Evidencias lista={k.evidencias} />
@@ -489,8 +562,8 @@ function Cuerpo({ s }: { s: SeccionVista }) {
   switch (s.clave) {
     case "datos":
       return <Datos c={s.contenido} />;
-    case "adn":
-      return <AdnVista c={s.contenido} />;
+    case "anatomia":
+      return <AnatomiaVista c={s.contenido} />;
     case "saber":
       return <Saber c={s.contenido} />;
     case "score":

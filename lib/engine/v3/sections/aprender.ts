@@ -5,7 +5,7 @@ import { SeccionVaciaError } from "../errors";
 import { runSection, type SectionDeps } from "../llm";
 import { bloqueDatosWeb, REGLAS_COMUNES } from "../prompt";
 import { limpiarAfirmacionesNoRespaldadas } from "../filtro";
-import type { Adn } from "./adn";
+import type { Adn } from "./anatomia";
 import type { Competidor } from "./competidores";
 import type { Revision } from "./revision";
 import { resumenAdn } from "./saber";

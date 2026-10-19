@@ -48,12 +48,12 @@ describe("runAnalysis v3", () => {
     expect(mine.informe).toBeNull();
     expect(mine.creditoDevuelto).toBe(false);
     expect(Object.keys(mine.secciones).sort()).toEqual(
-      ["adn", "aprender", "cierre", "competidores", "datos", "revision", "saber", "score"],
+      ["anatomia", "aprender", "cierre", "competidores", "datos", "revision", "saber", "score"],
     );
     expect(Object.values(mine.secciones).every((s) => s.estado === "lista")).toBe(true);
   });
 
-  it("queda listo justo después de guardar adn, antes de las demás secciones", async () => {
+  it("queda listo justo después de guardar anatomia, antes de las demás secciones", async () => {
     const { worker, state, a, deps } = setup([fakeV3Model()]);
     conCache(state, rawV3);
     const mine = state.analisis.find((x) => x.id === a.id)!;
@@ -65,10 +65,10 @@ describe("runAnalysis v3", () => {
       return r;
     };
     await runAnalysis(a.id, normalized, deps);
-    const iAdn = vistas.findIndex(([c]) => c === "adn");
+    const iAdn = vistas.findIndex(([c]) => c === "anatomia");
     expect(vistas[0]).toEqual(["datos", "procesando"]);
-    // Cuando se guarda adn aún está procesando; marcarListo va inmediatamente después.
-    expect(vistas[iAdn][0]).toBe("adn");
+    // Cuando se guarda anatomia aún está procesando; marcarListo va inmediatamente después.
+    expect(vistas[iAdn][0]).toBe("anatomia");
     expect(vistas.slice(iAdn + 1).length).toBeGreaterThan(0);
     expect(vistas.slice(iAdn + 1).every(([, e]) => e === "listo")).toBe(true);
   });
@@ -80,11 +80,11 @@ describe("runAnalysis v3", () => {
     const mine = state.analisis.find((x) => x.id === a.id)!;
     expect(mine.estado).toBe("listo");
     expect(mine.secciones.competidores).toEqual({ estado: "error", contenido: null });
-    expect(mine.secciones.adn.estado).toBe("lista");
+    expect(mine.secciones.anatomia.estado).toBe("lista");
     expect(mine.creditoDevuelto).toBe(false);
   });
 
-  it("fallo de adn: error, adn en error y crédito devuelto una vez", async () => {
+  it("fallo de anatomia: error, anatomia en error y crédito devuelto una vez", async () => {
     const { state, a, deps } = setup([badModel]);
     conCache(state, rawV3);
     await runAnalysis(a.id, normalized, deps);
@@ -92,7 +92,7 @@ describe("runAnalysis v3", () => {
     const mine = state.analisis.find((x) => x.id === a.id)!;
     expect(mine.estado).toBe("error");
     expect(mine.error).toBe("Alta demanda, inténtalo en unos minutos.");
-    expect(mine.secciones.adn).toEqual({ estado: "error", contenido: null });
+    expect(mine.secciones.anatomia).toEqual({ estado: "error", contenido: null });
     expect(mine.creditoDevuelto).toBe(true);
     expect(state.creditos).toBe(5);
   });
@@ -104,7 +104,7 @@ describe("runAnalysis v3", () => {
       conCache(state, vieja);
       await runAnalysis(a.id, normalized, deps);
       expect(getPage).toHaveBeenCalled();
-      // Los datos recogidos se guardan antes de adn aunque este falle.
+      // Los datos recogidos se guardan antes de anatomia aunque este falle.
       expect(state.analisis.find((x) => x.id === a.id)?.datosBrutos?.version).toBe(3);
     }
   });
@@ -140,7 +140,7 @@ describe("runAnalysis v3", () => {
     expect(state.analisis.find((x) => x.id === a.id)?.estado).toBe("listo");
   });
 
-  it("guarda los datos brutos antes de adn (la caché sirve aunque fallen las secciones)", async () => {
+  it("guarda los datos brutos antes de anatomia (la caché sirve aunque fallen las secciones)", async () => {
     const { worker, state, a, deps } = setup([badModel]);
     const orden: string[] = [];
     const g = worker.guardarDatosBrutos;
@@ -170,12 +170,12 @@ describe("runAnalysis v3", () => {
     expect(state.analisis.find((x) => x.id === a.id)?.estado).toBe("listo");
   });
 
-  it("si guardarSeccion de adn falla, el análisis falla y se devuelve el crédito", async () => {
+  it("si guardarSeccion de anatomia falla, el análisis falla y se devuelve el crédito", async () => {
     const { worker, state, a, deps } = setup([fakeV3Model()]);
     conCache(state, rawV3);
     const orig = worker.guardarSeccion;
     worker.guardarSeccion = async (id, clave, c, e) => {
-      if (clave === "adn") throw new Error("db caída");
+      if (clave === "anatomia") throw new Error("db caída");
       return orig(id, clave, c, e);
     };
     await runAnalysis(a.id, normalized, deps);

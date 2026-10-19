@@ -31,11 +31,29 @@ describe("Secciones (render)", () => {
     expect(html).toContain("Comprobado");
   });
 
-  it("la línea del adn muestra 'Fuente de ingresos'", () => {
-    const adn = { queEs: null, propuestaValor: null, tipoNegocio: "saas", modeloEstado: "probable", canales: [], afirmaciones: [], comoFunciona: null, lineas: [{ nombre: "L", queOfrece: ["x"], publico: "p", comoSeContrata: "c", ingresos: "Cuota mensual", evidencias: [ev] }] };
-    const html = render({ adn: { estado: "lista", contenido: adn } });
-    expect(html).toContain("Fuente de ingresos: Cuota mensual");
-    expect(html).not.toMatch(/>Ingresos:/);
+  it("la anatomía separa lo que la empresa declara de lo que ADNweb interpreta", () => {
+    const anatomia = {
+      nombre: "Facturo",
+      fraseResumen: { texto: "Facturas online", evidencias: [ev] },
+      identidad: { producto: { declara: { texto: "Software de facturas", evidencias: [ev] }, interpretamos: { texto: "Orientado a pymes", evidencias: [ev], clase: "inferencia" } } },
+      tipologias: [{ tipo: "saas", certeza: "media", explicacion: "Cuota", evidencias: [ev] }],
+      lineas: [{ nombre: "L", queOfrece: ["x"], publico: "p", comoSeContrata: "c", evidencias: [ev] }],
+      monetizacion: [{ fuente: "Cuota mensual", nivel: "inferido", evidencias: [ev] }],
+      cliente: { explicito: null, necesidades: [], sectores: [], mensaje: null, segmentosAlternativos: [{ texto: "Gestorías", clase: "hipotesis" }] },
+      canales: [],
+      afirmaciones: [],
+      modeloEstado: "probable",
+    };
+    const html = render({ anatomia: { estado: "lista", contenido: anatomia } });
+    expect(html).toContain("La empresa declara: Software de facturas");
+    expect(html).toContain("ADNweb interpreta: Orientado a pymes");
+    expect(html).toContain("Inferencia");
+    expect(html).toContain("Cuota mensual (Inferido)");
+    expect(html).toContain("(hipótesis)");
+  });
+
+  it("una anatomía incompleta no rompe la vista", () => {
+    expect(() => render({ anatomia: { estado: "lista", contenido: { nombre: "X" } } })).not.toThrow();
   });
 });
 
@@ -79,9 +97,9 @@ describe("Secciones (render): sin duplicados", () => {
   });
 
   it("la clave del ErrorBoundary cambia cuando cambia el contenido o el estado", () => {
-    const a = claveContenido({ clave: "adn", titulo: "", estado: "lista", contenido: { x: 1 } });
-    expect(claveContenido({ clave: "adn", titulo: "", estado: "lista", contenido: { x: 1 } })).toBe(a);
-    expect(claveContenido({ clave: "adn", titulo: "", estado: "lista", contenido: { x: 2 } })).not.toBe(a);
-    expect(claveContenido({ clave: "adn", titulo: "", estado: "error", contenido: { x: 1 } })).not.toBe(a);
+    const a = claveContenido({ clave: "anatomia", titulo: "", estado: "lista", contenido: { x: 1 } });
+    expect(claveContenido({ clave: "anatomia", titulo: "", estado: "lista", contenido: { x: 1 } })).toBe(a);
+    expect(claveContenido({ clave: "anatomia", titulo: "", estado: "lista", contenido: { x: 2 } })).not.toBe(a);
+    expect(claveContenido({ clave: "anatomia", titulo: "", estado: "error", contenido: { x: 1 } })).not.toBe(a);
   });
 });

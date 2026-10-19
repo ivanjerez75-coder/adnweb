@@ -47,7 +47,7 @@ export function aplicaPrecios(tipologias: Tipologia[], lineas: { comoSeContrata:
   return true;
 }
 
-/** Puente temporal hasta que la anatomía (Tarea 2) fije las tipologías: adapta el tipoNegocio actual del adn. */
+/** Adapta un tipoNegocio v3 a tipologías. El informe ya las toma de la anatomía; queda para fixtures v3. */
 export function tipologiasDesdeTipoNegocio(tipo: string): Tipologia[] {
   const mapa: Record<string, Tipologia> = { servicios: "servicio_profesional", contenido_ads: "contenido", otro: "web_informativa" };
   return [(mapa[tipo] ?? tipo) as Tipologia];

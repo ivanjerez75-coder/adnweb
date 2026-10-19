@@ -6,9 +6,8 @@ import type { RawData } from "../types";
 import { construirMetricas, escenarioIngresos, preciosPublicados, type Metrica } from "./estimates";
 import { buildEvidence } from "./evidence";
 import { limitarConcurrencia, type RunSectionOpts } from "./llm";
-import { tipologiasDesdeTipoNegocio } from "./clases";
 import { calcularScore, type DnaScore } from "./score";
-import { generarAdn } from "./sections/adn";
+import { adnDesdeAnatomia, generarAnatomia } from "./sections/anatomia";
 import { generarAprender } from "./sections/aprender";
 import { generarCierre } from "./sections/cierre";
 import { generarCompetidores } from "./sections/competidores";
@@ -16,7 +15,7 @@ import { generarRevision, type Revision } from "./sections/revision";
 import { generarNoSabemos, quitarIdsEvidencia } from "./sections/saber";
 
 /** Secciones escritas por la IA: sus textos pueden traer ids de evidencia sueltos ("[p8-e7]"). */
-const SECCIONES_IA: readonly SeccionClave[] = ["adn", "saber", "competidores", "revision", "aprender", "cierre"];
+const SECCIONES_IA: readonly SeccionClave[] = ["anatomia", "saber", "competidores", "revision", "aprender", "cierre"];
 
 const esEvidencia = (v: object): boolean => "id" in v && "tipo" in v && "texto" in v && "fuente" in v;
 
@@ -31,7 +30,7 @@ export function limpiarTextos(v: unknown): unknown {
   return v;
 }
 
-export type SeccionClave = "datos" | "adn" | "saber" | "competidores" | "revision" | "aprender" | "score" | "cierre";
+export type SeccionClave = "datos" | "anatomia" | "saber" | "competidores" | "revision" | "aprender" | "score" | "cierre";
 export type EstadoSeccion = "pendiente" | "lista" | "error";
 
 export interface ReportV3 {
@@ -68,7 +67,7 @@ export async function buildReportV3(raw: RawData, deps: ReportV3Deps, onSection:
   const secciones: ReportV3["secciones"] = {};
   const estados: ReportV3["estados"] = {
     datos: "pendiente",
-    adn: "pendiente",
+    anatomia: "pendiente",
     saber: "pendiente",
     competidores: "pendiente",
     revision: "pendiente",
@@ -77,7 +76,7 @@ export async function buildReportV3(raw: RawData, deps: ReportV3Deps, onSection:
     cierre: "pendiente",
   };
 
-  /** Registra la sección y avisa. Un fallo de onSection solo se propaga si `propagar` (adn). */
+  /** Registra la sección y avisa. Un fallo de onSection solo se propaga si `propagar` (anatomia). */
   const emitir = async (clave: SeccionClave, bruto: unknown | null, estado: EstadoSeccion, propagar = false) => {
     const contenido = bruto !== null && SECCIONES_IA.includes(clave) ? limpiarTextos(bruto) : bruto;
     estados[clave] = estado;
@@ -109,15 +108,18 @@ export async function buildReportV3(raw: RawData, deps: ReportV3Deps, onSection:
     await emitir("datos", null, "error");
   }
 
-  // Fase 2: adn. Si falla, todo el informe falla.
-  let adn;
+  // Fase 2: anatomía. Si falla, todo el informe falla.
+  let anatomia;
   try {
-    adn = await generarAdn(raw, reg, sectionDeps);
+    anatomia = await generarAnatomia(raw, reg, sectionDeps);
   } catch (e) {
-    await emitir("adn", null, "error");
+    await emitir("anatomia", null, "error");
     throw e;
   }
-  await emitir("adn", adn, "lista", true);
+  await emitir("anatomia", anatomia, "lista", true);
+  // Puente hasta las Tareas 3-7: las secciones v3 aún leen la forma Adn.
+  const adn = adnDesdeAnatomia(anatomia);
+  const tipologias = anatomia.tipologias.map((t) => t.tipo);
 
   // Fase 3: en paralelo (el limitador reparte los huecos de IA).
   // aprender no espera a competidores ni a revision (recibe [] y null): así no queda en la cola
@@ -152,7 +154,7 @@ export async function buildReportV3(raw: RawData, deps: ReportV3Deps, onSection:
   // Fase 4: score (código puro).
   let score: DnaScore | null = null;
   try {
-    score = calcularScore(raw, facts, signals, tipologiasDesdeTipoNegocio(adn.tipoNegocio), adn, revision, metricas, reg);
+    score = calcularScore(raw, facts, signals, tipologias, adn, revision, metricas, reg);
   } catch {
     score = null;
   }

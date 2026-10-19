@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { generarRevision } from "../../../lib/engine/v3/sections/revision";
-import type { Adn } from "../../../lib/engine/v3/sections/adn";
+import type { Adn } from "../../../lib/engine/v3/sections/anatomia";
 import { buildEvidence } from "../../../lib/engine/v3/evidence";
 import { makeRaw } from "../raw-fixture";
 import type { JsonModel } from "../../../lib/engine/ai/providers";

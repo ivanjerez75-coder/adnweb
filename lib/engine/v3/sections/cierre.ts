@@ -5,7 +5,7 @@ import { runSection, type SectionDeps } from "../llm";
 import { bloqueDatosWeb, REGLAS_COMUNES } from "../prompt";
 import { limpiarAfirmacionesNoRespaldadas as limpiar } from "../filtro";
 import type { DnaScore } from "../score";
-import type { Adn } from "./adn";
+import type { Adn } from "./anatomia";
 import type { Revision } from "./revision";
 import { resumenAdn } from "./saber";
 import { escapeAngles } from "../../ai/prompt";

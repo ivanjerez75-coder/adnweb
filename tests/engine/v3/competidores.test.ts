@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { generarCompetidores, normalizarTexto } from "../../../lib/engine/v3/sections/competidores";
-import type { Adn } from "../../../lib/engine/v3/sections/adn";
+import type { Adn } from "../../../lib/engine/v3/sections/anatomia";
 import type { JsonModel } from "../../../lib/engine/ai/providers";
 import type { PageGetter } from "../../../lib/engine/safe-fetch";
 import { makeRaw } from "../raw-fixture";

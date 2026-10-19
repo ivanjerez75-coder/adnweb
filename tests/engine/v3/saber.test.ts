@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { generarNoSabemos, BACKLINKS_ITEM } from "../../../lib/engine/v3/sections/saber";
-import type { Adn } from "../../../lib/engine/v3/sections/adn";
+import type { Adn } from "../../../lib/engine/v3/sections/anatomia";
 import { makeRaw } from "../raw-fixture";
 import type { JsonModel } from "../../../lib/engine/ai/providers";
 

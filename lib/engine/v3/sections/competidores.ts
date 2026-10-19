@@ -6,7 +6,7 @@ import type { JsonModel } from "../../ai/providers";
 import { runSection, type RunSectionOpts } from "../llm";
 import { bloqueDatosWeb, REGLAS_COMUNES } from "../prompt";
 import { limpiarAfirmacionesNoRespaldadas } from "../filtro";
-import type { Adn } from "./adn";
+import type { Adn } from "./anatomia";
 import { resumenAdn } from "./saber";
 import { escapeAngles } from "../../ai/prompt";
 

@@ -4,7 +4,7 @@ import { runSection, type SectionDeps } from "../llm";
 import { bloqueDatosWeb, REGLAS_COMUNES } from "../prompt";
 import { limpiarAfirmacionesNoRespaldadas } from "../filtro";
 import { escapeAngles } from "../../ai/prompt";
-import type { Adn } from "./adn";
+import type { Adn } from "./anatomia";
 
 export const BACKLINKS_ITEM = "Backlinks y palabras clave (requieren herramientas de pago)";
 const MAX_ITEMS = 8;

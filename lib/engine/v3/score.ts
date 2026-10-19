@@ -5,7 +5,7 @@ import { radarRank, validRank } from "../anchors";
 import type { Evidence } from "./evidence";
 import { aplicaPrecios, type Tipologia } from "./clases";
 import type { Metrica } from "./estimates";
-import type { Adn } from "./sections/adn";
+import type { Adn } from "./sections/anatomia";
 import type { Revision } from "./sections/revision";
 
 export const METODOLOGIA_DNA = "dna-score-1.0" as const;

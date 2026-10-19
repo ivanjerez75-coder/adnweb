@@ -4,7 +4,7 @@ import { citar, type Evidence } from "../evidence";
 import { runSection, type SectionDeps } from "../llm";
 import { bloqueDatosWeb, REGLAS_COMUNES } from "../prompt";
 import { limpiarAfirmacionesNoRespaldadas } from "../filtro";
-import type { Adn } from "./adn";
+import type { Adn } from "./anatomia";
 import { resumenAdn } from "./saber";
 
 const Check = z.enum(["si", "no", "no_aplica"]).catch("no_aplica"); // un valor raro no tumba la sección

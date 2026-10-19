@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { generarAprender } from "../../../lib/engine/v3/sections/aprender";
-import type { Adn } from "../../../lib/engine/v3/sections/adn";
+import type { Adn } from "../../../lib/engine/v3/sections/anatomia";
 import { buildEvidence } from "../../../lib/engine/v3/evidence";
 import { SeccionVaciaError } from "../../../lib/engine/v3/errors";
 import { makeRaw } from "../raw-fixture";

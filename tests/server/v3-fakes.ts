@@ -19,7 +19,7 @@ export const rawV3 = makeRaw({
   ],
 });
 
-type Fail = Partial<Record<"adn" | "saber" | "competidores" | "revision" | "aprender" | "cierre", boolean>>;
+type Fail = Partial<Record<"anatomia" | "saber" | "competidores" | "revision" | "aprender" | "cierre", boolean>>;
 
 const cands = [{ nombre: "Alfa", web: "https://alfa.com", ofrece: "Facturas", terminos: ["facturacion", "presupuestos"] }];
 
@@ -28,8 +28,8 @@ export function fakeV3Model(fail: Fail = {}): JsonModel {
   return {
     name: "fake-v3",
     generate: async (p) => {
-      const sec = p.includes("Explica qué es el negocio")
-        ? "adn"
+      const sec = p.includes("anatomía del negocio")
+        ? "anatomia"
         : p.includes("qué NO se puede saber")
           ? "saber"
           : p.includes("Encuentra de 3 a 5")
@@ -44,13 +44,13 @@ export function fakeV3Model(fail: Fail = {}): JsonModel {
       if (sec !== "dif" && fail[sec]) throw new Error("boom");
       const ev = ["p1-e1", "p1-e2"];
       switch (sec) {
-        case "adn":
+        case "anatomia":
           return JSON.stringify({
-            queEs: { texto: "Facturación", evidencias: ev },
-            propuestaValor: { texto: "Fácil", evidencias: ev },
-            tipoNegocio: "saas",
-            lineas: [{ nombre: "Facturas", queOfrece: ["x"], publico: "pymes", comoSeContrata: "web", ingresos: "suscripción", evidencias: ev }],
-            comoFunciona: { texto: "Online", evidencias: ev },
+            nombre: "Facturo",
+            fraseResumen: { texto: "Facturación online para pymes", evidencias: ev },
+            identidad: { producto: { declara: { texto: "Facturación", evidencias: ev }, interpretamos: null } },
+            tipologias: [{ tipo: "saas", certeza: "alta", explicacion: "Online", evidencias: ev }],
+            lineas: [{ nombre: "Facturas", queOfrece: ["x"], publico: "pymes", comoSeContrata: "web", evidencias: ev }],
           });
         case "saber":
           return JSON.stringify({ items: ["Márgenes"] });
