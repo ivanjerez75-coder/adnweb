@@ -7,7 +7,7 @@ import type { DnaScore, Indicador } from "@/lib/engine/v3/score";
 import type { Metrica } from "@/lib/engine/v3/estimates";
 import type { AdnBloque, AdnCanal, Anatomia, ClaveIdentidad, FuenteMonetizacion, LineaAnatomia, TipologiaAnatomia } from "@/lib/engine/v3/sections/anatomia";
 import type { AfirmacionCompetidor, Competencia, CompetidorV4, FilaMatriz, GanaPierde, PrecioCompetidor } from "@/lib/engine/v3/sections/competencia";
-import type { Revision } from "@/lib/engine/v3/sections/revision";
+import type { Debilidad, Diagnostico, Fortaleza, Friccion, Riesgo } from "@/lib/engine/v3/sections/diagnostico";
 import type { Rendimiento } from "@/lib/engine/v3/sections/rendimiento";
 import type { ItemAprender } from "@/lib/engine/v3/sections/aprender";
 import type { Cierre } from "@/lib/engine/v3/sections/cierre";
@@ -427,62 +427,51 @@ function ScoreVista({ c }: { c: unknown }) {
   );
 }
 
-const CONF_REV: Record<string, string> = { alta: "Confianza alta", media: "Confianza media", baja: "Confianza baja" };
-
-function Ficha({ x }: { x: { relevancia?: string; confianza?: string; limitaciones?: string[] } }) {
-  return (
+/** Vista mínima del diagnóstico (la Tarea 7 la rehace). */
+function DiagnosticoVista({ c }: { c: unknown }) {
+  const d = c as Diagnostico;
+  const bloque = (titulo: string, items: { id: string; texto: string; evidencias: Evidence[]; clase?: string }[], extra?: (x: never) => ReactNode) => (
     <>
-      {x.relevancia ? (
-        <>
-          <br />
-          <small>Relevancia: {x.relevancia}</small>
-        </>
-      ) : null}
-      {x.confianza ? (
-        <>
-          <br />
-          <small>{CONF_REV[x.confianza] ?? x.confianza}</small>
-        </>
-      ) : null}
-      {arr<string>(x.limitaciones).length > 0 && (
-        <ul>
-          {arr<string>(x.limitaciones).map((l, i) => (
-            <li key={i}>
-              <small>Limitación: {l}</small>
-            </li>
-          ))}
-        </ul>
-      )}
+      <h3>{titulo}</h3>
+      <ul>
+        {items.map((x) => (
+          <li key={x.id}>
+            {x.texto}
+            {x.clase ? <small> · {TIPO[x.clase] ?? x.clase}</small> : null}
+            {extra ? extra(x as never) : null}
+            <Evidencias lista={x.evidencias} />
+          </li>
+        ))}
+      </ul>
     </>
   );
-}
-
-function RevisionVista({ c }: { c: unknown }) {
-  const r = c as Revision;
   return (
     <>
-      <h3>Qué hace bien</h3>
-      <ul>
-        {arr<Revision["bien"][number]>(r.bien).map((b, i) => (
-          <li key={i}>
-            {b.texto}
-            <Ficha x={b} />
-            <Evidencias lista={b.evidencias} />
-          </li>
-        ))}
-      </ul>
-      <h3>Problemas</h3>
-      <ul>
-        {arr<Revision["problemas"][number]>(r.problemas).map((p, i) => (
-          <li key={i}>
-            <strong>{p.linea}:</strong> {p.problema}
+      {bloque("Fortalezas", arr<Fortaleza>(d.fortalezas), (f: Fortaleza) => (
+        <>
+          <br />
+          <small>
+            Frente a: {f.frenteA}
+            {f.paraQuien ? ` · Para: ${f.paraQuien}` : ""}
+          </small>
+        </>
+      ))}
+      {bloque("Debilidades", arr<Debilidad>(d.debilidades), (x: Debilidad) =>
+        x.porQueImporta ? (
+          <>
             <br />
-            Mejora: {p.mejora}
-            <Ficha x={p} />
-            <Evidencias lista={p.evidencias} />
-          </li>
-        ))}
-      </ul>
+            <small>Por qué importa: {x.porQueImporta}</small>
+          </>
+        ) : null,
+      )}
+      {bloque("Riesgos (hipótesis)", arr<Riesgo>(d.riesgos))}
+      {bloque("Fricciones potenciales", arr<Friccion>(d.fricciones))}
+      {d.integrado?.texto ? (
+        <>
+          <h3>Diagnóstico integrado</h3>
+          <p>{d.integrado.texto}</p>
+        </>
+      ) : null}
     </>
   );
 }
@@ -668,8 +657,8 @@ function Cuerpo({ s }: { s: SeccionVista }) {
       return <AnatomiaVista c={s.contenido} />;
     case "rendimiento":
       return <RendimientoVista c={s.contenido} />;
-    case "revision":
-      return <RevisionVista c={s.contenido} />;
+    case "diagnostico":
+      return <DiagnosticoVista c={s.contenido} />;
     case "competencia":
       return <CompetenciaVista c={s.contenido} />;
     case "aprender":

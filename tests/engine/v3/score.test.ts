@@ -3,7 +3,7 @@ import { tipologiasDesdeTipoNegocio, type Tipologia } from "../../../lib/engine/
 import { calcularScore, METODOLOGIA_DNA, PESOS_DNA, AVISO_SCORE, type DnaScore, type DimensionClave } from "../../../lib/engine/v3/score";
 import { construirMetricas } from "../../../lib/engine/v3/estimates";
 import type { Adn } from "../../../lib/engine/v3/sections/anatomia";
-import type { Revision } from "../../../lib/engine/v3/sections/revision";
+import type { ComprobacionesWeb as Revision } from "../../../lib/engine/v3/sections/diagnostico";
 import { buildEvidence, type Evidence } from "../../../lib/engine/v3/evidence";
 import { computeFacts } from "../../../lib/engine/facts";
 import { makeRaw, makeSite, ps } from "../raw-fixture";

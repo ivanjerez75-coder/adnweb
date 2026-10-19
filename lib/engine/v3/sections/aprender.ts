@@ -12,7 +12,10 @@ export interface CompetidorResumen {
   ofrece: string;
   verificado: boolean;
 }
-import type { Revision } from "./revision";
+/** TEMPORAL (la Tarea 5 elimina aprender): lo único que lee de lo que la web hace bien. */
+export interface BienAprender {
+  bien: { texto: string }[];
+}
 import { resumenAdn } from "./comun";
 // Lo que viene de la IA (bien, competidores) se escapa: inyección de segundo orden.
 import { escapeAngles } from "../../ai/prompt";
@@ -31,7 +34,7 @@ export interface ItemAprender {
   evidencias: Evidence[];
 }
 
-function prompt(raw: RawData, adn: Adn, revision: Revision | null, competidores: CompetidorResumen[]): string {
+function prompt(raw: RawData, adn: Adn, revision: BienAprender | null, competidores: CompetidorResumen[]): string {
   const bien = revision?.bien.length ? `\nLo que la web ya hace bien:\n${revision.bien.map((b) => `- ${b.texto}`).join("\n")}\n` : "";
   const verificados = competidores.filter((c) => c.verificado);
   const comp = verificados.length
@@ -58,7 +61,7 @@ ${bloqueDatosWeb(raw)}`;
 export async function generarAprender(
   raw: RawData,
   adn: Adn,
-  revision: Revision | null,
+  revision: BienAprender | null,
   reg: Map<string, Evidence>,
   deps: SectionDeps,
   competidores: CompetidorResumen[] = [],

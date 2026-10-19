@@ -18,8 +18,8 @@ const ORDEN: [ClaveSeccion, string][] = [
   ["datos", "Datos y métricas"],
   ["anatomia", "Anatomía del negocio"],
   ["rendimiento", "Rendimiento y presencia digital"],
-  ["revision", "Qué hace bien y problemas"],
   ["competencia", "Competencia y posicionamiento"],
+  ["diagnostico", "Diagnóstico estratégico"],
   ["aprender", "Qué aprender"],
   ["cierre", "Oportunidades"],
 ];

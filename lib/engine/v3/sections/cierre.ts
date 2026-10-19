@@ -6,7 +6,13 @@ import { bloqueDatosWeb, REGLAS_COMUNES } from "../prompt";
 import { limpiarAfirmacionesNoRespaldadas as limpiar } from "../filtro";
 import type { DnaScore } from "../score";
 import type { Adn } from "./anatomia";
-import type { Revision } from "./revision";
+/**
+ * TEMPORAL (la Tarea 5 sustituye cierre por oportunidades): lo único que cierre lee del diagnóstico,
+ * adaptado desde sus debilidades en report.ts.
+ */
+export interface ProblemasCierre {
+  problemas: { linea: string; problema: string; mejora: string }[];
+}
 import { resumenAdn } from "./comun";
 import { escapeAngles } from "../../ai/prompt";
 
@@ -70,7 +76,7 @@ export function calcularPrioridad(impacto: Nivel, esfuerzo: Nivel, riesgo: Nivel
   return puntos > 1.5 ? "alta" : puntos > 0.5 ? "media" : "baja";
 }
 
-function prompt(raw: RawData, adn: Adn, revision: Revision | null, score: DnaScore): string {
+function prompt(raw: RawData, adn: Adn, revision: ProblemasCierre | null, score: DnaScore): string {
   const dims = score.dimensiones
     .map((d) => `- ${d.clave} (${d.nombre}): ${d.valor === null ? "No puntuable" : d.valor} [cobertura ${Math.round(d.cobertura * 100)} %]`)
     .join("\n");
@@ -115,7 +121,7 @@ ${bloqueDatosWeb(raw)}`;
 export async function generarCierre(
   raw: RawData,
   adn: Adn,
-  revision: Revision | null,
+  revision: ProblemasCierre | null,
   score: DnaScore,
   reg: Map<string, Evidence>,
   deps: SectionDeps,

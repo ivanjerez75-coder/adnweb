@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { calcularPrioridad, generarCierre } from "../../../lib/engine/v3/sections/cierre";
 import type { DnaScore } from "../../../lib/engine/v3/score";
 import type { Adn } from "../../../lib/engine/v3/sections/anatomia";
-import type { Revision } from "../../../lib/engine/v3/sections/revision";
+import type { ProblemasCierre as Revision } from "../../../lib/engine/v3/sections/cierre";
 import { buildEvidence } from "../../../lib/engine/v3/evidence";
 import { makeRaw } from "../raw-fixture";
 import type { JsonModel } from "../../../lib/engine/ai/providers";

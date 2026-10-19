@@ -21,7 +21,7 @@ const raw = makeRaw({
 
 const cands = [{ nombre: "Alfa", web: "https://alfa.com", ofrece: "Facturas", terminos: ["facturacion", "presupuestos"] }];
 
-type Fail = Partial<Record<"anatomia" | "rendimiento" | "competidores" | "revision" | "aprender" | "cierre", boolean>>;
+type Fail = Partial<Record<"anatomia" | "rendimiento" | "competidores" | "diagnostico" | "aprender" | "cierre", boolean>>;
 
 /** Modelo falso que responde según el prompt, cuenta llamadas simultáneas y puede fallar por sección. */
 function fakeModels(fail: Fail = {}, tracker = { cur: 0, max: 0 }): JsonModel {
@@ -40,8 +40,8 @@ function fakeModels(fail: Fail = {}, tracker = { cur: 0, max: 0 }): JsonModel {
               ? "competidores"
               : p.includes("Compara el negocio")
                 ? "dif"
-                : p.includes("revisa la web")
-                  ? "revision"
+                : p.includes("diagnóstico estratégico")
+                  ? "diagnostico"
                   : p.includes("puede aprender")
                     ? "aprender"
                     : "cierre";
@@ -62,8 +62,8 @@ function fakeModels(fail: Fail = {}, tracker = { cur: 0, max: 0 }): JsonModel {
             return JSON.stringify({ competidores: cands });
           case "dif":
             return JSON.stringify({ diferencias: [] });
-          case "revision":
-            return JSON.stringify({ bien: [{ texto: "Claro", evidencias: ev }], lineas: [], problemas: [] });
+          case "diagnostico":
+            return JSON.stringify({ fortalezas: [{ texto: "Claro", frenteA: "Alfa", paraQuien: "pymes", evidencias: ev }], debilidades: [{ texto: "Sin casos", porQueImporta: "Confianza", evidencias: ev }], integrado: "Prioridad: casos." });
           case "aprender":
             return JSON.stringify({ items: [{ texto: "Mostrar precio", evidencias: ev }] });
           default:
@@ -128,14 +128,14 @@ describe("buildReportV3", () => {
     const r = await buildReportV3(raw, deps(fakeModels({ competidores: true })), async () => {});
     expect(r.estados.competencia).toBe("error");
     expect(r.secciones.competencia).toBeUndefined();
-    for (const k of ["datos", "anatomia", "rendimiento", "revision", "aprender", "cierre"] as const) {
+    for (const k of ["datos", "anatomia", "rendimiento", "diagnostico", "aprender", "cierre"] as const) {
       expect(r.estados[k]).toBe("lista");
     }
   });
 
-  it("revision fallida: el score (dentro de rendimiento) se calcula igualmente", async () => {
-    const r = await buildReportV3(raw, deps(fakeModels({ revision: true })), async () => {});
-    expect(r.estados.revision).toBe("error");
+  it("diagnostico fallido: el score (dentro de rendimiento) se calcula igualmente", async () => {
+    const r = await buildReportV3(raw, deps(fakeModels({ diagnostico: true })), async () => {});
+    expect(r.estados.diagnostico).toBe("error");
     expect(r.estados.rendimiento).toBe("lista");
     expect((r.secciones.rendimiento as { score: { metodologia: string } }).score.metodologia).toBe("dna-score-1.0");
   });
@@ -147,6 +147,23 @@ describe("buildReportV3", () => {
     expect(rend.dimensiones).toHaveLength(5);
     expect(rend.noSePuedeSaber.length).toBeGreaterThan(1);
     expect(r.estados.cierre).toBe("lista");
+  });
+
+  it("diagnostico va tras competencia con su registro, y cierre recibe sus debilidades (adaptador temporal)", async () => {
+    const orden: string[] = [];
+    const prompts: string[] = [];
+    const base = fakeModels();
+    const m: JsonModel = { name: "spy", generate: (p, o) => (prompts.push(p), base.generate(p, o)) };
+    const r = await buildReportV3(raw, deps(m), async (c) => {
+      orden.push(c);
+    });
+    expect(orden.indexOf("competencia")).toBeLessThan(orden.indexOf("diagnostico"));
+    expect(orden.indexOf("diagnostico")).toBeLessThan(orden.indexOf("cierre"));
+    expect(prompts.find((p) => p.includes("diagnóstico estratégico"))).toContain("[c1] Alfa");
+    expect(prompts.find((p) => p.includes("Cierra el informe"))).toContain("Sin casos");
+    const d = r.secciones.diagnostico as { fortalezas: { id: string }[]; debilidades: { id: string }[] };
+    expect(d.fortalezas[0].id).toBe("f1");
+    expect(d.debilidades[0].id).toBe("d1");
   });
 
   it("cierre fallido -> error", async () => {

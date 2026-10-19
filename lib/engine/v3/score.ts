@@ -6,7 +6,7 @@ import type { Evidence } from "./evidence";
 import { aplicaPrecios, type Tipologia } from "./clases";
 import type { Metrica } from "./estimates";
 import type { Adn } from "./sections/anatomia";
-import type { Revision } from "./sections/revision";
+import type { ComprobacionesWeb } from "./sections/diagnostico";
 
 export const METODOLOGIA_DNA = "dna-score-1.0" as const;
 export const AVISO_SCORE = "Resume indicadores públicos; no es una valoración financiera." as const;
@@ -132,11 +132,11 @@ function bloque(clave: string, nombre: string, b: Adn["queEs"], raw: RawData, ma
   return ind(clave, nombre, 0, maximo, "La web se leyó pero no se encontró una explicación citable.");
 }
 
-function propuesta(raw: RawData, adn: Adn, revision: Revision | null): Indicador[] {
+function propuesta(raw: RawData, adn: Adn, comprobaciones: ComprobacionesWeb | null): Indicador[] {
   let si = 0;
   let validos = 0;
   const evCheck: Evidence[][] = [];
-  for (const l of revision?.lineas ?? []) {
+  for (const l of comprobaciones?.lineas ?? []) {
     for (const k of ["propuestaClara", "diceAQuien"] as const) {
       const v = l.checks[k];
       if (v === "no_aplica") continue;
@@ -146,7 +146,7 @@ function propuesta(raw: RawData, adn: Adn, revision: Revision | null): Indicador
     evCheck.push(l.evidenciasChecks);
   }
   const claridad =
-    revision && validos > 0
+    comprobaciones && validos > 0
       ? ind("claridad_web", "La web deja claro qué es y para quién", (30 * si) / validos, 30, `${si} de ${validos} comprobaciones de claridad cumplidas (propuesta clara y a quién se dirige).`, unicas(...evCheck))
       : sinDato("claridad_web", "La web deja claro qué es y para quién", 30, "No hay revisión de la web con comprobaciones aplicables.");
 
@@ -335,7 +335,7 @@ export function esWebEspanola(raw: RawData): boolean {
   return idiomas.includes("es") || idiomas.includes("ca");
 }
 
-function confianza(raw: RawData, revision: Revision | null, reg: Reg): Indicador[] {
+function confianza(raw: RawData, comprobaciones: ComprobacionesWeb | null, reg: Reg): Indicador[] {
   const lg = raw.legal;
   const leida = legible(raw);
   const espanola = esWebEspanola(raw);
@@ -386,7 +386,7 @@ function confianza(raw: RawData, revision: Revision | null, reg: Reg): Indicador
     );
   }
 
-  const casosSi = revision?.lineas.some((l) => l.checks.muestraCasos === "si") ?? false;
+  const casosSi = comprobaciones?.lineas.some((l) => l.checks.muestraCasos === "si") ?? false;
   if (!raw.site) out.push(sinDato("testimonios", "Testimonios o casos de éxito", 10, "No se pudo leer la web."));
   else if (raw.site.hasTestimonials || casosSi) out.push(ind("testimonios", "Testimonios o casos de éxito", 10, 10, "La web muestra testimonios o casos de éxito."));
   else if (legible(raw)) out.push(ind("testimonios", "Testimonios o casos de éxito", 0, 10, "La web se leyó y no muestra testimonios ni casos."));
@@ -450,17 +450,17 @@ export function calcularScore(
   signals: Signal[],
   tipologias: Tipologia[],
   adn: Adn,
-  revision: Revision | null,
+  comprobaciones: ComprobacionesWeb | null,
   metricas: Metrica[],
   reg: Reg = new Map(),
 ): DnaScore {
   void signals; // v1.0 no usa señales: todo sale de datos y métricas.
   const dimensiones: DimensionScore[] = [
-    dimension("propuesta", "Propuesta de valor", propuesta(raw, adn, revision)),
+    dimension("propuesta", "Propuesta de valor", propuesta(raw, adn, comprobaciones)),
     dimension("oferta", "Oferta y monetización", oferta(raw, facts, adn, reg, tipologias)),
     dimension("experiencia", "Experiencia y rendimiento", experiencia(raw, metricas, reg)),
     dimension("adquisicion", "Adquisición y visibilidad", adquisicion(raw, facts, metricas, reg)),
-    dimension("confianza", "Confianza y transparencia", confianza(raw, revision, reg)),
+    dimension("confianza", "Confianza y transparencia", confianza(raw, comprobaciones, reg)),
   ];
   const coberturaGlobal = dimensiones.reduce((a, d) => a + d.cobertura, 0) / dimensiones.length;
   const puntuables = dimensiones.filter((d): d is DimensionScore & { valor: number } => d.valor !== null);
