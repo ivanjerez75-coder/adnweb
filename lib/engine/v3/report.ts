@@ -8,15 +8,14 @@ import { buildEvidence } from "./evidence";
 import { limitarConcurrencia, type RunSectionOpts } from "./llm";
 import { calcularScore, type DnaScore } from "./score";
 import { adnDesdeAnatomia, generarAnatomia } from "./sections/anatomia";
-import { generarAprender } from "./sections/aprender";
-import { generarCierre, type ProblemasCierre } from "./sections/cierre";
+import { generarOportunidades } from "./sections/oportunidades";
 import { generarCompetencia } from "./sections/competencia";
-import { generarDiagnostico, type Diagnostico } from "./sections/diagnostico";
+import { generarDiagnostico } from "./sections/diagnostico";
 import { generarRendimiento } from "./sections/rendimiento";
 import { quitarIdsEvidencia } from "./sections/comun";
 
 /** Secciones escritas por la IA: sus textos pueden traer ids de evidencia sueltos ("[p8-e7]"). */
-const SECCIONES_IA: readonly SeccionClave[] = ["anatomia", "rendimiento", "competencia", "diagnostico", "aprender", "cierre"];
+const SECCIONES_IA: readonly SeccionClave[] = ["anatomia", "rendimiento", "competencia", "diagnostico", "oportunidades"];
 
 const esEvidencia = (v: object): boolean => "id" in v && "tipo" in v && "texto" in v && "fuente" in v;
 
@@ -32,15 +31,7 @@ export function limpiarTextos(v: unknown): unknown {
 }
 
 /** El DNA Score va dentro de rendimiento. */
-/**
- * TEMPORAL hasta la Tarea 5 (oportunidades sustituye a cierre): cierre aún lee "problemas" con la
- * forma de la antigua revisión; se adaptan desde las debilidades del diagnóstico.
- */
-export function problemasDesdeDiagnostico(d: Diagnostico | null): ProblemasCierre | null {
-  return d ? { problemas: d.debilidades.map((x) => ({ linea: "", problema: x.texto, mejora: x.porQueImporta })) } : null;
-}
-
-export type SeccionClave = "datos" | "anatomia" | "rendimiento" | "competencia" | "diagnostico" | "aprender" | "cierre";
+export type SeccionClave = "datos" | "anatomia" | "rendimiento" | "competencia" | "diagnostico" | "oportunidades";
 export type EstadoSeccion = "pendiente" | "lista" | "error";
 
 export interface ReportV3 {
@@ -81,8 +72,7 @@ export async function buildReportV3(raw: RawData, deps: ReportV3Deps, onSection:
     rendimiento: "pendiente",
     competencia: "pendiente",
     diagnostico: "pendiente",
-    aprender: "pendiente",
-    cierre: "pendiente",
+    oportunidades: "pendiente",
   };
 
   /** Registra la sección y avisa. Un fallo de onSection solo se propaga si `propagar` (anatomia). */
@@ -126,14 +116,14 @@ export async function buildReportV3(raw: RawData, deps: ReportV3Deps, onSection:
     throw e;
   }
   await emitir("anatomia", anatomia, "lista", true);
-  // Puente hasta las Tareas 3-7: las secciones v3 aún leen la forma Adn.
+  // Puente: el DNA Score aún lee la forma Adn.
   const adn = adnDesdeAnatomia(anatomia);
   const tipologias = anatomia.tipologias.map((t) => t.tipo);
 
   // Fase 3: en paralelo (el limitador reparte los huecos de IA).
   // - competencia → diagnóstico (recibe el registro unido web + competidores) → score (código).
   // - rendimiento lanza su llamada de IA en seguida y espera al score y a las fricciones para cerrar.
-  // - aprender no espera a nadie (recibe [] y null): pierde algo de contexto pero no alarga el total.
+  // - oportunidades sale en cuanto hay diagnóstico (no espera a rendimiento).
   /** Ejecuta una sección aislada: si falla queda en error y devuelve null. */
   const tarea = async <T>(clave: SeccionClave, fn: () => Promise<T>, emitido: (v: T) => unknown = (v) => v): Promise<T | null> => {
     let valor: T;
@@ -153,27 +143,28 @@ export async function buildReportV3(raw: RawData, deps: ReportV3Deps, onSection:
     () => generarCompetencia(raw, anatomia, reg, { searchModels, models, getPage: deps.getPage, runOpts: deps.runOpts, now: deps.now }),
     (v) => v.competencia,
   );
-  const pDiagnostico = pCompetencia.then((c) =>
-    tarea("diagnostico", () =>
-      generarDiagnostico(raw, anatomia, c?.competencia ?? null, c ? new Map([...reg, ...c.regCompetidores]) : reg, sectionDeps),
-    ),
-  );
+  // Registro unido (web + competidores): diagnóstico y oportunidades pueden citar extractos de competidores.
+  const pRegTotal = pCompetencia.then((c) => (c ? new Map([...reg, ...c.regCompetidores]) : reg));
+  const pDiagnostico = pCompetencia.then(async (c) => {
+    const regTotal = await pRegTotal;
+    return tarea("diagnostico", () => generarDiagnostico(raw, anatomia, c?.competencia ?? null, regTotal, sectionDeps));
+  });
   // Fase 4: score (código puro), en cuanto hay diagnóstico (o su fallo).
   const pScore: Promise<DnaScore> = pDiagnostico.then((d) =>
     calcularScore(raw, facts, signals, tipologias, adn, d ? { lineas: d.comprobaciones } : null, metricas, reg),
   );
-  pScore.catch(() => {}); // el fallo lo recogen rendimiento y cierre
+  pScore.catch(() => {}); // el fallo lo recoge rendimiento
 
-  const [diagnostico] = await Promise.all([
-    pDiagnostico,
+  // Fase 5: oportunidades, tras el diagnóstico (enlazan a sus hallazgos y a la comparación).
+  const pOportunidades = pDiagnostico.then(async (d) => {
+    const c = await pCompetencia;
+    return tarea("oportunidades", async () => generarOportunidades(raw, anatomia, d, c?.competencia ?? null, await pRegTotal, sectionDeps));
+  });
+
+  await Promise.all([
+    pOportunidades,
     tarea("rendimiento", () => generarRendimiento(raw, metricas, anatomia, pScore, sectionDeps, pDiagnostico.then((d) => d?.fricciones ?? []))),
-    tarea("aprender", () => generarAprender(raw, adn, null, reg, sectionDeps, [])),
   ]);
-  const score: DnaScore | null = await pScore.catch(() => null);
-
-  // Fase 5: cierre (necesita el score).
-  if (score) await tarea("cierre", () => generarCierre(raw, adn, problemasDesdeDiagnostico(diagnostico), score, reg, sectionDeps));
-  else await emitir("cierre", null, "error");
 
   return { version: 3, dominio: raw.domain, generadoEn, secciones, estados };
 }

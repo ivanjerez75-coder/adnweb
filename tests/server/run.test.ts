@@ -48,7 +48,7 @@ describe("runAnalysis v3", () => {
     expect(mine.informe).toBeNull();
     expect(mine.creditoDevuelto).toBe(false);
     expect(Object.keys(mine.secciones).sort()).toEqual(
-      ["anatomia", "aprender", "cierre", "competencia", "datos", "diagnostico", "rendimiento"],
+      ["anatomia", "competencia", "datos", "diagnostico", "oportunidades", "rendimiento"],
     );
     expect(Object.values(mine.secciones).every((s) => s.estado === "lista")).toBe(true);
   });

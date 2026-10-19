@@ -10,25 +10,26 @@ const render = (secciones: Record<string, { estado: string; contenido: unknown }
 const veces = (html: string, t: string) => html.split(t).length - 1;
 
 const ev = { id: "p1-e1", tipo: "pagina", texto: "Cita literal", url: "https://x.example/", fuente: "https://x.example/" };
-const oportunidad = (confianza: string) => ({
-  hallazgo: "H",
-  evidencias: [ev],
-  impacto: "Más solicitudes",
-  impactoNivel: "alto",
-  esfuerzo: "bajo",
-  riesgo: "bajo",
-  prioridad: "alta",
-  accion: "A",
-  validacion: "V",
-  confianza,
-  supuestos: [],
+const oportunidad = (id: string, estado: string) => ({
+  id,
+  tipologia: "mejorar",
+  titulo: `Mostrar casos ${id}`,
+  origen: ["d1"],
+  ficha: { evidencia: { texto: "No hay casos", evidencias: [ev] }, problema: "Falta confianza", solucion: "Publicar casos", porQuePodria: "Da confianza", faltaComprobar: ["Si hay clientes dispuestos"] },
+  estado,
+  criterios: { impacto: "alto", evidencia: "medio", viabilidad: "medio", diferenciacion: "bajo", facilidadValidacion: "alto" },
+  prioridad: "media",
+  clase: "hipotesis",
 });
 
 describe("Secciones (render)", () => {
-  it("el impacto se etiqueta siempre como hipótesis, también en una oportunidad comprobada", () => {
-    const html = render({ cierre: { estado: "lista", contenido: { oportunidades: [oportunidad("comprobado"), oportunidad("hipotesis")] } } });
-    expect(veces(html, "Impacto esperado (hipótesis): Más solicitudes")).toBe(2);
-    expect(html).toContain("Comprobado");
+  it("una oportunidad se etiqueta siempre como hipótesis y muestra su ficha y su origen", () => {
+    const html = render({ oportunidades: { estado: "lista", contenido: [oportunidad("o1", "detectada"), oportunidad("o2", "por_validar")] } });
+    expect(veces(html, "Hipótesis")).toBe(2);
+    expect(html).toContain("Detectada");
+    expect(html).toContain("Por validar");
+    expect(html).toContain("Sale de: d1");
+    expect(html).toContain("Qué falta comprobar:");
   });
 
   it("la anatomía separa lo que la empresa declara de lo que ADNweb interpreta", () => {
@@ -67,10 +68,9 @@ describe("Secciones (render): sin duplicados", () => {
   };
 
   it("el aviso del score aparece una vez y se muestra el resumen calculado en código", () => {
-    const html = render({ rendimiento: { estado: "lista", contenido: { dimensiones: [], score: scoreContenido, noSePuedeSaber: [] } }, cierre: { estado: "lista", contenido: { oportunidades: [], motivos: { propuesta: ["Texto de la IA"] } } } });
+    const html = render({ rendimiento: { estado: "lista", contenido: { dimensiones: [], score: scoreContenido, noSePuedeSaber: [] } } });
     expect(veces(html, "Resume indicadores públicos")).toBe(1);
     expect(html).toContain("Puntos fuertes: Se explica qué es el negocio (25/25).");
-    expect(html).not.toContain("Texto de la IA");
   });
 
   it("las cifras del escenario se muestran una sola vez", () => {

@@ -9,8 +9,7 @@ import type { AdnBloque, AdnCanal, Anatomia, ClaveIdentidad, FuenteMonetizacion,
 import type { AfirmacionCompetidor, Competencia, CompetidorV4, FilaMatriz, GanaPierde, PrecioCompetidor } from "@/lib/engine/v3/sections/competencia";
 import type { Debilidad, Diagnostico, Fortaleza, Friccion, Riesgo } from "@/lib/engine/v3/sections/diagnostico";
 import type { Rendimiento } from "@/lib/engine/v3/sections/rendimiento";
-import type { ItemAprender } from "@/lib/engine/v3/sections/aprender";
-import type { Cierre } from "@/lib/engine/v3/sections/cierre";
+import type { Oportunidad } from "@/lib/engine/v3/sections/oportunidades";
 import { decidirSondeo, siguienteSondeo } from "@/lib/shared/polling";
 import { hayPendientes, ordenSecciones, type SeccionVista } from "@/lib/shared/secciones-view";
 
@@ -596,48 +595,42 @@ function CompetenciaVista({ c }: { c: unknown }) {
   );
 }
 
-function AprenderVista({ c }: { c: unknown }) {
-  return (
-    <ul>
-      {arr<ItemAprender>(c).map((i, n) => (
-        <li key={n}>
-          {i.texto}
-          <Evidencias lista={i.evidencias} />
-        </li>
-      ))}
-    </ul>
-  );
-}
+const TIPOLOGIA_OPORTUNIDAD: Record<string, string> = {
+  mejorar: "Mejorar el negocio",
+  diferenciarse: "Diferenciarse",
+  complementario: "Producto complementario",
+  nuevo_mercado: "Nuevo mercado o segmento",
+};
 
-function CierreVista({ c }: { c: unknown }) {
-  const acciones = arr<Cierre["oportunidades"][number]>((c as Cierre | null)?.oportunidades);
+/** Vista mínima (la Tarea 7 la rehace): cada oportunidad es una hipótesis enlazada a un hallazgo. */
+function OportunidadesVista({ c }: { c: unknown }) {
   return (
     <ol>
-      {acciones.map((a, i) => (
-        <li key={i}>
+      {arr<Oportunidad>(c).map((o) => (
+        <li key={o.id}>
           <article>
-            <h3>{a.hallazgo}</h3>
+            <h3>{o.titulo}</h3>
             <p>
-              <small>{a.confianza === "comprobado" ? "Comprobado" : "Hipótesis"}</small>
+              <small>
+                {TIPOLOGIA_OPORTUNIDAD[o.tipologia] ?? o.tipologia} · Hipótesis · {o.estado === "detectada" ? "Detectada" : "Por validar"} · Prioridad {o.prioridad}
+              </small>
             </p>
-            {/* "Comprobado" se refiere al hallazgo; el impacto siempre es una hipótesis. */}
-            <p>Impacto esperado (hipótesis): {a.impacto || "sin estimar"}</p>
-            <p>Acción: {a.accion}</p>
-            <p>
-              Prioridad: {a.prioridad}. Impacto: {a.impactoNivel}. Esfuerzo: {a.esfuerzo}. Riesgo: {a.riesgo}.
-            </p>
-            <p>Cómo validarlo: {a.validacion}</p>
-            {arr<string>(a.supuestos).length > 0 && (
+            <p>Sale de: {arr<string>(o.origen).join(", ")}</p>
+            <p>Evidencia: {o.ficha?.evidencia?.texto}</p>
+            <p>Problema potencial: {o.ficha?.problema}</p>
+            <p>Solución posible: {o.ficha?.solucion}</p>
+            <p>Por qué podría funcionar: {o.ficha?.porQuePodria}</p>
+            {arr<string>(o.ficha?.faltaComprobar).length > 0 && (
               <>
-                <p>Supuestos:</p>
+                <p>Qué falta comprobar:</p>
                 <ul>
-                  {arr<string>(a.supuestos).map((s, j) => (
+                  {arr<string>(o.ficha?.faltaComprobar).map((s, j) => (
                     <li key={j}>{s}</li>
                   ))}
                 </ul>
               </>
             )}
-            <Evidencias lista={a.evidencias} />
+            <Evidencias lista={o.ficha?.evidencia?.evidencias} />
           </article>
         </li>
       ))}
@@ -661,10 +654,8 @@ function Cuerpo({ s }: { s: SeccionVista }) {
       return <DiagnosticoVista c={s.contenido} />;
     case "competencia":
       return <CompetenciaVista c={s.contenido} />;
-    case "aprender":
-      return <AprenderVista c={s.contenido} />;
-    case "cierre":
-      return <CierreVista c={s.contenido} />;
+    case "oportunidades":
+      return <OportunidadesVista c={s.contenido} />;
   }
 }
 

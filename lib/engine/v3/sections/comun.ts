@@ -1,5 +1,5 @@
 import { escapeAngles } from "../../ai/prompt";
-import type { Adn, Anatomia } from "./anatomia";
+import type { Anatomia } from "./anatomia";
 
 /** Ayudas compartidas por las secciones del informe (antes en saber.ts y competencia.ts). */
 
@@ -17,15 +17,6 @@ export function quitarIdsEvidencia(texto: string): string {
     .replace(/\s+([.,;:])/g, "$1")
     .replace(/\s{2,}/g, " ")
     .trim();
-}
-
-/**
- * Resumen compacto del adn v3 para los prompts (no se pasa el objeto entero). Es texto de la IA derivado
- * de la web: va escapado para que no pueda cerrar el delimitador DATOS_WEB (inyección de segundo orden).
- */
-export function resumenAdn(adn: Adn): string {
-  const lineas = adn.lineas.map((l) => `- ${l.nombre}: ${l.queOfrece.join(", ")}`).join("\n");
-  return escapeAngles(`Tipo de negocio: ${adn.tipoNegocio}\nLíneas de negocio:\n${lineas}`);
 }
 
 /** Resumen compacto de la anatomía para los prompts. Texto de la IA derivado de la web: escapado. */

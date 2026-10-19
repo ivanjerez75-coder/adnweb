@@ -20,8 +20,7 @@ const ORDEN: [ClaveSeccion, string][] = [
   ["rendimiento", "Rendimiento y presencia digital"],
   ["competencia", "Competencia y posicionamiento"],
   ["diagnostico", "Diagnóstico estratégico"],
-  ["aprender", "Qué aprender"],
-  ["cierre", "Oportunidades"],
+  ["oportunidades", "Oportunidades de negocio"],
 ];
 
 const ESTADOS = ["pendiente", "lista", "error"];

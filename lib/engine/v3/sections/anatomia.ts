@@ -462,7 +462,7 @@ export interface AdnLinea {
   ingresos: string;
   evidencias: Evidence[];
 }
-/** Forma v3 que aún esperan aprender, cierre y el score (puente hasta la Tarea 5). */
+/** Forma v3 que aún espera el DNA Score (puente hasta la Tarea 6). */
 export interface Adn {
   queEs: AdnBloque | null;
   propuestaValor: AdnBloque | null;

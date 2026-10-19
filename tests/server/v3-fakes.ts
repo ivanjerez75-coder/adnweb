@@ -19,7 +19,7 @@ export const rawV3 = makeRaw({
   ],
 });
 
-type Fail = Partial<Record<"anatomia" | "rendimiento" | "competidores" | "diagnostico" | "aprender" | "cierre", boolean>>;
+type Fail = Partial<Record<"anatomia" | "rendimiento" | "competidores" | "diagnostico" | "oportunidades" | "plan", boolean>>;
 
 const cands = [{ nombre: "Alfa", web: "https://alfa.com", ofrece: "Facturas", terminos: ["facturacion", "presupuestos"] }];
 
@@ -38,9 +38,9 @@ export function fakeV3Model(fail: Fail = {}): JsonModel {
               ? "dif"
               : p.includes("diagnóstico estratégico")
                 ? "diagnostico"
-                : p.includes("puede aprender")
-                  ? "aprender"
-                  : "cierre";
+                : p.includes("Convierte el diagnóstico en oportunidades")
+                  ? "oportunidades"
+                  : "plan";
       if (sec !== "dif" && fail[sec]) throw new Error("boom");
       const ev = ["p1-e1", "p1-e2"];
       switch (sec) {
@@ -60,10 +60,10 @@ export function fakeV3Model(fail: Fail = {}): JsonModel {
           return JSON.stringify({ diferencias: [] });
         case "diagnostico":
           return JSON.stringify({ fortalezas: [{ texto: "Claro", frenteA: "Alfa", paraQuien: "pymes", evidencias: ev }], debilidades: [{ texto: "Sin casos", porQueImporta: "Confianza", evidencias: ev }], integrado: "Prioridad: casos." });
-        case "aprender":
-          return JSON.stringify({ items: [{ texto: "Mostrar precio", evidencias: ev }] });
+        case "oportunidades":
+          return JSON.stringify({ oportunidades: [{ tipologia: "mejorar", titulo: "Mostrar casos", origen: ["d1"], ficha: { evidencia: { texto: "No hay casos", evidencias: ev }, problema: "Falta confianza", solucion: "Publicar casos", porQuePodria: "Da confianza", faltaComprobar: [] }, estado: "por_validar", criterios: {} }] });
         default:
-          return JSON.stringify({ oportunidades: [] });
+          return JSON.stringify({ comprobar: [{ origen: "o1", tarea: "Preguntar a clientes", porQue: "Valida la idea", recursos: [], indicador: "Respuestas", criterio: { continuar: "Si interesa", modificar: "Si dudan", descartar: "Si no" } }], experimentar: [], medir: [] });
       }
     },
   };
