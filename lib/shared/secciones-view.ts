@@ -1,4 +1,7 @@
-export type ClaveSeccion = "datos" | "adn" | "saber" | "score" | "revision" | "competidores" | "aprender" | "cierre";
+import type { SeccionClave } from "@/lib/engine/v3/report";
+
+/** Misma clave que el motor: un solo contrato. */
+export type ClaveSeccion = SeccionClave;
 export type EstadoSeccionVista = "pendiente" | "lista" | "error";
 
 export interface SeccionVista {
