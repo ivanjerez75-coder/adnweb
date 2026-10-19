@@ -88,7 +88,7 @@ function prompt(raw: RawData, adn: Adn, conBusqueda: boolean): string {
 
 ${resumenAdn(adn)}
 
-Devuelve SOLO un JSON: { "competidores": [ { "nombre": string, "web": string (URL de su página principal), "ofrece": string (una frase), "terminos": string[] (de 3 a 6 términos clave del servicio que deberían aparecer en su web) } ] }
+Devuelve SOLO un JSON: { "competidores": [ { "nombre": string, "web": string (URL de su página principal), "ofrece": string (una frase), "terminos": string[] (hasta 8 términos clave del servicio que deberían aparecer en su web: ponlos en el idioma de la web del competidor (por ejemplo catalán, inglés) y añade además sus equivalentes en español) } ] }
 
 Reglas:
 ${REGLAS_COMUNES}
@@ -101,13 +101,13 @@ async function obtenerCandidatos(raw: RawData, adn: Adn, deps: CompetidoresDeps)
   if (deps.searchModels.length > 0) {
     try {
       const r = await runSection("competidores", prompt(raw, adn, true), CompetidoresIA, deps.searchModels, deps.runOpts);
-      return { candidatos: r.competidores, buscado: true };
+      return r.competidores;
     } catch {
-      // cae al modelo normal, sin verificación posible de la búsqueda
+      // cae al modelo normal: la verificación con la portada se hace igual
     }
   }
   const r = await runSection("competidores", prompt(raw, adn, false), CompetidoresIA, deps.models, deps.runOpts);
-  return { candidatos: r.competidores, buscado: false };
+  return r.competidores;
 }
 
 async function portada(url: string, getPage: PageGetter, timeoutMs: number): Promise<string | null> {
@@ -167,7 +167,7 @@ export async function generarCompetidores(
     propio = null;
   }
 
-  const { candidatos, buscado } = await obtenerCandidatos(raw, adn, deps);
+  const candidatos = await obtenerCandidatos(raw, adn, deps);
 
   const vistos = new Set<string>();
   const filtrados: { c: z.infer<typeof CandidatoIA>; web: string | null }[] = [];
@@ -183,7 +183,7 @@ export async function generarCompetidores(
 
   const timeoutMs = deps.timeoutMs ?? TIMEOUT_MS;
   const textos = await Promise.all(
-    filtrados.map(({ web }) => (buscado && web ? portada(web, deps.getPage, timeoutMs) : Promise.resolve(null))),
+    filtrados.map(({ web }) => (web ? portada(web, deps.getPage, timeoutMs) : Promise.resolve(null))),
   );
 
   const lista: Competidor[] = filtrados.map(({ c, web }, i) => {

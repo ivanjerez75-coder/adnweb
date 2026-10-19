@@ -62,19 +62,45 @@ describe("generarCompetidores", () => {
     expect(r.lista.every((c) => !c.verificado && c.diferencias.length === 0)).toBe(true);
     expect(r.textosVerificados).toEqual([]);
   });
-  it("si falla la búsqueda usa el modelo normal y nada queda verificado", async () => {
-    const plain = model(() => JSON.stringify({ competidores: cands }));
-    let fetched = 0;
-    const getPage: PageGetter = async () => (fetched++, page("facturacion presupuestos inventario nominas"));
+  it("si falla la búsqueda usa el modelo normal y verifica igualmente con la portada", async () => {
+    const plain = model((p) =>
+      p.includes("diferencias") ? "FAIL" : JSON.stringify({ competidores: cands }),
+    );
+    const fetchedUrls: string[] = [];
+    const getPage: PageGetter = async (u) => (fetchedUrls.push(u), page("<p>Facturacion y presupuestos para autonomos</p>"));
     const r = await generarCompetidores(raw, adn, {
       searchModels: [model(() => "FAIL")],
       models: [plain],
       getPage,
       runOpts,
     });
-    expect(r.lista.length).toBe(2);
-    expect(r.lista.every((c) => !c.verificado && c.diferencias.length === 0)).toBe(true);
-    expect(fetched).toBe(0);
+    expect(r.lista.map((c) => c.nombre)).toEqual(["Alfa", "Beta"]);
+    expect(fetchedUrls.length).toBe(2);
+    expect(r.lista[0].verificado).toBe(true); // 2 términos en su portada
+    expect(r.lista[1].verificado).toBe(false); // ninguno de sus términos
+  });
+  it("candidato del modelo normal (sin búsqueda) con 2 términos en la portada queda verificado", async () => {
+    const plain = model((p) =>
+      p.includes("diferencias")
+        ? JSON.stringify({ diferencias: [{ nombre: "Fundació Ampans", items: ["Es una fundación"] }] })
+        : JSON.stringify({
+            competidores: [
+              { nombre: "Fundació Ampans", web: "https://ampans.cat", ofrece: "Inserción laboral", terminos: ["inserció laboral", "discapacitat", "insercion laboral"] },
+            ],
+          }),
+    );
+    const getPage = getter({ "ampans.cat": "<html><body>Inserció laboral per a persones amb discapacitat</body></html>" });
+    const r = await generarCompetidores(raw, adn, { searchModels: [], models: [plain], getPage, runOpts });
+    expect(r.lista[0].verificado).toBe(true);
+    expect(r.textosVerificados).toHaveLength(1);
+  });
+  it("el prompt pide términos en el idioma de la web del competidor, más equivalentes en español, hasta 8", async () => {
+    const prompts: string[] = [];
+    const m = model((p) => (prompts.push(p), p.includes("diferencias") ? "FAIL" : JSON.stringify({ competidores: cands })));
+    await generarCompetidores(raw, adn, { searchModels: [], models: [m], getPage: getter({}), runOpts });
+    expect(prompts[0]).toContain("idioma de la web del competidor");
+    expect(prompts[0]).toContain("equivalentes en español");
+    expect(prompts[0]).toContain("hasta 8");
   });
   it("timeout por homepage: página colgada no verifica", async () => {
     const getPage: PageGetter = () => new Promise(() => {});
