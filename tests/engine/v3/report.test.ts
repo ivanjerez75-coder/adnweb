@@ -97,7 +97,7 @@ describe("buildReportV3", () => {
     expect(calls[calls.length - 1][0]).toBe("cierre");
     expect(calls.filter(([c]) => c === "datos")).toHaveLength(1);
     expect(Object.values(r.estados).every((e) => e === "lista")).toBe(true);
-    expect(r.secciones.competidores).toBeInstanceOf(Array);
+    expect((r.secciones.competencia as { competidores: unknown }).competidores).toBeInstanceOf(Array);
   });
 
   it("datos se emite una sola vez, con métricas etiquetadas y sin visitas inventadas", async () => {
@@ -124,10 +124,10 @@ describe("buildReportV3", () => {
     expect(escenarioPresente).toBe(true);
   });
 
-  it("un competidores que falla da error y el resto sigue lista", async () => {
+  it("una competencia que falla da error y el resto sigue lista", async () => {
     const r = await buildReportV3(raw, deps(fakeModels({ competidores: true })), async () => {});
-    expect(r.estados.competidores).toBe("error");
-    expect(r.secciones.competidores).toBeUndefined();
+    expect(r.estados.competencia).toBe("error");
+    expect(r.secciones.competencia).toBeUndefined();
     for (const k of ["datos", "anatomia", "saber", "revision", "aprender", "score", "cierre"] as const) {
       expect(r.estados[k]).toBe("lista");
     }

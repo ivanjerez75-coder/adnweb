@@ -10,12 +10,12 @@ import { calcularScore, type DnaScore } from "./score";
 import { adnDesdeAnatomia, generarAnatomia } from "./sections/anatomia";
 import { generarAprender } from "./sections/aprender";
 import { generarCierre } from "./sections/cierre";
-import { generarCompetidores } from "./sections/competidores";
+import { generarCompetencia } from "./sections/competencia";
 import { generarRevision, type Revision } from "./sections/revision";
 import { generarNoSabemos, quitarIdsEvidencia } from "./sections/saber";
 
 /** Secciones escritas por la IA: sus textos pueden traer ids de evidencia sueltos ("[p8-e7]"). */
-const SECCIONES_IA: readonly SeccionClave[] = ["anatomia", "saber", "competidores", "revision", "aprender", "cierre"];
+const SECCIONES_IA: readonly SeccionClave[] = ["anatomia", "saber", "competencia", "revision", "aprender", "cierre"];
 
 const esEvidencia = (v: object): boolean => "id" in v && "tipo" in v && "texto" in v && "fuente" in v;
 
@@ -30,7 +30,7 @@ export function limpiarTextos(v: unknown): unknown {
   return v;
 }
 
-export type SeccionClave = "datos" | "anatomia" | "saber" | "competidores" | "revision" | "aprender" | "score" | "cierre";
+export type SeccionClave = "datos" | "anatomia" | "saber" | "competencia" | "revision" | "aprender" | "score" | "cierre";
 export type EstadoSeccion = "pendiente" | "lista" | "error";
 
 export interface ReportV3 {
@@ -54,7 +54,7 @@ export type OnSection = (clave: SeccionClave, contenido: unknown | null, estado:
 const MAX_IA_SIMULTANEAS = 3;
 
 /**
- * Cada llamada de IA (incluida la segunda de "diferencias" dentro de competidores) pasa por UN
+ * Cada llamada de IA (incluidas las de fichas y comparación dentro de competencia) pasa por UN
  * limitador compartido: se envuelve `generate` de cada modelo, así todas las secciones lo respetan
  * sin tocar su código.
  */
@@ -69,7 +69,7 @@ export async function buildReportV3(raw: RawData, deps: ReportV3Deps, onSection:
     datos: "pendiente",
     anatomia: "pendiente",
     saber: "pendiente",
-    competidores: "pendiente",
+    competencia: "pendiente",
     revision: "pendiente",
     aprender: "pendiente",
     score: "pendiente",
@@ -122,7 +122,7 @@ export async function buildReportV3(raw: RawData, deps: ReportV3Deps, onSection:
   const tipologias = anatomia.tipologias.map((t) => t.tipo);
 
   // Fase 3: en paralelo (el limitador reparte los huecos de IA).
-  // aprender no espera a competidores ni a revision (recibe [] y null): así no queda en la cola
+  // aprender no espera a competencia ni a revision (recibe [] y null): así no queda en la cola
   // detrás de la sección más lenta y el tiempo total es el mínimo. Pierde algo de contexto.
   let revision: Revision | null = null;
 
@@ -136,14 +136,14 @@ export async function buildReportV3(raw: RawData, deps: ReportV3Deps, onSection:
       return;
     }
     ok(valor);
-    await emitir(clave, clave === "competidores" ? (valor as { lista: unknown }).lista : valor, "lista");
+    await emitir(clave, clave === "competencia" ? (valor as { competencia: unknown }).competencia : valor, "lista");
   };
 
   await Promise.all([
     tarea("saber", () => generarNoSabemos(raw, adn, sectionDeps)),
-    tarea(
-      "competidores",
-      () => generarCompetidores(raw, adn, { searchModels, models, getPage: deps.getPage, runOpts: deps.runOpts }),
+    // regCompetidores (extractos c<n>-e<k>) lo usarán diagnóstico y oportunidades (Tareas 4-5).
+    tarea("competencia", () =>
+      generarCompetencia(raw, anatomia, reg, { searchModels, models, getPage: deps.getPage, runOpts: deps.runOpts, now: deps.now }),
     ),
     tarea("revision", () => generarRevision(raw, adn, reg, sectionDeps), (r) => {
       revision = r;

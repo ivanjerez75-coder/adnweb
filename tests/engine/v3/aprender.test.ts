@@ -52,8 +52,8 @@ describe("generarAprender", () => {
   it("el prompt incluye competidores verificados y delimitador", async () => {
     const { deps, prompts } = fake({ items: items(2) });
     await generarAprender(raw, adn, null, reg, deps, [
-      { nombre: "Rival", web: "https://r.example", ofrece: "Cosas de rival", diferencias: [], verificado: true },
-      { nombre: "Dudoso", web: null, ofrece: "NoVerificado", diferencias: [], verificado: false },
+      { nombre: "Rival", ofrece: "Cosas de rival", verificado: true },
+      { nombre: "Dudoso", ofrece: "NoVerificado", verificado: false },
     ]);
     expect(prompts[0]).toContain("Rival");
     expect(prompts[0]).not.toContain("Dudoso");

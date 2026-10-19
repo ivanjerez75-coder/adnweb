@@ -6,7 +6,12 @@ import { runSection, type SectionDeps } from "../llm";
 import { bloqueDatosWeb, REGLAS_COMUNES } from "../prompt";
 import { limpiarAfirmacionesNoRespaldadas } from "../filtro";
 import type { Adn } from "./anatomia";
-import type { Competidor } from "./competidores";
+/** Lo mínimo que aprender necesita de un competidor. */
+export interface CompetidorResumen {
+  nombre: string;
+  ofrece: string;
+  verificado: boolean;
+}
 import type { Revision } from "./revision";
 import { resumenAdn } from "./saber";
 // Lo que viene de la IA (bien, competidores) se escapa: inyección de segundo orden.
@@ -26,7 +31,7 @@ export interface ItemAprender {
   evidencias: Evidence[];
 }
 
-function prompt(raw: RawData, adn: Adn, revision: Revision | null, competidores: Competidor[]): string {
+function prompt(raw: RawData, adn: Adn, revision: Revision | null, competidores: CompetidorResumen[]): string {
   const bien = revision?.bien.length ? `\nLo que la web ya hace bien:\n${revision.bien.map((b) => `- ${b.texto}`).join("\n")}\n` : "";
   const verificados = competidores.filter((c) => c.verificado);
   const comp = verificados.length
@@ -56,7 +61,7 @@ export async function generarAprender(
   revision: Revision | null,
   reg: Map<string, Evidence>,
   deps: SectionDeps,
-  competidores: Competidor[] = [],
+  competidores: CompetidorResumen[] = [],
 ): Promise<ItemAprender[]> {
   const ia = await runSection("aprender", prompt(raw, adn, revision, competidores), AprenderIA, deps.models, deps.runOpts);
   const out: ItemAprender[] = [];

@@ -6,7 +6,7 @@ import type { Evidence } from "@/lib/engine/v3/evidence";
 import type { DnaScore, Indicador } from "@/lib/engine/v3/score";
 import type { Metrica } from "@/lib/engine/v3/estimates";
 import type { AdnBloque, AdnCanal, Anatomia, ClaveIdentidad, FuenteMonetizacion, LineaAnatomia, TipologiaAnatomia } from "@/lib/engine/v3/sections/anatomia";
-import type { Competidor } from "@/lib/engine/v3/sections/competidores";
+import type { AfirmacionCompetidor, Competencia, CompetidorV4, FilaMatriz, GanaPierde, PrecioCompetidor } from "@/lib/engine/v3/sections/competencia";
 import type { Revision } from "@/lib/engine/v3/sections/revision";
 import type { ItemAprender } from "@/lib/engine/v3/sections/aprender";
 import type { Cierre } from "@/lib/engine/v3/sections/cierre";
@@ -474,34 +474,123 @@ function RevisionVista({ c }: { c: unknown }) {
   );
 }
 
-function CompetidoresVista({ c }: { c: unknown }) {
+const TIPO_COMP: Record<string, string> = { directo: "Directo", indirecto: "Indirecto", emergente: "Alternativa emergente" };
+const DIMENSION: Record<string, string> = {
+  cliente: "Cliente objetivo",
+  propuesta: "Propuesta de valor",
+  precio: "Precio",
+  funcionalidades: "Funcionalidades",
+  diferenciacion: "Diferenciación",
+  oportunidad: "Oportunidad",
+};
+
+function AfirmacionesVista({ titulo, items }: { titulo: string; items: unknown }) {
+  const xs = arr<AfirmacionCompetidor>(items);
+  if (xs.length === 0) return null;
   return (
-    <ul>
-      {arr<Competidor>(c).map((k, i) => (
-        <li key={i}>
-          <strong>{k.nombre}</strong>
-          {esHttp(k.web) && (
-            <>
-              {" "}
-              (
-              <a href={k.web} rel="noopener noreferrer" target="_blank">
-                {k.web}
-              </a>
-              )
-            </>
-          )}
-          {!k.verificado && <em> — sin verificar</em>}
-          <p>{k.ofrece}</p>
-          {arr(k.diferencias).length > 0 && (
-            <ul>
-              {arr<string>(k.diferencias).map((d, j) => (
-                <li key={j}>{d}</li>
+    <>
+      <p>{titulo}:</p>
+      <ul>
+        {xs.map((x, i) => (
+          <li key={i}>
+            {x.texto}
+            <Evidencias lista={x.evidencias} />
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+/** Vista mínima de la sección; la Tarea 7 la rediseña. */
+function CompetenciaVista({ c }: { c: unknown }) {
+  const comp = (c ?? {}) as Partial<Competencia>;
+  const competidores = arr<CompetidorV4>(comp.competidores);
+  const nombreDe = (q: string) => (q === "analizada" ? "Empresa analizada" : (competidores.find((k) => k.id === q)?.nombre ?? q));
+  const dims = arr<string>(comp.matriz?.dimensiones);
+  const filas = arr<FilaMatriz>(comp.matriz?.filas);
+  return (
+    <>
+      <ul>
+        {competidores.map((k) => {
+          const f = k.ficha;
+          return (
+            <li key={k.id}>
+              <strong>{k.nombre}</strong>
+              {esHttp(k.web) && (
+                <>
+                  {" "}
+                  (
+                  <a href={k.web} rel="noopener noreferrer" target="_blank">
+                    {k.web}
+                  </a>
+                  )
+                </>
+              )}{" "}
+              <small>{TIPO_COMP[k.tipo] ?? k.tipo}</small>
+              {!k.verificado && <em> — sin verificar</em>}
+              {k.motivo && <p>Por qué es relevante: {k.motivo}</p>}
+              {k.descripcion && <p>{k.descripcion}</p>}
+              {f && (
+                <>
+                  <Bloque titulo="Público" b={f.publico} />
+                  <Bloque titulo="Problema que resuelve" b={f.problema} />
+                  <Bloque titulo="Propuesta de valor" b={f.propuesta} />
+                  <Lista titulo="Funcionalidades" items={f.funcionalidades} />
+                  <p>Precios públicos: {f.precios === "desconocido" ? "Desconocido" : arr<PrecioCompetidor>(f.precios).map((p) => p.texto).join(", ")}</p>
+                  {f.precios !== "desconocido" && <Evidencias lista={arr<PrecioCompetidor>(f.precios).map((p) => p.evidencia)} />}
+                  <AfirmacionesVista titulo="Fortalezas" items={f.fortalezas} />
+                  <AfirmacionesVista titulo="Debilidades" items={f.debilidades} />
+                </>
+              )}
+              {arr<string>(k.fuentes).length > 0 && (
+                <p>
+                  <small>
+                    Fuentes: {arr<string>(k.fuentes).join(", ")} · comprobado el {new Date(k.comprobadoEn).toLocaleDateString("es-ES")}
+                  </small>
+                </p>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {filas.length > 1 && (
+        <table>
+          <thead>
+            <tr>
+              <th />
+              {dims.map((d) => (
+                <th key={d}>{DIMENSION[d] ?? d}</th>
               ))}
-            </ul>
-          )}
-        </li>
-      ))}
-    </ul>
+            </tr>
+          </thead>
+          <tbody>
+            {filas.map((f) => (
+              <tr key={f.quien}>
+                <th>{nombreDe(f.quien)}</th>
+                {dims.map((d) => (
+                  <td key={d}>{(f.valores as Record<string, string> | undefined)?.[d] ?? "Sin datos"}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {arr<GanaPierde>(comp.ganaPierde).length > 0 && (
+        <ul>
+          {arr<GanaPierde>(comp.ganaPierde).map((g) => (
+            <li key={g.dimension}>
+              <strong>{DIMENSION[g.dimension] ?? g.dimension}</strong>:{" "}
+              {g.destaca === "sin_datos" ? "Sin datos" : g.destaca === "empate" ? "Empate" : `destaca ${nombreDe(g.destaca)}`}
+              {g.porQueImporta && <p>Por qué importa: {g.porQueImporta}</p>}
+              {g.aprender && <p>Qué aprender: {g.aprender}</p>}
+              {g.diferenciarse && <p>Cómo diferenciarse: {g.diferenciarse}</p>}
+              <Evidencias lista={g.evidencia} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
   );
 }
 
@@ -570,8 +659,8 @@ function Cuerpo({ s }: { s: SeccionVista }) {
       return <ScoreVista c={s.contenido} />;
     case "revision":
       return <RevisionVista c={s.contenido} />;
-    case "competidores":
-      return <CompetidoresVista c={s.contenido} />;
+    case "competencia":
+      return <CompetenciaVista c={s.contenido} />;
     case "aprender":
       return <AprenderVista c={s.contenido} />;
     case "cierre":

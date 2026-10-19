@@ -45,6 +45,35 @@ export function extractPassages(html: string, max = 25): string[] {
   return out.slice(0, max);
 }
 
+/** Un importe con su moneda ("29 €", "$20", "9,90 EUR"). */
+const PRECIO = /\d[\d.,]*\s*(?:€|\$|£|eur\b|euros?\b|usd\b|gbp\b)|(?:€|\$|£)\s*\d/i;
+const MAX_PRECIO = 120;
+
+/**
+ * Textos literales cortos que contienen un importe (las tablas de precios suelen tener "29 €/mes"
+ * en un elemento suelto, por debajo del mínimo de `extractPassages`). Se toma el elemento más
+ * profundo que contiene el importe completo; nunca se reescribe.
+ */
+export function extractPricePassages(html: string, max = 15): string[] {
+  const $ = cheerio.load(html);
+  $(NOISE).remove();
+  const main = $("main").first();
+  const body = $("body").first();
+  const root = main.length ? main : body.length ? body : $.root().children();
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const el of root.find("*").toArray()) {
+    if (out.length >= max) break;
+    const $el = $(el);
+    const text = clean($el.text());
+    if (text.length > MAX_PRECIO || !PRECIO.test(text) || seen.has(text)) continue;
+    if ($el.children().toArray().some((c) => PRECIO.test(clean($(c).text())))) continue; // lo dice un hijo
+    seen.add(text);
+    out.push(text);
+  }
+  return out;
+}
+
 const stripUrl = (u: string): URL | null => {
   try {
     const url = new URL(u);

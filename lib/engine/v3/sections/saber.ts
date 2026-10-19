@@ -16,7 +16,7 @@ const NoSabemosIA = z.object({
     .transform((xs) => xs.map((x) => x.trim()).filter((x) => x.length > 0)),
 });
 
-const ID_EVIDENCIA = String.raw`(?:p\d+(?:-e\d+)?|dato:[a-z_:0-9]+)`;
+const ID_EVIDENCIA = String.raw`(?:p\d+(?:-e\d+)?|c\d+-e\d+|dato:[a-z_:0-9]+)`;
 const PARENTESIS_IDS = new RegExp(String.raw`\s*\(\s*${ID_EVIDENCIA}(?:\s*,\s*${ID_EVIDENCIA})*\s*\)`, "gi");
 const CORCHETES_IDS = new RegExp(String.raw`\s*\[\s*${ID_EVIDENCIA}(?:\s*,\s*${ID_EVIDENCIA})*\s*\]`, "gi");
 

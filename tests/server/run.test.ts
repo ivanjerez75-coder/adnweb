@@ -48,7 +48,7 @@ describe("runAnalysis v3", () => {
     expect(mine.informe).toBeNull();
     expect(mine.creditoDevuelto).toBe(false);
     expect(Object.keys(mine.secciones).sort()).toEqual(
-      ["anatomia", "aprender", "cierre", "competidores", "datos", "revision", "saber", "score"],
+      ["anatomia", "aprender", "cierre", "competencia", "datos", "revision", "saber", "score"],
     );
     expect(Object.values(mine.secciones).every((s) => s.estado === "lista")).toBe(true);
   });
@@ -79,7 +79,7 @@ describe("runAnalysis v3", () => {
     await runAnalysis(a.id, normalized, deps);
     const mine = state.analisis.find((x) => x.id === a.id)!;
     expect(mine.estado).toBe("listo");
-    expect(mine.secciones.competidores).toEqual({ estado: "error", contenido: null });
+    expect(mine.secciones.competencia).toEqual({ estado: "error", contenido: null });
     expect(mine.secciones.anatomia.estado).toBe("lista");
     expect(mine.creditoDevuelto).toBe(false);
   });

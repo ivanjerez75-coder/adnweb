@@ -20,7 +20,7 @@ const ORDEN: [ClaveSeccion, string][] = [
   ["saber", "Qué sabemos y qué no"],
   ["score", "DNA Score"],
   ["revision", "Qué hace bien y problemas"],
-  ["competidores", "Competidores"],
+  ["competencia", "Competencia y posicionamiento"],
   ["aprender", "Qué aprender"],
   ["cierre", "Oportunidades"],
 ];

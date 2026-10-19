@@ -7,14 +7,14 @@ const en = (ms: number) => new Date(Date.parse(t0) + ms);
 describe("ordenSecciones", () => {
   it("devuelve el orden y los títulos fijos", () => {
     const r = ordenSecciones({}, t0, en(0));
-    expect(r.map((s) => s.clave)).toEqual(["datos", "anatomia", "saber", "score", "revision", "competidores", "aprender", "cierre"]);
+    expect(r.map((s) => s.clave)).toEqual(["datos", "anatomia", "saber", "score", "revision", "competencia", "aprender", "cierre"]);
     expect(r.map((s) => s.titulo)).toEqual([
       "Datos y métricas",
       "Anatomía del negocio",
       "Qué sabemos y qué no",
       "DNA Score",
       "Qué hace bien y problemas",
-      "Competidores",
+      "Competencia y posicionamiento",
       "Qué aprender",
       "Oportunidades",
     ]);
