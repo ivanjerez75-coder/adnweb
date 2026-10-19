@@ -187,7 +187,7 @@ describe("crear", () => {
     expect(tareas).toHaveLength(1);
     await tareas[0]();
     expect(mio.estado).toBe("listo");
-    expect(mio.version).toBe(3);
+    expect(mio.version).toBe(4);
   });
 
   it("un análisis colgado de 4 min no bloquea: 202, el viejo pasa a error y se devuelve el crédito", async () => {

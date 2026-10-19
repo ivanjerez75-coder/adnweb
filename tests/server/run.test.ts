@@ -37,18 +37,18 @@ function conCache(state: ReturnType<typeof setup>["state"], datosBrutos: unknown
   });
 }
 
-describe("runAnalysis v3", () => {
-  it("camino feliz con caché v3: listo, versión 3, secciones guardadas, sin informe ni devolución", async () => {
+describe("runAnalysis (informe v4)", () => {
+  it("camino feliz con caché v3: listo, versión 4, secciones guardadas, sin informe ni devolución", async () => {
     const { state, a, deps } = setup([fakeV3Model()]);
     conCache(state, rawV3);
     await runAnalysis(a.id, normalized, deps);
     const mine = state.analisis.find((x) => x.id === a.id)!;
     expect(mine.estado).toBe("listo");
-    expect(mine.version).toBe(3);
+    expect(mine.version).toBe(4);
     expect(mine.informe).toBeNull();
     expect(mine.creditoDevuelto).toBe(false);
     expect(Object.keys(mine.secciones).sort()).toEqual(
-      ["anatomia", "competencia", "datos", "diagnostico", "oportunidades", "plan", "rendimiento"],
+      ["anatomia", "cobertura", "competencia", "datos", "diagnostico", "oportunidades", "plan", "rendimiento", "resumen"],
     );
     expect(Object.values(mine.secciones).every((s) => s.estado === "lista")).toBe(true);
   });

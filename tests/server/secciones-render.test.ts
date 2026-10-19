@@ -23,6 +23,27 @@ const oportunidad = (id: string, estado: string) => ({
 });
 
 describe("Secciones (render)", () => {
+  it("el resumen muestra frase, hallazgos y cobertura; un resumen vacío no rompe la vista", () => {
+    const resumen = {
+      nombre: "Facturo",
+      dominio: "facturo.example",
+      categoria: ["saas"],
+      frase: { texto: "Facturación online para pymes", evidencias: [] },
+      modelo: { tipologias: [], estado: "probable" },
+      indicadores: [],
+      hallazgos: [{ tipo: "debilidad", id: "d1", texto: "Sin casos", evidencias: [] }],
+      destacado: {},
+      oportunidad: null,
+      cobertura: { competencia: { estado: "fallido", motivo: "No se pudo analizar la competencia." } },
+    };
+    const html = render({ resumen: { estado: "lista", contenido: resumen } });
+    expect(html).toContain("Resumen ejecutivo");
+    expect(html).toContain("Facturación online para pymes");
+    expect(html).toContain("Debilidad:");
+    expect(html).toContain("Fallido");
+    expect(render({ resumen: { estado: "lista", contenido: {} } })).toContain("Cobertura del análisis");
+  });
+
   it("una oportunidad se etiqueta siempre como hipótesis y muestra su ficha y su origen", () => {
     const html = render({ oportunidades: { estado: "lista", contenido: [oportunidad("o1", "detectada"), oportunidad("o2", "por_validar")] } });
     expect(veces(html, "Hipótesis")).toBe(2);

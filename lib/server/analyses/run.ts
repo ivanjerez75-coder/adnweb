@@ -1,7 +1,7 @@
 import { collect, type CollectDeps } from "@/lib/engine/collect";
 import type { JsonModel } from "@/lib/engine/ai/providers";
 import type { RunSectionOpts } from "@/lib/engine/v3/llm";
-import { buildReportV3, type SeccionClave } from "@/lib/engine/v3/report";
+import { buildReportV4, type SeccionClaveV4 } from "@/lib/engine/v3/report";
 import type { RawData } from "@/lib/engine/types";
 import type { NormalizedUrl } from "@/lib/engine/url";
 import type { WorkerRepo } from "@/lib/server/analyses/repo";
@@ -30,7 +30,7 @@ export interface RunDeps {
 }
 
 /**
- * Ejecuta el análisis en segundo plano (informe v3). Cada sección se guarda en cuanto está lista y
+ * Ejecuta el análisis en segundo plano (informe v4). Cada sección se guarda en cuanto está lista y
  * el análisis pasa a `listo` al guardar el bloque 1 (anatomia). Nunca lanza: los fallos se guardan y se
  * devuelve el crédito.
  */
@@ -61,9 +61,9 @@ export async function runAnalysis(id: string, normalized: NormalizedUrl, deps: R
     await worker.guardarDatosBrutos(id, raw);
 
     await onStep("Analizando el negocio…");
-    // buildReportV3 ignora los fallos de onSection salvo en anatomia: este indicador evita seguir guardando.
+    // buildReportV4 ignora los fallos de onSection salvo en anatomia: este indicador evita seguir guardando.
     let abortado = false;
-    await buildReportV3(
+    await buildReportV4(
       raw,
       {
         models: engine.models,
@@ -72,8 +72,8 @@ export async function runAnalysis(id: string, normalized: NormalizedUrl, deps: R
         now,
         runOpts: engine.runOpts,
       },
-      async (clave: SeccionClave, contenido, estado) => {
-        // buildReportV3 solo propaga el fallo de guardar anatomia (y las demás se ignoran).
+      async (clave: SeccionClaveV4, contenido, estado) => {
+        // buildReportV4 solo propaga el fallo de guardar anatomia (y las demás se ignoran).
         if (abortado) throw new FilaFinalError();
         const guardada = await worker.guardarSeccion(id, clave, contenido, estado);
         if (!guardada) {

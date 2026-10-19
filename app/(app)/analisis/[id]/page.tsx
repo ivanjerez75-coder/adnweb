@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { t } from "@/lib/i18n";
 import { repoDelUsuario } from "@/lib/server/auth/usuario";
 import { Progreso } from "./progreso";
 import { Secciones } from "./secciones";
@@ -17,7 +18,7 @@ async function Contenido({ params }: { params: Promise<{ id: string }> }) {
   const a = await repo.obtener(id);
   if (!a) notFound();
 
-  if (a.version === 3 && a.estado !== "error") {
+  if (a.version === 4 && a.estado !== "error") {
     return (
       <main className={MAIN}>
         <h1>{a.dominio}</h1>
@@ -28,6 +29,18 @@ async function Contenido({ params }: { params: Promise<{ id: string }> }) {
         />
         <p>
           <Link href="/dashboard">Volver al panel</Link>
+        </p>
+      </main>
+    );
+  }
+  // Informe v3 (secciones antiguas): no se pinta con la vista v4.
+  if (a.version === 3 && a.estado !== "error") {
+    return (
+      <main className={MAIN}>
+        <h1>{a.dominio}</h1>
+        <p role="note">{t("informe.versionAnterior")}</p>
+        <p>
+          <Link href="/dashboard">{t("informe.volverPanel")}</Link>
         </p>
       </main>
     );
@@ -56,7 +69,7 @@ async function Contenido({ params }: { params: Promise<{ id: string }> }) {
   return (
     <main className={MAIN}>
       <h1>{a.dominio}</h1>
-      <p>Informe de una versión anterior</p>
+      <p role="note">{t("informe.versionAnterior")}</p>
       {informe ? <p>{informe.resumen.queHace}</p> : <p>El informe no está disponible.</p>}
       <p>
         <Link href="/dashboard">Volver al panel</Link>

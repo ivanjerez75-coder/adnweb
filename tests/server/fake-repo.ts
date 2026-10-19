@@ -198,7 +198,7 @@ export function createFakeRepos(opts?: {
       const a = procesando(id);
       if (!a) return;
       a.estado = "listo";
-      a.version = 3;
+      a.version = 4;
       a.pasoActual = null;
       a.updatedAt = state.now();
     },

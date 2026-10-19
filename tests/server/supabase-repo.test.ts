@@ -213,10 +213,10 @@ describe("createWorkerRepo", () => {
     expect(eqs(s)).toContainEqual(["estado", "procesando"]);
   });
 
-  it("marcarListo: listo, version 3, filtra por estado procesando", async () => {
+  it("marcarListo: listo, version 4, filtra por estado procesando", async () => {
     const s = stub({});
     await createWorkerRepo(s.client).marcarListo("id1");
-    expect(upd(s)).toMatchObject({ estado: "listo", version: 3, paso_actual: null });
+    expect(upd(s)).toMatchObject({ estado: "listo", version: 4, paso_actual: null });
     expect(upd(s).informe).toBeUndefined();
     expect(eqs(s)).toContainEqual(["id", "id1"]);
     expect(eqs(s)).toContainEqual(["estado", "procesando"]);

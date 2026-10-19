@@ -126,6 +126,10 @@ export const es = {
     sinResultados: "Ningún análisis coincide con «{q}».",
     verTodo: "Ver todos",
   },
+  informe: {
+    versionAnterior: "Informe de una versión anterior. Vuelve a analizar para ver el nuevo informe.",
+    volverPanel: "Volver al panel",
+  },
   errores: {
     generico: "Algo ha salido mal. Inténtalo de nuevo.",
     urlInvalida: "Escribe una URL válida, por ejemplo canva.com.",

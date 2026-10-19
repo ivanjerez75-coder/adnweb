@@ -139,7 +139,7 @@ export function createWorkerRepo(admin: SupabaseClient): WorkerRepo {
     },
 
     async marcarListo(id) {
-      await actualizar(id, { estado: "listo", version: 3, paso_actual: null });
+      await actualizar(id, { estado: "listo", version: 4, paso_actual: null });
     },
 
     async completar(id, raw: RawData, informe: Report) {

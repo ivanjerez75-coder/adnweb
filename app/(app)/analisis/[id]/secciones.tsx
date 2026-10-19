@@ -11,6 +11,7 @@ import type { Debilidad, Diagnostico, Fortaleza, Friccion, Riesgo } from "@/lib/
 import type { Rendimiento } from "@/lib/engine/v3/sections/rendimiento";
 import type { Oportunidad } from "@/lib/engine/v3/sections/oportunidades";
 import type { Accion, Plan } from "@/lib/engine/v3/sections/plan";
+import type { CoberturaInforme, Hallazgo, Resumen } from "@/lib/engine/v3/sections/resumen";
 import { decidirSondeo, siguienteSondeo } from "@/lib/shared/polling";
 import { hayPendientes, ordenSecciones, type SeccionVista } from "@/lib/shared/secciones-view";
 
@@ -674,6 +675,73 @@ function PlanVista({ c }: { c: unknown }) {
   );
 }
 
+const COMPONENTE: Record<string, string> = {
+  identidad: "Identidad",
+  modelo: "Modelo de negocio",
+  auditoria: "Auditoría web",
+  rendimiento: "Datos de rendimiento",
+  competencia: "Competencia",
+  diagnostico: "Diagnóstico",
+  oportunidades: "Oportunidades",
+  plan: "Plan de acción",
+};
+const ESTADO_COBERTURA: Record<string, string> = { valido: "Válido", parcial: "Parcial", fallido: "Fallido" };
+const HALLAZGO: Record<string, string> = { debilidad: "Debilidad", fortaleza: "Fortaleza", riesgo: "Riesgo", friccion: "Fricción" };
+
+/** Vista mínima (la Tarea 7 la rehace): qué se pudo estudiar y qué no. */
+function CoberturaVista({ c }: { c: unknown }) {
+  const cob = (c ?? {}) as Partial<CoberturaInforme>;
+  return (
+    <ul>
+      {Object.entries(cob).map(([k, v]) => (
+        <li key={k}>
+          <strong>{COMPONENTE[k] ?? k}</strong>: {ESTADO_COBERTURA[v?.estado ?? ""] ?? v?.estado} <small>{v?.motivo}</small>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Vista mínima (la Tarea 7 la rehace) del resumen ejecutivo. */
+function ResumenVista({ c }: { c: unknown }) {
+  const r = (c ?? {}) as Partial<Resumen>;
+  return (
+    <>
+      <p>
+        <strong>{r.nombre}</strong> · {r.dominio} · {arr<string>(r.categoria).join(", ")}
+      </p>
+      {r.frase?.texto && <p>{r.frase.texto}</p>}
+      {r.modelo && <p>Modelo de negocio: {r.modelo.estado}</p>}
+      {arr<Metrica>(r.indicadores).length > 0 && (
+        <ul>
+          {arr<Metrica>(r.indicadores).map((m) => (
+            <li key={m.clave}>
+              {m.etiqueta}: {valorMetrica(m) ?? "—"}
+            </li>
+          ))}
+        </ul>
+      )}
+      {arr<Hallazgo>(r.hallazgos).length > 0 && (
+        <section>
+          <h3>Hallazgos principales</h3>
+          <ul>
+            {arr<Hallazgo>(r.hallazgos).map((h) => (
+              <li key={h.id}>
+                <strong>{HALLAZGO[h.tipo] ?? h.tipo}:</strong> {h.texto}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {r.oportunidad && <p>Oportunidad más interesante: {r.oportunidad.titulo}</p>}
+      <section>
+        <h3>Cobertura del análisis</h3>
+        <CoberturaVista c={r.cobertura} />
+      </section>
+    </>
+  );
+}
+
 function Cuerpo({ s }: { s: SeccionVista }) {
   if (s.estado === "pendiente") return <p role="status">Generando…</p>;
   if (s.estado === "error" || s.contenido === null || s.contenido === undefined) {
@@ -694,6 +762,10 @@ function Cuerpo({ s }: { s: SeccionVista }) {
       return <OportunidadesVista c={s.contenido} />;
     case "plan":
       return <PlanVista c={s.contenido} />;
+    case "resumen":
+      return <ResumenVista c={s.contenido} />;
+    case "cobertura":
+      return <CoberturaVista c={s.contenido} />;
   }
 }
 

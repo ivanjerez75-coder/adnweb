@@ -1,7 +1,7 @@
-import type { SeccionClave } from "@/lib/engine/v3/report";
+import type { SeccionClaveV4 } from "@/lib/engine/v3/report";
 
 /** Misma clave que el motor: un solo contrato. */
-export type ClaveSeccion = SeccionClave;
+export type ClaveSeccion = SeccionClaveV4;
 export type EstadoSeccionVista = "pendiente" | "lista" | "error";
 
 export interface SeccionVista {
@@ -15,6 +15,7 @@ export interface SeccionVista {
 export const TIEMPO_MAX_SECCION_MS = 3 * 60 * 1000;
 
 const ORDEN: [ClaveSeccion, string][] = [
+  ["resumen", "Resumen ejecutivo"],
   ["datos", "Datos y métricas"],
   ["anatomia", "Anatomía del negocio"],
   ["rendimiento", "Rendimiento y presencia digital"],

@@ -28,9 +28,9 @@ export type SeccionesGuardadas = Record<string, SeccionGuardada>;
 
 export interface AnalisisDetalle extends AnalisisResumen {
   pasoActual: string | null;
-  /** Informe antiguo (version 2). Null en v3: el contenido está en secciones. */
+  /** Informe antiguo (version 2). Null en v3/v4: el contenido está en secciones. */
   informe: Report | null;
-  /** 2 = informe antiguo, 3 = informe por secciones. */
+  /** 2 = informe antiguo, 3 = secciones v3 (antiguas), 4 = secciones v4. */
   version: number;
   secciones: SeccionesGuardadas;
   error: string | null;
@@ -54,9 +54,9 @@ export interface WorkerRepo {
   paso(id: string, texto: string): Promise<void>;
   /** Guarda los datos recogidos (alimenta la caché de 24 h aunque fallen las secciones). */
   guardarDatosBrutos(id: string, raw: RawData): Promise<void>;
-  /** Guarda (o sobrescribe) una sección del informe v3. false si la fila ya no está procesando/listo. */
+  /** Guarda (o sobrescribe) una sección del informe v4. false si la fila ya no está procesando/listo. */
   guardarSeccion(id: string, clave: string, contenido: unknown | null, estado: SeccionGuardada["estado"]): Promise<boolean>;
-  /** procesando -> listo, version 3. */
+  /** procesando -> listo, version 4 (informe v4 por secciones). */
   marcarListo(id: string): Promise<void>;
   completar(id: string, raw: RawData, informe: Report): Promise<void>;
   fallar(id: string, mensaje: string, kind: string): Promise<void>;
