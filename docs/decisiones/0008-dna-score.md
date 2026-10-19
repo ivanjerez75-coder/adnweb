@@ -92,6 +92,13 @@ Reglas comunes de los cuatro indicadores legales (informe v3.1, casos teb.org y 
 | `dominio_antiguo` | Registro RDAP frente a `collectedAt`: ≥ 5 años 15; ≥ 2 años 8; menos 0. No indica la edad de la empresa | 15 |
 | `email_corporativo` | `raw.dns.emailProvider` distinto de "Ninguno": 15, si no 0. Sin DNS: no evaluado | 15 |
 
+## Resumen de cada dimensión
+
+El texto que explica cada dimensión lo construye el código (`resumen` en `DimensionScore`), nunca la IA: antes el cierre pedía a la IA una frase por dimensión ("motivos"), sin citas. Ese campo se ha quitado del esquema, del prompt y de la vista.
+
+- Dimensión puntuable: "Puntos fuertes: A (x/y), B (x/y). A mejorar: C (x/y), D (x/y)." Puntos fuertes = hasta 2 indicadores evaluados y aplicables con mayor `puntos/maximo` (y más de 0). A mejorar = hasta 2 de los restantes con menor proporción (y menos de 1). A igual proporción manda el orden de la metodología. Si una parte queda vacía, no se escribe.
+- Dimensión "No puntuable": "No hay datos suficientes para puntuar esta dimensión."
+
 ## Evidencias
 
 Cada indicador adjunta los `Evidence` que lo respaldan, tomados del registro (`reg`): `dato:aviso_legal`, `dato:privacidad`, `dato:cif`, `dato:razon_social`, `dato:contacto`, `dato:pagespeed`, `dato:crux`, `dato:email`, `dato:trafico`, `dato:paginas_sitemap`, `dato:precio:N`, y los extractos de página de `adn` (`queEs`, `propuestaValor`, `comoSeContrata`).

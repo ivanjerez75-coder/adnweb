@@ -67,7 +67,7 @@ function fakeModels(fail: Fail = {}, tracker = { cur: 0, max: 0 }): JsonModel {
           case "aprender":
             return JSON.stringify({ items: [{ texto: "Mostrar precio", evidencias: ev }] });
           default:
-            return JSON.stringify({ motivos: {}, oportunidades: [] });
+            return JSON.stringify({ oportunidades: [] });
         }
       } finally {
         tracker.cur--;

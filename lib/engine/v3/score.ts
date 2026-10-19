@@ -49,6 +49,8 @@ export interface DimensionScore {
   /** 0-1: indicadores evaluados / indicadores aplicables. */
   cobertura: number;
   indicadores: Indicador[];
+  /** Resumen en lenguaje llano construido en código a partir de los indicadores evaluados. */
+  resumen: string;
 }
 export interface DnaScore {
   metodologia: typeof METODOLOGIA_DNA;
@@ -403,6 +405,24 @@ function confianza(raw: RawData, revision: Revision | null, reg: Reg): Indicador
 
 // ---------- Agregación ----------
 
+export const RESUMEN_NO_PUNTUABLE = "No hay datos suficientes para puntuar esta dimensión.";
+const MAX_RESUMEN = 2;
+
+/** "Puntos fuertes: A (x/y), B (x/y). A mejorar: C (x/y)." Solo indicadores aplicables y evaluados, por puntos/máximo. */
+export function resumenDimension(valor: number | null, indicadores: Indicador[]): string {
+  if (valor === null) return RESUMEN_NO_PUNTUABLE;
+  const ratio = (i: Indicador) => (i.maximo > 0 ? i.puntos / i.maximo : 0);
+  const evaluados = indicadores.filter((i) => i.aplica && i.evaluado && i.maximo > 0);
+  const fmt = (i: Indicador) => `${i.nombre} (${i.puntos}/${i.maximo})`;
+  // sort es estable: a igual proporción se conserva el orden de la metodología.
+  const fuertes = [...evaluados].sort((a, b) => ratio(b) - ratio(a)).filter((i) => ratio(i) > 0).slice(0, MAX_RESUMEN);
+  const mejorar = [...evaluados].filter((i) => !fuertes.includes(i) && ratio(i) < 1).sort((a, b) => ratio(a) - ratio(b)).slice(0, MAX_RESUMEN);
+  const partes: string[] = [];
+  if (fuertes.length) partes.push(`Puntos fuertes: ${fuertes.map(fmt).join(", ")}.`);
+  if (mejorar.length) partes.push(`A mejorar: ${mejorar.map(fmt).join(", ")}.`);
+  return partes.join(" ");
+}
+
 function dimension(clave: DimensionClave, nombre: string, indicadores: Indicador[]): DimensionScore {
   const aplicables = indicadores.filter((i) => i.aplica);
   const evaluados = aplicables.filter((i) => i.evaluado);
@@ -410,7 +430,7 @@ function dimension(clave: DimensionClave, nombre: string, indicadores: Indicador
   const maximo = evaluados.reduce((a, i) => a + i.maximo, 0);
   const puntos = evaluados.reduce((a, i) => a + i.puntos, 0);
   const valor = cobertura >= COBERTURA_MIN_DIMENSION && maximo > 0 ? Math.round((100 * puntos) / maximo) : null;
-  return { clave, nombre, peso: PESOS_DNA[clave], valor, cobertura, indicadores };
+  return { clave, nombre, peso: PESOS_DNA[clave], valor, cobertura, indicadores, resumen: resumenDimension(valor, indicadores) };
 }
 
 /** DNA Score v1.0: reglas publicadas y reproducibles. Lo que falta es "no evaluado", nunca 0. */

@@ -3,7 +3,7 @@ import type { RawData } from "../../types";
 import { citar, type Evidence } from "../evidence";
 import { runSection, type SectionDeps } from "../llm";
 import { bloqueDatosWeb, REGLAS_COMUNES } from "../prompt";
-import type { DimensionClave, DnaScore } from "../score";
+import type { DnaScore } from "../score";
 import type { Adn } from "./adn";
 import type { Revision } from "./revision";
 import { resumenAdn } from "./saber";
@@ -34,14 +34,11 @@ export interface Oportunidad {
   supuestos: string[];
 }
 export interface Cierre {
-  /** Una frase por dimensión puntuada; solo claves de dimensión conocidas. */
-  motivos: Partial<Record<DimensionClave, string[]>>;
   oportunidades: Oportunidad[];
 }
 
 // Los niveles llegan como texto libre y se validan en código: un valor raro descarta solo esa oportunidad.
 const CierreIA = z.object({
-  motivos: z.record(z.string(), z.string()).catch({}),
   oportunidades: z
     .array(
       z.object({
@@ -78,16 +75,15 @@ function prompt(raw: RawData, adn: Adn, revision: Revision | null, score: DnaSco
   const problemas = revision?.problemas.length
     ? `\nProblemas detectados:\n${revision.problemas.map((p) => `- ${p.linea}: ${p.problema} (mejora: ${p.mejora})`).join("\n")}\n`
     : "";
-  return `Eres un consultor de negocio. Cierra el informe con (1) una frase por dimensión que explique la puntuación y (2) las oportunidades más útiles.
+  return `Eres un consultor de negocio. Cierra el informe con las oportunidades más útiles.
 
 ${resumenAdn(adn)}
 
-DNA Score (calculado por código; NO lo cambies, solo explícalo):
+DNA Score (calculado por código; NO lo cambies ni lo discutas):
 ${dims}
 ${problemas}
 Devuelve SOLO un JSON:
 {
-  "motivos": { "<clave de la dimensión>": string },
   "oportunidades": [ {
     "hallazgo": string,
     "evidencias": string[],
@@ -105,7 +101,6 @@ Devuelve SOLO un JSON:
 
 Reglas:
 ${REGLAS_COMUNES}
-- "motivos": una frase corta en lenguaje llano por cada dimensión puntuada, usando las claves de la lista. No cambies ni discutas los números.
 - "oportunidades": como máximo 3, concretas y específicas de este negocio. Cada una cita en "evidencias" al menos 2 ids válidos distintos; las que no lo hagan se descartan. Si no hay 3 buenas, devuelve menos: no rellenes.
 - "hallazgo": lo que se observa; "impacto": qué se ganaría, en palabras (sin cifras inventadas); "accion": qué cambiar; "validacion": cómo comprobar que funcionó; "supuestos": lo que das por cierto sin poder verlo.
 - "confianza": "comprobado" solo si el hallazgo trata de la propia web y se ve en un extracto de página; en cualquier otro caso es "hipotesis". "sobreLaWeb" indica si el hallazgo trata de la propia web. La prioridad no la eliges tú: la calcula el sistema.
@@ -113,7 +108,7 @@ ${REGLAS_COMUNES}
 ${bloqueDatosWeb(raw)}`;
 }
 
-/** Cierre del informe: motivos del score en lenguaje llano (la IA explica, no puntúa) y hasta 3 oportunidades validadas. */
+/** Cierre del informe: hasta 3 oportunidades validadas. Los resúmenes del score los construye el código (score.ts). */
 export async function generarCierre(
   raw: RawData,
   adn: Adn,
@@ -123,13 +118,6 @@ export async function generarCierre(
   deps: SectionDeps,
 ): Promise<Cierre> {
   const ia = await runSection("cierre", prompt(raw, adn, revision, score), CierreIA, deps.models, deps.runOpts);
-
-  const claves = new Set<string>(score.dimensiones.map((d) => d.clave));
-  const motivos: Cierre["motivos"] = {};
-  for (const [k, v] of Object.entries(ia.motivos)) {
-    const t = v.trim();
-    if (claves.has(k) && t) motivos[k as DimensionClave] = [t];
-  }
 
   const oportunidades: Oportunidad[] = [];
   const vistas = new Set<string>();
@@ -168,5 +156,5 @@ export async function generarCierre(
       PRIORIDADES.indexOf(y.prioridad) - PRIORIDADES.indexOf(x.prioridad) ||
       NIVELES.indexOf(y.impactoNivel) - NIVELES.indexOf(x.impactoNivel),
   );
-  return { motivos, oportunidades: oportunidades.slice(0, MAX_OPORTUNIDADES) };
+  return { oportunidades: oportunidades.slice(0, MAX_OPORTUNIDADES) };
 }

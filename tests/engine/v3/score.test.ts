@@ -402,6 +402,35 @@ describe("calcularScore: indicadores que no aplican al tipo de negocio", () => {
   });
 });
 
+describe("calcularScore: resumen de cada dimensión (calculado en código)", () => {
+  it("usa solo nombres y valores reales de indicadores evaluados: 2 más altos y 2 más bajos", () => {
+    const s = score(completo({ sitemap: sitemap({ recentBlogPosts: 0 }) }), { adn: adnCompleto(), rev: revCompleta() });
+    const a = dim(s, "adquisicion");
+    // SEO 18/20, títulos 11/15, sitemap 15/15, blog 0/15, redes 8/15, popularidad 20/20
+    expect(a.resumen).toBe("Puntos fuertes: Sitemap con contenido (15/15), Popularidad en rankings públicos (20/20). A mejorar: Blog activo (0/15), Redes sociales (8/15).");
+    for (const d of s.dimensiones) {
+      const nombres = [...d.resumen.matchAll(/([^:,.]+?) \((\d+)\/(\d+)\)/g)].map((m) => [m[1].trim(), Number(m[2]), Number(m[3])] as const);
+      for (const [n, p, mx] of nombres) {
+        const i = d.indicadores.find((x) => x.nombre === n);
+        expect(i, n).toBeDefined();
+        expect([i!.puntos, i!.maximo, i!.evaluado, i!.aplica]).toEqual([p, mx, true, true]);
+      }
+    }
+  });
+
+  it("sin nada que mejorar no añade 'A mejorar'; no lista indicadores no evaluados ni que no aplican", () => {
+    const s = score(completo(), { adn: adnCompleto(), rev: revCompleta() });
+    expect(dim(s, "confianza").resumen).toBe("Puntos fuertes: Aviso legal (15/15), Política de privacidad (15/15).");
+    const o = score(completo(), { adn: { ...adnCompleto(), tipoNegocio: "organizacion_social" }, rev: revCompleta() });
+    expect(dim(o, "oferta").resumen).not.toMatch(/Plan gratuito|Página de precios|Cobra en línea/);
+  });
+
+  it("una dimensión no puntuable lleva el texto fijo", () => {
+    const s = score(vacio());
+    for (const d of s.dimensiones) expect(d.resumen).toBe("No hay datos suficientes para puntuar esta dimensión.");
+  });
+});
+
 describe("calcularScore: fixture completo con global calculado a mano", () => {
   it("global = media de las 5 dimensiones", () => {
     const s = score(completo(), { adn: adnCompleto(), rev: revCompleta() });

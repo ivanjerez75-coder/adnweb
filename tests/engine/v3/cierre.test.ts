@@ -38,8 +38,8 @@ const score: DnaScore = {
   coberturaGlobal: 0.8,
   avisos: ["Resume indicadores públicos; no es una valoración financiera.", "Pesos provisionales, pendientes de validación."],
   dimensiones: [
-    { clave: "propuesta", nombre: "Propuesta de valor", peso: 0.2, valor: 80, cobertura: 1, indicadores: [] },
-    { clave: "oferta", nombre: "Oferta y monetización", peso: 0.2, valor: null, cobertura: 0.25, indicadores: [] },
+    { clave: "propuesta", nombre: "Propuesta de valor", peso: 0.2, valor: 80, cobertura: 1, indicadores: [], resumen: "" },
+    { clave: "oferta", nombre: "Oferta y monetización", peso: 0.2, valor: null, cobertura: 0.25, indicadores: [], resumen: "No hay datos suficientes para puntuar esta dimensión." },
   ],
 };
 function fake(obj: object) {
@@ -65,14 +65,13 @@ const op = (hallazgo: string, o: Record<string, unknown> = {}) => ({
 
 describe("generarCierre", () => {
   it("descarta una oportunidad con una sola evidencia", async () => {
-    const { deps } = fake({ motivos: {}, oportunidades: [op("Una", { evidencias: ["p1-e1"] }), op("Dos")] });
+    const { deps } = fake({ oportunidades: [op("Una", { evidencias: ["p1-e1"] }), op("Dos")] });
     const r = await generarCierre(raw, adn, null, score, reg, deps);
     expect(r.oportunidades.map((a) => a.hallazgo)).toEqual(["Dos"]);
     expect(r.oportunidades[0].evidencias).toHaveLength(2);
   });
   it("calcula la prioridad en código a partir de los niveles", async () => {
     const { deps } = fake({
-      motivos: {},
       oportunidades: [
         op("Alta", { impactoNivel: "alto", esfuerzo: "bajo", riesgo: "bajo", prioridad: "baja" }), // 3-0.5-0.5=2
         op("Media", { impactoNivel: "medio", esfuerzo: "bajo", riesgo: "bajo" }), // 2-1=1
@@ -95,7 +94,6 @@ describe("generarCierre", () => {
   });
   it("ordena por prioridad y luego impacto, y recorta a 3", async () => {
     const { deps } = fake({
-      motivos: {},
       oportunidades: [
         op("A", { impactoNivel: "bajo", esfuerzo: "bajo", riesgo: "bajo" }), // 1-1=0 baja
         op("B", { impactoNivel: "alto", esfuerzo: "alto", riesgo: "alto" }), // 3-3=0 baja, impacto alto
@@ -110,42 +108,41 @@ describe("generarCierre", () => {
   it("comprobado con solo señal como evidencia se fuerza a hipotesis", async () => {
     const sig2 = { id: "s2", family: "tecnica", source: "web", label: "Sin blog", polarity: "negativa" } as unknown as Signal;
     const r2 = buildEvidence(raw, [sig, sig2]);
-    const { deps } = fake({ motivos: {}, oportunidades: [op("Señales", { evidencias: ["s1", "s2"] }), op("Con página")] });
+    const { deps } = fake({ oportunidades: [op("Señales", { evidencias: ["s1", "s2"] }), op("Con página")] });
     const r = await generarCierre(raw, adn, null, score, r2, deps);
     expect(r.oportunidades.find((a) => a.hallazgo === "Señales")!.confianza).toBe("hipotesis");
     expect(r.oportunidades.find((a) => a.hallazgo === "Con página")!.confianza).toBe("comprobado");
   });
   it("comprobado exige que el hallazgo sea sobre la propia web", async () => {
-    const { deps } = fake({ motivos: {}, oportunidades: [op("Mercado", { sobreLaWeb: false })] });
+    const { deps } = fake({ oportunidades: [op("Mercado", { sobreLaWeb: false })] });
     const r = await generarCierre(raw, adn, null, score, reg, deps);
     expect(r.oportunidades[0].confianza).toBe("hipotesis");
   });
   it("una hipotesis de la IA nunca se sube a comprobado", async () => {
-    const { deps } = fake({ motivos: {}, oportunidades: [op("H", { confianza: "hipotesis" })] });
+    const { deps } = fake({ oportunidades: [op("H", { confianza: "hipotesis" })] });
     expect((await generarCierre(raw, adn, null, score, reg, deps)).oportunidades[0].confianza).toBe("hipotesis");
   });
   it("conserva los campos de la tarjeta y limpia supuestos", async () => {
-    const { deps } = fake({ motivos: {}, oportunidades: [op("Tarjeta", { supuestos: [" a ", "", "b"], riesgo: "raro" })] });
+    const { deps } = fake({ oportunidades: [op("Tarjeta", { supuestos: [" a ", "", "b"], riesgo: "raro" })] });
     const o = (await generarCierre(raw, adn, null, score, reg, deps)).oportunidades[0];
     expect(o).toMatchObject({ hallazgo: "Tarjeta", impacto: "Más pedidos de presupuesto", impactoNivel: "alto", esfuerzo: "bajo", riesgo: "medio", accion: "Hacer Tarjeta", validacion: "Medir solicitudes durante 30 días" });
     expect(o.supuestos).toEqual(["a", "b"]);
   });
   it("descarta niveles de impacto/esfuerzo inválidos y no rellena", async () => {
-    const { deps } = fake({ motivos: {}, oportunidades: [op("Ok"), op("Mala", { impactoNivel: "enorme" })] });
+    const { deps } = fake({ oportunidades: [op("Ok"), op("Mala", { impactoNivel: "enorme" })] });
     const r = await generarCierre(raw, adn, null, score, reg, deps);
     expect(r.oportunidades.map((a) => a.hallazgo)).toEqual(["Ok"]);
   });
   it("sin oportunidades válidas devuelve lista vacía, sin lanzar", async () => {
-    const { deps } = fake({ motivos: {}, oportunidades: [] });
+    const { deps } = fake({ oportunidades: [] });
     expect((await generarCierre(raw, adn, null, score, reg, deps)).oportunidades).toEqual([]);
   });
-  it("motivos: solo dimensiones conocidas, como array de una línea", async () => {
-    const { deps, prompts } = fake({ motivos: { propuesta: "Se entiende bien", inventada: "x", oferta: "  " }, oportunidades: [] });
+  it("no pide ni devuelve motivos de la IA: los resúmenes del score salen del código", async () => {
+    const { deps, prompts } = fake({ motivos: { propuesta: "Se entiende bien" }, oportunidades: [] });
     const r = await generarCierre(raw, adn, null, score, reg, deps);
-    expect(r.motivos).toEqual({ propuesta: ["Se entiende bien"] });
-    expect(prompts[0]).toContain("propuesta");
+    expect(r).not.toHaveProperty("motivos");
+    expect(prompts[0]).not.toMatch(/motivos/);
     expect(prompts[0]).toContain("<<<DATOS_WEB");
-    expect(prompts[0]).toMatch(/dimensión/);
     expect(prompts[0]).not.toMatch(/criterio/);
   });
 });

@@ -300,9 +300,8 @@ function IndicadorVista({ i }: { i: Indicador }) {
   );
 }
 
-function ScoreVista({ c, cierre }: { c: unknown; cierre: unknown }) {
+function ScoreVista({ c }: { c: unknown }) {
   const s = c as DnaScore;
-  const motivos = (cierre as Cierre | null)?.motivos ?? {};
   return (
     <>
       <p>
@@ -323,9 +322,7 @@ function ScoreVista({ c, cierre }: { c: unknown; cierre: unknown }) {
               (cobertura {Math.round(k.cobertura * 100)} %, peso {Math.round(k.peso * 100)} %)
             </small>
           </p>
-          {arr<string>((motivos as Record<string, unknown>)[k.clave]).map((m, i) => (
-            <p key={i}>{m}</p>
-          ))}
+          {typeof k.resumen === "string" && k.resumen ? <p>{k.resumen}</p> : null}
           <ul>
             {arr<Indicador>(k.indicadores).map((i) => (
               <IndicadorVista key={i.clave} i={i} />
@@ -481,7 +478,7 @@ function CierreVista({ c }: { c: unknown }) {
   );
 }
 
-function Cuerpo({ s, todas }: { s: SeccionVista; todas: SeccionVista[] }) {
+function Cuerpo({ s }: { s: SeccionVista }) {
   if (s.estado === "pendiente") return <p role="status">Generando…</p>;
   if (s.estado === "error" || s.contenido === null || s.contenido === undefined) {
     return <p>No hemos podido generar esta sección.</p>;
@@ -494,7 +491,7 @@ function Cuerpo({ s, todas }: { s: SeccionVista; todas: SeccionVista[] }) {
     case "saber":
       return <Saber c={s.contenido} />;
     case "score":
-      return <ScoreVista c={s.contenido} cierre={todas.find((x) => x.clave === "cierre" && x.estado === "lista")?.contenido} />;
+      return <ScoreVista c={s.contenido} />;
     case "revision":
       return <RevisionVista c={s.contenido} />;
     case "competidores":
@@ -589,7 +586,7 @@ export function Secciones({ id, createdAt, inicial }: { id: string; createdAt: s
       {vistas.map((s) => (
         <section key={s.clave} aria-labelledby={`sec-${s.clave}`}>
           <h2 id={`sec-${s.clave}`}>{s.titulo}</h2>
-          <ErrorBoundary><Cuerpo s={s} todas={vistas} /></ErrorBoundary>
+          <ErrorBoundary><Cuerpo s={s} /></ErrorBoundary>
           {s.clave === "score" && <p>{AVISO}</p>}
         </section>
       ))}
