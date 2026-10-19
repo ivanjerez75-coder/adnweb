@@ -6,6 +6,7 @@ import type { RawData } from "../types";
 import { construirMetricas, escenarioIngresos, preciosPublicados, type Metrica } from "./estimates";
 import { buildEvidence } from "./evidence";
 import { limitarConcurrencia, type RunSectionOpts } from "./llm";
+import { tipologiasDesdeTipoNegocio } from "./clases";
 import { calcularScore, type DnaScore } from "./score";
 import { generarAdn } from "./sections/adn";
 import { generarAprender } from "./sections/aprender";
@@ -151,7 +152,7 @@ export async function buildReportV3(raw: RawData, deps: ReportV3Deps, onSection:
   // Fase 4: score (código puro).
   let score: DnaScore | null = null;
   try {
-    score = calcularScore(raw, facts, signals, adn, revision, metricas, reg);
+    score = calcularScore(raw, facts, signals, tipologiasDesdeTipoNegocio(adn.tipoNegocio), adn, revision, metricas, reg);
   } catch {
     score = null;
   }

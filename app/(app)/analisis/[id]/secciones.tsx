@@ -60,7 +60,7 @@ function Evidencias({ lista }: { lista: Evidence[] | undefined }) {
 
 const num = (n: number) => n.toLocaleString("es-ES", { maximumFractionDigits: 2 });
 
-const TIPO: Record<string, string> = { observado: "Observado", estimado: "Estimado", hipotetico: "Hipotético" };
+const TIPO: Record<string, string> = { observado: "Observado", fuente_externa: "Fuente externa", inferencia: "Inferencia", hipotesis: "Hipótesis" };
 const CONFIANZA: Record<string, string> = {
   alta: "Confianza alta",
   media: "Confianza media",
@@ -153,8 +153,8 @@ interface PrecioVista {
 function Datos({ c }: { c: unknown }) {
   const d = (c ?? {}) as { metricas?: Metrica[]; precios?: PrecioVista[]; escenario?: { clientes: number; ingresosMes: number }[] | null };
   const todas = arr<Metrica>(d.metricas);
-  const normales = todas.filter((m) => m.tipo !== "hipotetico");
-  const hipoteticas = todas.filter((m) => m.tipo === "hipotetico");
+  const normales = todas.filter((m) => m.tipo !== "hipotesis");
+  const hipoteticas = todas.filter((m) => m.tipo === "hipotesis");
   const escenario = arr<{ clientes: number; ingresosMes: number }>(d.escenario);
   const precios = arr<PrecioVista>(d.precios);
   return (

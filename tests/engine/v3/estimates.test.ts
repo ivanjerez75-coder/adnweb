@@ -66,13 +66,13 @@ describe("construirMetricas: sin datos publicados (teb-like)", () => {
 describe("construirMetricas: popularidad", () => {
   it("Tranco puesto 50000: observado, alta, no mide visitas", () => {
     const m = get(construirMetricas(makeRaw({ tranco: { rank: 50_000, trend: "sube" } }), NOW), "popularidad_tranco");
-    expect(m).toMatchObject({ valor: 50_000, unidad: "puesto", tipo: "observado", confianza: "alta", estado: "disponible" });
+    expect(m).toMatchObject({ valor: 50_000, unidad: "puesto", tipo: "fuente_externa", confianza: "alta", estado: "disponible" });
     expect(m.limitaciones.join(" ")).toContain("No mide visitas");
     expect(m.fuente).toMatch(/Tranco/);
   });
   it("Radar con franja: observado y no mide visitas", () => {
     const m = get(construirMetricas(makeRaw({ radar: { bucket: 10_000, rank: null } }), NOW), "popularidad_radar");
-    expect(m).toMatchObject({ tipo: "observado", confianza: "alta", estado: "disponible" });
+    expect(m).toMatchObject({ tipo: "fuente_externa", confianza: "alta", estado: "disponible" });
     expect(m.limitaciones.join(" ")).toContain("No mide visitas");
   });
 });
@@ -83,7 +83,7 @@ describe("construirMetricas: CrUX y PageSpeed", () => {
       pagespeed: { ...ps(80, 90), campo: { fuente: "origen", lcpMs: 2400, inpMs: 180, cls: 0.05, categoria: "FAST" } },
     });
     const m = get(construirMetricas(raw, NOW), "usuarios_reales_crux");
-    expect(m).toMatchObject({ tipo: "observado", confianza: "alta", estado: "disponible" });
+    expect(m).toMatchObject({ tipo: "fuente_externa", confianza: "alta", estado: "disponible" });
     expect(String(m.valor)).toMatch(/2400/);
     expect(m.limitaciones.join(" ")).toMatch(/visitas/i);
   });
@@ -139,7 +139,7 @@ describe("construirMetricas: ingresos publicados", () => {
     get(construirMetricas(makeRaw({ wikidata: wd({ amount: 12_000_000, currency: "EUR", year }) }), NOW), "ingresos_publicados");
   it("reciente (≤ 2 años): alta, con año y moneda originales", () => {
     const m = ing(2025);
-    expect(m).toMatchObject({ valor: 12_000_000, tipo: "observado", confianza: "alta", estado: "disponible", periodo: "2025" });
+    expect(m).toMatchObject({ valor: 12_000_000, tipo: "fuente_externa", confianza: "alta", estado: "disponible", periodo: "2025" });
     expect(m.unidad).toContain("EUR");
     expect(m.fuente).toMatch(/Wikidata/);
   });
@@ -192,7 +192,7 @@ describe("precios y escenario", () => {
   it("métrica escenario_ingresos: hipotética con texto fijo y supuestos", () => {
     const ms = construirMetricas(rawPrecios(["29 €/mes", "290 €/año"]), NOW);
     const m = get(ms, "escenario_ingresos");
-    expect(m.tipo).toBe("hipotetico");
+    expect(m.tipo).toBe("hipotesis");
     expect(m.limitaciones).toContain("Escenario ilustrativo: no son los ingresos de la empresa");
     expect(m.supuestos.length).toBeGreaterThan(0);
     expect(m.supuestos.join(" ")).not.toMatch(/periodicidad desconocida/);

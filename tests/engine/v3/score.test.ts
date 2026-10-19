@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { tipologiasDesdeTipoNegocio, type Tipologia } from "../../../lib/engine/v3/clases";
 import { calcularScore, METODOLOGIA_DNA, PESOS_DNA, AVISO_SCORE, type DnaScore, type DimensionClave } from "../../../lib/engine/v3/score";
 import { construirMetricas } from "../../../lib/engine/v3/estimates";
 import type { Adn } from "../../../lib/engine/v3/sections/adn";
@@ -25,8 +26,9 @@ const checks = (v: string) => ({ propuestaClara: v, diceAQuien: v, muestraCasos:
 const mkRev = (c: object[]): Revision =>
   ({ bien: [], problemas: [], lineas: c.map((ch, i) => ({ nombre: `L${i}`, checks: ch, evidenciasChecks: [] })) }) as unknown as Revision;
 
-function score(raw: RawData, o: { adn?: Adn; rev?: Revision | null } = {}): DnaScore {
-  return calcularScore(raw, computeFacts(raw), [], o.adn ?? mkAdn(), o.rev ?? null, construirMetricas(raw, NOW), buildEvidence(raw, []));
+function score(raw: RawData, o: { adn?: Adn; rev?: Revision | null; tipologias?: Tipologia[] } = {}): DnaScore {
+  const adn = o.adn ?? mkAdn();
+  return calcularScore(raw, computeFacts(raw), [], o.tipologias ?? tipologiasDesdeTipoNegocio(adn.tipoNegocio), adn, o.rev ?? null, construirMetricas(raw, NOW), buildEvidence(raw, []));
 }
 const dim = (s: DnaScore, clave: DimensionClave) => s.dimensiones.find((d) => d.clave === clave)!;
 const ind = (s: DnaScore, d: DimensionClave, clave: string) => dim(s, d).indicadores.find((i) => i.clave === clave)!;
@@ -341,9 +343,10 @@ describe("calcularScore: indicadores que no aplican al tipo de negocio", () => {
   const datoContacto: Evidence = { id: "dato:contacto", tipo: "dato", texto: "Contacto publicado: correo teb@teb.example", fuente: "legal" };
   const tebRaw = () => makeRaw({ site: makeSite({ pricesFound: [], hasPricingPage: false, hasFreePlanOrTrial: false, technologies: [], ctas: [], textLength: 4000 }) });
   const tebAdn = (tipo: Adn["tipoNegocio"]) => mkAdn({ tipoNegocio: tipo, canales: [{ tipo: "contacto", evidencias: [pagina("p2-e1")] }] });
-  const NO_APLICAN = ["plan_gratuito", "pagos", "pagina_precios"];
+  const NO_APLICAN = ["plan_gratuito", "pagos", "pagina_precios", "precios_publicados"];
+  const MONETIZACION = ["plan_gratuito", "pagos", "pagina_precios"];
 
-  it("organización social (caso TEB): plan gratuito, pagos y página de precios no aplican ni puntúan", () => {
+  it("organización social (caso TEB): plan gratuito, pagos, precios publicados y página de precios no aplican ni puntúan", () => {
     const s = score(tebRaw(), { adn: tebAdn("organizacion_social") });
     for (const c of NO_APLICAN) {
       const i = ind(s, "oferta", c);
@@ -352,15 +355,14 @@ describe("calcularScore: indicadores que no aplican al tipo de negocio", () => {
       expect(i.puntos, c).toBe(0);
       expect(i.motivo, c).toBe("No aplica a este tipo de negocio");
     }
-    // Precios publicados y canal de conversión siempre aplican.
-    expect(ind(s, "oferta", "precios_publicados").aplica).toBe(true);
+    // El canal de conversión siempre aplica.
     expect(ind(s, "oferta", "canal_conversion").aplica).toBe(true);
   });
 
   it("la cobertura y el valor se calculan solo sobre los indicadores aplicables (no se penaliza por no ser SaaS)", () => {
     const o = dim(score(tebRaw(), { adn: tebAdn("organizacion_social") }), "oferta");
-    expect(o.cobertura).toBe(1); // 2 evaluados / 2 aplicables, no 2/5
-    expect(o.valor).toBe(Math.round((100 * 20) / 45)); // canal 20 de (precios 25 + canal 20)
+    expect(o.cobertura).toBe(1); // 1 evaluado / 1 aplicable, no 1/5
+    expect(o.valor).toBe(100); // canal 20 de 20: sin precios que penalizar
   });
 
   it("el mismo negocio como SaaS sí puntúa 0 en plan gratuito, pagos y página de precios", () => {
@@ -377,7 +379,7 @@ describe("calcularScore: indicadores que no aplican al tipo de negocio", () => {
     ["ecommerce", [false, true, true]],
     ["marketplace", [false, true, true]],
     ["servicios", [false, false, false]],
-    ["contenido_ads", [false, false, false]],
+    ["contenido_ads", [false, false, true]],
     ["negocio_local", [false, false, false]],
     ["otro", [false, false, false]],
   ] as const)("tipo %s: aplica plan_gratuito, pagos, pagina_precios = %j", (tipo, [plan, pagos, precios]) => {
@@ -385,6 +387,20 @@ describe("calcularScore: indicadores que no aplican al tipo de negocio", () => {
     expect(ind(s, "oferta", "plan_gratuito").aplica).toBe(plan);
     expect(ind(s, "oferta", "pagos").aplica).toBe(pagos);
     expect(ind(s, "oferta", "pagina_precios").aplica).toBe(precios);
+  });
+
+  it("tipologías múltiples: aplica si aplica a alguna; servicio_profesional sin precios", () => {
+    const multi = score(tebRaw(), { tipologias: ["saas", "servicio_profesional"] });
+    for (const c of NO_APLICAN) expect(ind(multi, "oferta", c).aplica, c).toBe(true);
+    const sp = score(tebRaw(), { tipologias: ["servicio_profesional"] });
+    expect(ind(sp, "oferta", "precios_publicados")).toMatchObject({ aplica: false, evaluado: false, puntos: 0 });
+    const freemium = score(tebRaw(), { tipologias: ["freemium"] });
+    for (const c of MONETIZACION) expect(ind(freemium, "oferta", c).aplica, c).toBe(true);
+  });
+
+  it("líneas contratadas por presupuesto: precios publicados no aplica", () => {
+    const adn = mkAdn({ tipoNegocio: "saas", lineas: [lineaAdn({ comoSeContrata: "Por presupuesto" })] });
+    expect(ind(score(tebRaw(), { adn }), "oferta", "precios_publicados").aplica).toBe(false);
   });
 
   it("todos los demás indicadores aplican siempre", () => {

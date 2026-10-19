@@ -1,11 +1,12 @@
 import { FX_TO_EUR } from "../anchors";
 import type { Range, RawData } from "../types";
+import type { ClaseDato } from "./clases";
 
 /**
  * Métricas v3.1 (docs/decisiones/0007-estimaciones-v3.md): cada cifra del informe es un registro
  * etiquetado con su tipo, confianza y limitaciones. Nunca se convierte un ranking en visitas.
  */
-export type TipoMetrica = "observado" | "estimado" | "hipotetico";
+export type TipoMetrica = ClaseDato;
 export type ConfianzaMetrica = "alta" | "media" | "baja" | "insuficiente";
 export type EstadoMetrica = "disponible" | "insuficiente" | "error" | "no_aplica";
 
@@ -161,10 +162,18 @@ export function escenarioIngresos(precios: PrecioPublicado[]): { clientes: numbe
 
 type Base = Pick<Metrica, "clave" | "etiqueta" | "fuente" | "obtenidoEn"> & Partial<Metrica>;
 
+/** Clase por defecto de cada métrica: rankings y datos de terceros son fuente externa; el resto, observado. */
+const CLASE_POR_CLAVE: Record<string, ClaseDato> = {
+  popularidad_tranco: "fuente_externa",
+  popularidad_radar: "fuente_externa",
+  usuarios_reales_crux: "fuente_externa",
+  ingresos_publicados: "fuente_externa",
+};
+
 const metrica = (b: Base): Metrica => ({
   valor: null,
   unidad: "",
-  tipo: "observado",
+  tipo: CLASE_POR_CLAVE[b.clave] ?? "observado",
   metodologia: "",
   confianza: "insuficiente",
   motivoConfianza: "",
@@ -398,7 +407,7 @@ function escenarioMetrica(raw: RawData, precios: PrecioPublicado[]): Metrica | n
     valor: { min: esc[0].ingresosMes, max: esc[esc.length - 1].ingresosMes },
     unidad: "€/mes",
     fuente: "Precios publicados en la web",
-    tipo: "hipotetico",
+    tipo: "hipotesis",
     metodologia: `Clientes (${CLIENTES_ESCENARIO.join(", ")}) × mediana del precio mensual publicado, calculada sobre ${usados.length} precio(s).`,
     obtenidoEn: raw.collectedAt,
     confianza: "baja",
@@ -538,7 +547,7 @@ export function construirMetricas(raw: RawData, now: Date): Metrica[] {
   const visitas = metrica({
     clave: "visitas_mensuales",
     etiqueta: "Visitas mensuales",
-    tipo: "estimado",
+    tipo: "inferencia",
     unidad: "visitas/mes",
     fuente: "Ninguna fuente gratuita",
     metodologia: `${TEXTO_NO_FIABLE}: ninguna fuente gratuita mide las visitas y no se deducen de rankings.`,
@@ -550,7 +559,7 @@ export function construirMetricas(raw: RawData, now: Date): Metrica[] {
   const valoracion = metrica({
     clave: "valoracion",
     etiqueta: "Valor del negocio",
-    tipo: "estimado",
+    tipo: "inferencia",
     unidad: "€",
     fuente: "Sin base de cálculo",
     metodologia: `${TEXTO_VALORACION}.`,

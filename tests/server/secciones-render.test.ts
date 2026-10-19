@@ -61,7 +61,7 @@ describe("Secciones (render): sin duplicados", () => {
       etiqueta: "Escenario de ingresos",
       valor: { min: 4584, max: 45840 },
       unidad: "€/mes",
-      tipo: "hipotetico",
+      tipo: "hipotesis",
       metodologia: "Clientes × precio",
       fuente: "Precios publicados",
       obtenidoEn: "2026-10-19",

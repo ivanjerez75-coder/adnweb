@@ -3,6 +3,7 @@ import type { Facts } from "../facts";
 import { allTechnologies } from "../signals";
 import { radarRank, validRank } from "../anchors";
 import type { Evidence } from "./evidence";
+import { aplicaPrecios, type Tipologia } from "./clases";
 import type { Metrica } from "./estimates";
 import type { Adn } from "./sections/adn";
 import type { Revision } from "./sections/revision";
@@ -95,14 +96,17 @@ function noAplica(clave: string, nombre: string, maximo: number): Indicador {
   return { clave, nombre, aplica: false, evaluado: false, puntos: 0, maximo, motivo: MOTIVO_NO_APLICA, evidencias: [] };
 }
 
-type TipoNegocio = Adn["tipoNegocio"];
-/** Tipos de negocio a los que aplica cada indicador de monetización (el resto siempre aplica). */
-const APLICA_A: Record<string, readonly TipoNegocio[]> = {
-  plan_gratuito: ["saas", "app"],
-  pagos: ["ecommerce", "saas", "marketplace", "app"],
-  pagina_precios: ["saas", "ecommerce", "marketplace", "app"],
+/** Tipologías a las que aplica cada indicador de monetización (el resto siempre aplica). */
+const APLICA_A: Record<string, readonly Tipologia[]> = {
+  plan_gratuito: ["saas", "app", "freemium"],
+  pagos: ["ecommerce", "saas", "marketplace", "app", "freemium"],
 };
-const aplicaA = (clave: string, tipo: TipoNegocio) => APLICA_A[clave]?.includes(tipo) ?? true;
+/** Aplica si aplica a alguna de las tipologías del negocio (puede ser más de una). */
+function aplicaA(clave: string, tipologias: Tipologia[], lineas: Adn["lineas"]): boolean {
+  if (clave === "precios_publicados" || clave === "pagina_precios") return aplicaPrecios(tipologias, lineas);
+  const tipos = APLICA_A[clave];
+  return tipos ? tipologias.some((t) => tipos.includes(t)) : true;
+}
 
 function metrica(metricas: Metrica[], clave: string): Metrica | undefined {
   return metricas.find((m) => m.clave === clave);
@@ -226,8 +230,8 @@ function ofertaIndicadores(raw: RawData, facts: Facts, adn: Adn, reg: Reg): Indi
 }
 
 /** Los indicadores que no aplican al tipo de negocio se sustituyen por "no aplica". */
-function oferta(raw: RawData, facts: Facts, adn: Adn, reg: Reg): Indicador[] {
-  return ofertaIndicadores(raw, facts, adn, reg).map((i) => (aplicaA(i.clave, adn.tipoNegocio) ? i : noAplica(i.clave, i.nombre, i.maximo)));
+function oferta(raw: RawData, facts: Facts, adn: Adn, reg: Reg, tipologias: Tipologia[]): Indicador[] {
+  return ofertaIndicadores(raw, facts, adn, reg).map((i) => (aplicaA(i.clave, tipologias, adn.lineas) ? i : noAplica(i.clave, i.nombre, i.maximo)));
 }
 
 // ---------- Experiencia y rendimiento ----------
@@ -438,6 +442,7 @@ export function calcularScore(
   raw: RawData,
   facts: Facts,
   signals: Signal[],
+  tipologias: Tipologia[],
   adn: Adn,
   revision: Revision | null,
   metricas: Metrica[],
@@ -446,7 +451,7 @@ export function calcularScore(
   void signals; // v1.0 no usa señales: todo sale de datos y métricas.
   const dimensiones: DimensionScore[] = [
     dimension("propuesta", "Propuesta de valor", propuesta(raw, adn, revision)),
-    dimension("oferta", "Oferta y monetización", oferta(raw, facts, adn, reg)),
+    dimension("oferta", "Oferta y monetización", oferta(raw, facts, adn, reg, tipologias)),
     dimension("experiencia", "Experiencia y rendimiento", experiencia(raw, metricas, reg)),
     dimension("adquisicion", "Adquisición y visibilidad", adquisicion(raw, facts, metricas, reg)),
     dimension("confianza", "Confianza y transparencia", confianza(raw, revision, reg)),
