@@ -362,7 +362,7 @@ describe("calcularScore: indicadores que no aplican al tipo de negocio", () => {
   it("la cobertura y el valor se calculan solo sobre los indicadores aplicables (no se penaliza por no ser SaaS)", () => {
     const o = dim(score(tebRaw(), { adn: tebAdn("organizacion_social") }), "oferta");
     expect(o.cobertura).toBe(1); // 1 evaluado / 1 aplicable, no 1/5
-    expect(o.valor).toBe(100); // canal 20 de 20: sin precios que penalizar
+    expect(o.valor).toBeNull(); // un solo indicador aplicable: no basta para puntuar (mín. 2)
   });
 
   it("el mismo negocio como SaaS sí puntúa 0 en plan gratuito, pagos y página de precios", () => {

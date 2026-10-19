@@ -25,6 +25,8 @@ export const PESOS_DNA: Record<DimensionClave, number> = {
 
 /** Cobertura mínima de una dimensión para ser puntuable (< 50 % = "No puntuable"). */
 export const COBERTURA_MIN_DIMENSION = 0.5;
+/** Indicadores evaluados mínimos para puntuar una dimensión. */
+export const MIN_EVALUADOS_DIMENSION = 2;
 /** Cobertura global mínima (< 60 % = "DNA Score no disponible"). */
 export const COBERTURA_MIN_GLOBAL = 0.6;
 /** Dimensiones puntuables mínimas para dar una puntuación global. */
@@ -433,7 +435,11 @@ function dimension(clave: DimensionClave, nombre: string, indicadores: Indicador
   const cobertura = aplicables.length === 0 ? 0 : evaluados.length / aplicables.length;
   const maximo = evaluados.reduce((a, i) => a + i.maximo, 0);
   const puntos = evaluados.reduce((a, i) => a + i.puntos, 0);
-  const valor = cobertura >= COBERTURA_MIN_DIMENSION && maximo > 0 ? Math.round((100 * puntos) / maximo) : null;
+  // Con un solo indicador evaluado la nota sería todo o nada: hacen falta al menos 2.
+  const valor =
+    cobertura >= COBERTURA_MIN_DIMENSION && evaluados.length >= MIN_EVALUADOS_DIMENSION && maximo > 0
+      ? Math.round((100 * puntos) / maximo)
+      : null;
   return { clave, nombre, peso: PESOS_DNA[clave], valor, cobertura, indicadores, resumen: resumenDimension(valor, indicadores) };
 }
 
