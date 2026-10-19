@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generarCierre } from "../../../lib/engine/v3/sections/cierre";
+import { calcularPrioridad, generarCierre } from "../../../lib/engine/v3/sections/cierre";
 import type { DnaScore } from "../../../lib/engine/v3/score";
 import type { Adn } from "../../../lib/engine/v3/sections/adn";
 import { buildEvidence } from "../../../lib/engine/v3/evidence";
@@ -86,22 +86,12 @@ describe("generarCierre", () => {
       ["Baja", "baja"],
     ]);
   });
-  it("los umbrales son estrictos: 1.5 es media y 0.5 es baja", async () => {
-    const { deps } = fake({
-      motivos: {},
-      oportunidades: [
-        op("Borde alto", { impactoNivel: "alto", esfuerzo: "medio", riesgo: "medio" }), // 3-1-1=1 -> media
-        op("Borde 1.5", { impactoNivel: "alto", esfuerzo: "medio", riesgo: "bajo" }), // 3-1-0.5=1.5 -> media
-        op("Borde 0.5", { impactoNivel: "medio", esfuerzo: "medio", riesgo: "medio" }), // 2-1-1=0 -> baja
-        op("Justo 0.5", { impactoNivel: "medio", esfuerzo: "alto", riesgo: "bajo" }), // 2-1.5-0.5=0 -> baja
-      ],
-    });
-    const r = await generarCierre(raw, adn, null, score, reg, deps);
-    const p = Object.fromEntries(r.oportunidades.map((a) => [a.hallazgo, a.prioridad]));
-    expect(p["Borde 1.5"]).toBe("media");
-    expect(p["Borde alto"]).toBe("media");
-    expect(p["Borde 0.5"]).toBe("baja");
-    expect(p["Justo 0.5"]).toBe("baja");
+  it("los umbrales son estrictos: 1.5 es media y 0.5 es baja", () => {
+    expect(calcularPrioridad("alto", "medio", "bajo")).toBe("media"); // 3-1-0.5 = 1.5
+    expect(calcularPrioridad("alto", "bajo", "bajo")).toBe("alta"); // 2
+    expect(calcularPrioridad("medio", "medio", "bajo")).toBe("baja"); // 2-1-0.5 = 0.5 no supera 0.5
+    expect(calcularPrioridad("medio", "bajo", "bajo")).toBe("media"); // 2-1 = 1
+    expect(calcularPrioridad("medio", "alto", "bajo")).toBe("baja"); // 0
   });
   it("ordena por prioridad y luego impacto, y recorta a 3", async () => {
     const { deps } = fake({
