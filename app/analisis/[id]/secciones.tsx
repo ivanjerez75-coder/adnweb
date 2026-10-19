@@ -103,13 +103,15 @@ function Lista({ titulo, items }: { titulo: string; items: unknown }) {
   );
 }
 
-function MetricaVista({ m }: { m: Metrica }) {
+/** sinCifras: el valor ya se muestra en otra parte (la lista del escenario) y no se repite. */
+function MetricaVista({ m, sinCifras = false }: { m: Metrica; sinCifras?: boolean }) {
   const valor = valorMetrica(m);
   // R7: la etiqueta de tipo solo se muestra si el dato está disponible.
   const disponible = m.estado === "disponible";
+  const limitaciones = sinCifras ? arr<string>(m.limitaciones).filter((l) => l !== TEXTO_ESCENARIO) : m.limitaciones;
   return (
     <li>
-      <strong>{m.etiqueta}:</strong> {valor ?? "—"}
+      {sinCifras ? <strong>{m.etiqueta}</strong> : <><strong>{m.etiqueta}:</strong> {valor ?? "—"}</>}
       <br />
       <small>
         {disponible ? <>{TIPO[m.tipo] ?? m.tipo} · </> : null}
@@ -137,7 +139,7 @@ function MetricaVista({ m }: { m: Metrica }) {
           {m.periodo ? <>. Periodo: {m.periodo}</> : null}
         </small>
       </p>
-      <Lista titulo="Limitaciones" items={m.limitaciones} />
+      <Lista titulo="Limitaciones" items={limitaciones} />
       <Lista titulo="Supuestos" items={m.supuestos} />
     </li>
   );
@@ -200,7 +202,7 @@ function Datos({ c }: { c: unknown }) {
           )}
           <ul>
             {hipoteticas.map((m) => (
-              <MetricaVista key={m.clave} m={m} />
+              <MetricaVista key={m.clave} m={m} sinCifras={escenario.length > 0} />
             ))}
           </ul>
         </section>
@@ -504,7 +506,21 @@ function Cuerpo({ s }: { s: SeccionVista }) {
   }
 }
 
-const AVISO = "Resume indicadores públicos; no es una valoración financiera.";
+/**
+ * Clave del ErrorBoundary: cambia con el estado y el contenido, para que una sección que falló al
+ * pintarse se vuelva a intentar cuando el sondeo traiga contenido nuevo.
+ */
+export function claveContenido(s: SeccionVista): string {
+  let json = "";
+  try {
+    json = JSON.stringify(s.contenido) ?? "";
+  } catch {
+    json = "";
+  }
+  let h = 0;
+  for (let i = 0; i < json.length; i++) h = (Math.imul(h, 31) + json.charCodeAt(i)) | 0;
+  return `${s.clave}:${s.estado}:${json.length}:${h >>> 0}`;
+}
 
 export function Secciones({ id, createdAt, inicial }: { id: string; createdAt: string; inicial: InicialSecciones }) {
   const router = useRouter();
@@ -587,8 +603,9 @@ export function Secciones({ id, createdAt, inicial }: { id: string; createdAt: s
       {vistas.map((s) => (
         <section key={s.clave} aria-labelledby={`sec-${s.clave}`}>
           <h2 id={`sec-${s.clave}`}>{s.titulo}</h2>
-          <ErrorBoundary><Cuerpo s={s} /></ErrorBoundary>
-          {s.clave === "score" && <p>{AVISO}</p>}
+          <ErrorBoundary key={claveContenido(s)}>
+            <Cuerpo s={s} />
+          </ErrorBoundary>
         </section>
       ))}
     </div>
