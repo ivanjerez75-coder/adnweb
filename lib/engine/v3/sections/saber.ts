@@ -3,6 +3,7 @@ import type { RawData } from "../../types";
 import { runSection, type SectionDeps } from "../llm";
 import { bloqueDatosWeb, REGLAS_COMUNES } from "../prompt";
 import { limpiarAfirmacionesNoRespaldadas } from "../filtro";
+import { escapeAngles } from "../../ai/prompt";
 import type { Adn } from "./adn";
 
 export const BACKLINKS_ITEM = "Backlinks y palabras clave (requieren herramientas de pago)";
@@ -29,10 +30,13 @@ export function quitarIdsEvidencia(texto: string): string {
     .trim();
 }
 
-/** Resumen compacto del adn para los prompts (no se pasa el objeto entero). */
+/**
+ * Resumen compacto del adn para los prompts (no se pasa el objeto entero). Es texto de la IA derivado
+ * de la web: va escapado para que no pueda cerrar el delimitador DATOS_WEB (inyección de segundo orden).
+ */
 export function resumenAdn(adn: Adn): string {
   const lineas = adn.lineas.map((l) => `- ${l.nombre}: ${l.queOfrece.join(", ")}`).join("\n");
-  return `Tipo de negocio: ${adn.tipoNegocio}\nLíneas de negocio:\n${lineas}`;
+  return escapeAngles(`Tipo de negocio: ${adn.tipoNegocio}\nLíneas de negocio:\n${lineas}`);
 }
 
 function prompt(raw: RawData, adn: Adn): string {

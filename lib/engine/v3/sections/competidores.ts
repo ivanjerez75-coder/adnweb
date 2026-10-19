@@ -8,6 +8,7 @@ import { bloqueDatosWeb, REGLAS_COMUNES } from "../prompt";
 import { limpiarAfirmacionesNoRespaldadas } from "../filtro";
 import type { Adn } from "./adn";
 import { resumenAdn } from "./saber";
+import { escapeAngles } from "../../ai/prompt";
 
 export interface Competidor {
   nombre: string;
@@ -132,7 +133,8 @@ async function portada(url: string, getPage: PageGetter, timeoutMs: number): Pro
 async function generarDiferencias(adn: Adn, verificados: Competidor[], deps: CompetidoresDeps): Promise<Map<string, string[]>> {
   const out = new Map<string, string[]>();
   if (verificados.length === 0) return out;
-  const lista = verificados.map((c) => `- ${c.nombre}: ${c.ofrece}`).join("\n");
+  // Nombre y oferta vienen de la IA: escapados para que no cierren ningún delimitador.
+  const lista = escapeAngles(verificados.map((c) => `- ${c.nombre}: ${c.ofrece}`).join("\n"));
   const p = `Compara el negocio analizado con estos competidores, usando solo lo que ofrecen según la lista. Indica en qué se diferencian (1 a 3 diferencias cortas y concretas por competidor, sin inventar datos como precios o cifras).
 
 ${resumenAdn(adn)}

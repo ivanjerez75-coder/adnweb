@@ -8,6 +8,7 @@ import type { DnaScore } from "../score";
 import type { Adn } from "./adn";
 import type { Revision } from "./revision";
 import { resumenAdn } from "./saber";
+import { escapeAngles } from "../../ai/prompt";
 
 export type Nivel = "alto" | "medio" | "bajo";
 export type Prioridad = "alta" | "media" | "baja";
@@ -74,7 +75,8 @@ function prompt(raw: RawData, adn: Adn, revision: Revision | null, score: DnaSco
     .map((d) => `- ${d.clave} (${d.nombre}): ${d.valor === null ? "No puntuable" : d.valor} [cobertura ${Math.round(d.cobertura * 100)} %]`)
     .join("\n");
   const problemas = revision?.problemas.length
-    ? `\nProblemas detectados:\n${revision.problemas.map((p) => `- ${p.linea}: ${p.problema} (mejora: ${p.mejora})`).join("\n")}\n`
+    ? // Texto de la IA derivado de la web: escapado (inyección de segundo orden).
+      `\nProblemas detectados:\n${escapeAngles(revision.problemas.map((p) => `- ${p.linea}: ${p.problema} (mejora: ${p.mejora})`).join("\n"))}\n`
     : "";
   return `Eres un consultor de negocio. Cierra el informe con las oportunidades más útiles.
 

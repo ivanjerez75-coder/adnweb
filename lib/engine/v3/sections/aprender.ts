@@ -9,6 +9,8 @@ import type { Adn } from "./adn";
 import type { Competidor } from "./competidores";
 import type { Revision } from "./revision";
 import { resumenAdn } from "./saber";
+// Lo que viene de la IA (bien, competidores) se escapa: inyección de segundo orden.
+import { escapeAngles } from "../../ai/prompt";
 
 const MAX_ITEMS = 4;
 
@@ -33,7 +35,7 @@ function prompt(raw: RawData, adn: Adn, revision: Revision | null, competidores:
   return `Eres un analista de negocios. Indica qué puede aprender OTRO negocio (o quien quiera montar uno parecido) mirando la web analizada: lecciones concretas y reutilizables.
 
 ${resumenAdn(adn)}
-${bien}${comp}
+${escapeAngles(bien + comp)}
 Devuelve SOLO un JSON: { "items": [ { "texto": string, "evidencias": string[] } ] }
 
 Reglas:
