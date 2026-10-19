@@ -53,7 +53,7 @@ describe("enviarCodigo", () => {
     const r = await enviarCodigo(undefined, form({ email: " a@b.com " }));
     expect(sb.signInWithOtp).toHaveBeenCalledWith({
       email: "a@b.com",
-      options: { shouldCreateUser: true },
+      options: { shouldCreateUser: true, emailRedirectTo: "http://localhost:3100/auth/callback?next=%2Fdashboard" },
     });
     expect(r).toEqual({ paso: "codigo", email: "a@b.com" });
   });

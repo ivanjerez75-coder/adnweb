@@ -47,7 +47,7 @@ export const es = {
   auth: {
     titulo: "ADNweb: analiza cualquier web.",
     subtitulo: "Entra o regístrate con tu email",
-    subtituloCodigo: "Te hemos enviado un código de 6 dígitos",
+    subtituloCodigo: "Revisa tu email y pulsa el enlace para entrar. Si trae un código de 6 dígitos, escríbelo aquí.",
     email: "Tu email",
     emailPlaceholder: "tu@correo.com",
     continuar: "CONTINUAR",
@@ -65,7 +65,7 @@ export const es = {
     errorCodigo: "El código no es correcto o ha caducado.",
     errorLimite: "Has pedido demasiados códigos. Espera unos minutos.",
     errorEnvio: "No hemos podido enviar el código. Inténtalo de nuevo.",
-    errorGoogle: "No se pudo iniciar sesión con Google. Inténtalo de nuevo.",
+    errorGoogle: "No se pudo iniciar sesión. Vuelve a pedir el enlace o inténtalo de nuevo.",
     entrar: "Entrar",
     salir: "Cerrar sesión",
   },

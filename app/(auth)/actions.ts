@@ -29,16 +29,29 @@ function esLimite(error: { status?: number; code?: string; message?: string }): 
   );
 }
 
+/** Origen de la web a partir de las cabeceras de la petición (nunca de datos del usuario). */
+async function origenPeticion(): Promise<string | null> {
+  const h = await headers();
+  return origenDesdeCabeceras(h.get("x-forwarded-host") ?? h.get("host"), h.get("x-forwarded-proto"));
+}
+
 /** Paso 1: envía el código por email (crea la cuenta si no existe). */
 export async function enviarCodigo(_prev: AuthState, formData: FormData): Promise<AuthState> {
   const email = campo(formData, "email").trim();
   const invalido = validarEmail(email);
   if (invalido) return { error: invalido };
 
+  // Sin SMTP propio, Supabase manda su email por defecto con un enlace: el enlace vuelve a
+  // /auth/callback, que abre la sesión y lleva al destino. Con SMTP propio, el email trae el código.
+  const destino = destinoTrasLogin(campo(formData, "next"), campo(formData, "url"));
+  const origen = await origenPeticion();
   const supabase = await createServerSupabase();
   const { error } = await supabase.auth.signInWithOtp({
     email,
-    options: { shouldCreateUser: true },
+    options: {
+      shouldCreateUser: true,
+      ...(origen ? { emailRedirectTo: `${origen}/auth/callback?next=${encodeURIComponent(destino)}` } : {}),
+    },
   });
   if (error) {
     const mensaje = esLimite(error) ? t("auth.errorLimite") : t("auth.errorEnvio");
@@ -68,11 +81,7 @@ export async function verificarCodigo(_prev: AuthState, formData: FormData): Pro
 /** Google: redirige al proveedor. El origen sale de las cabeceras, nunca del usuario. */
 export async function entrarConGoogle(formData: FormData): Promise<void> {
   const destino = destinoTrasLogin(campo(formData, "next"), campo(formData, "url"));
-  const h = await headers();
-  const origen = origenDesdeCabeceras(
-    h.get("x-forwarded-host") ?? h.get("host"),
-    h.get("x-forwarded-proto"),
-  );
+  const origen = await origenPeticion();
   if (!origen) redirect("/login?error=google");
 
   const supabase = await createServerSupabase();
