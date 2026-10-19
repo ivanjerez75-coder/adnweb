@@ -9,14 +9,14 @@ describe("ordenSecciones", () => {
     const r = ordenSecciones({}, t0, en(0));
     expect(r.map((s) => s.clave)).toEqual(["datos", "adn", "saber", "score", "revision", "competidores", "aprender", "cierre"]);
     expect(r.map((s) => s.titulo)).toEqual([
-      "Datos y estimaciones",
+      "Datos y métricas",
       "ADN del negocio",
       "Qué sabemos y qué no",
       "DNA Score",
       "Qué hace bien y problemas",
       "Competidores",
       "Qué aprender",
-      "Qué haría yo después",
+      "Oportunidades",
     ]);
   });
 

@@ -3,7 +3,8 @@
 import { Component, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { Evidence } from "@/lib/engine/v3/evidence";
-import type { DnaScore } from "@/lib/engine/v3/score";
+import type { DnaScore, Indicador } from "@/lib/engine/v3/score";
+import type { Metrica } from "@/lib/engine/v3/estimates";
 import type { Adn, AdnBloque } from "@/lib/engine/v3/sections/adn";
 import type { Competidor } from "@/lib/engine/v3/sections/competidores";
 import type { Revision } from "@/lib/engine/v3/sections/revision";
@@ -59,81 +60,150 @@ function Evidencias({ lista }: { lista: Evidence[] | undefined }) {
 
 const num = (n: number) => n.toLocaleString("es-ES", { maximumFractionDigits: 2 });
 
-/** Forma antigua de `datos` (v3); Task 5 la sustituye por las métricas v3.1. */
-interface Estimacion {
-  valor: { min: number; max: number } | number | null;
-  unidad: string;
-  fuente: string;
-  metodologia: string;
-  confianza: string;
-  motivoNoEstimable?: string;
+const TIPO: Record<string, string> = { observado: "Observado", estimado: "Estimado", hipotetico: "Hipotético" };
+const CONFIANZA: Record<string, string> = {
+  alta: "Confianza alta",
+  media: "Confianza media",
+  baja: "Confianza baja",
+  insuficiente: "Confianza insuficiente",
+};
+const ESTADO: Record<string, string> = {
+  disponible: "Disponible",
+  insuficiente: "Datos insuficientes",
+  error: "Error",
+  no_aplica: "No aplica",
+};
+
+const TEXTO_ESCENARIO = "Escenario ilustrativo: no son los ingresos de la empresa";
+
+function valorMetrica(m: Metrica): string | null {
+  const v = m.valor;
+  if (v === null || v === undefined) return null;
+  const u = m.unidad ? ` ${m.unidad}` : "";
+  if (typeof v === "number") return `${num(v)}${u}`;
+  if (typeof v === "string") return `${v}${u}`;
+  if (typeof v === "object" && typeof v.min === "number" && typeof v.max === "number") return `${num(v.min)} – ${num(v.max)}${u}`;
+  return null;
 }
 
-function Cifra({ titulo, e }: { titulo: string; e: Estimacion | undefined }) {
-  if (!e) return null;
-  const v = e.valor;
-  const cifra =
-    v === null || v === undefined ? null : typeof v === "number" ? `${num(v)} ${e.unidad}` : `${num(v.min)} – ${num(v.max)} ${e.unidad}`;
+function Lista({ titulo, items }: { titulo: string; items: unknown }) {
+  const l = arr<string>(items);
+  if (l.length === 0) return null;
+  return (
+    <>
+      <small>{titulo}:</small>
+      <ul>
+        {l.map((t, i) => (
+          <li key={i}>
+            <small>{t}</small>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+function MetricaVista({ m }: { m: Metrica }) {
+  const valor = valorMetrica(m);
+  // R7: la etiqueta de tipo solo se muestra si el dato está disponible.
+  const disponible = m.estado === "disponible";
   return (
     <li>
-      <strong>{titulo}:</strong> {cifra ?? "—"}
-      {cifra === null && e.motivoNoEstimable ? <> No estimable: {e.motivoNoEstimable}</> : null}
+      <strong>{m.etiqueta}:</strong> {valor ?? "—"}
       <br />
       <small>
-        Fuente: {e.fuente}. {e.metodologia} Confianza: {e.confianza}.
+        {disponible ? <>{TIPO[m.tipo] ?? m.tipo} · </> : null}
+        {CONFIANZA[m.confianza] ?? m.confianza} · {ESTADO[m.estado] ?? m.estado}
       </small>
+      {m.motivoConfianza ? (
+        <>
+          <br />
+          <small>{m.motivoConfianza}</small>
+        </>
+      ) : null}
+      <p>
+        <small>
+          <strong>Metodología:</strong> {m.metodologia}
+          <br />
+          Fuente:{" "}
+          {esHttp(m.fuenteUrl) ? (
+            <a href={m.fuenteUrl} rel="noopener noreferrer" target="_blank">
+              {m.fuente}
+            </a>
+          ) : (
+            m.fuente
+          )}
+          . Obtenido el {m.obtenidoEn}
+          {m.periodo ? <>. Periodo: {m.periodo}</> : null}
+        </small>
+      </p>
+      <Lista titulo="Limitaciones" items={m.limitaciones} />
+      <Lista titulo="Supuestos" items={m.supuestos} />
     </li>
   );
 }
 
+interface PrecioVista {
+  url: string;
+  texto: string;
+}
+
 function Datos({ c }: { c: unknown }) {
-  const d = (c ?? {}) as {
-    trafico?: Estimacion;
-    ingresos?: Estimacion;
-    valoracion?: Estimacion;
-    seo?: {
-      paginasSitemap: number | null;
-      pagespeedMovil: number | null;
-      titulosYDescripciones: { conTitulo: number; conDescripcion: number; total: number };
-      idiomas: string[];
-      blogActivo: boolean | null;
-    };
-    publicados?: { etiqueta: string; valor: string; fuente: string; evidencia: string }[];
-  };
-  const seo = d.seo;
+  const d = (c ?? {}) as { metricas?: Metrica[]; precios?: PrecioVista[]; escenario?: { clientes: number; ingresosMes: number }[] | null };
+  const todas = arr<Metrica>(d.metricas);
+  const normales = todas.filter((m) => m.tipo !== "hipotetico");
+  const hipoteticas = todas.filter((m) => m.tipo === "hipotetico");
+  const escenario = arr<{ clientes: number; ingresosMes: number }>(d.escenario);
+  const precios = arr<PrecioVista>(d.precios);
   return (
     <>
       <ul>
-        <Cifra titulo="Tráfico" e={d.trafico} />
-        <Cifra titulo="Ingresos" e={d.ingresos} />
-        <Cifra titulo="Valoración" e={d.valoracion} />
+        {normales.map((m) => (
+          <MetricaVista key={m.clave} m={m} />
+        ))}
       </ul>
-      {seo && (
+      {precios.length > 0 && (
         <>
-          <h3>SEO</h3>
+          <h3>Precios publicados</h3>
           <ul>
-            <li>Páginas en el sitemap: {seo.paginasSitemap ?? "—"}</li>
-            <li>PageSpeed móvil: {seo.pagespeedMovil ?? "—"}</li>
-            <li>
-              Páginas analizadas con título: {seo.titulosYDescripciones.conTitulo} de {seo.titulosYDescripciones.total}; con descripción:{" "}
-              {seo.titulosYDescripciones.conDescripcion}
-            </li>
-            <li>Idiomas: {arr(seo.idiomas).length ? arr<string>(seo.idiomas).join(", ") : "—"}</li>
-            <li>Blog activo: {seo.blogActivo === null ? "—" : seo.blogActivo ? "Sí" : "No"}</li>
-          </ul>
-        </>
-      )}
-      {d.publicados && d.publicados.length > 0 && (
-        <>
-          <h3>Datos publicados</h3>
-          <ul>
-            {arr<NonNullable<typeof d.publicados>[number]>(d.publicados).map((p, n) => (
-              <li key={`${p.evidencia}-${n}`}>
-                {p.etiqueta}: {p.valor} <small>({p.fuente})</small>
+            {precios.map((p, i) => (
+              <li key={i}>
+                {p.texto}{" "}
+                {esHttp(p.url) && (
+                  <small>
+                    (
+                    <a href={p.url} rel="noopener noreferrer" target="_blank">
+                      {p.url}
+                    </a>
+                    )
+                  </small>
+                )}
               </li>
             ))}
           </ul>
         </>
+      )}
+      {(hipoteticas.length > 0 || escenario.length > 0) && (
+        <section aria-labelledby="escenario-hipotetico" style={{ border: "2px dashed currentColor", padding: "1em", margin: "1em 0" }}>
+          <h3 id="escenario-hipotetico">Escenario hipotético</h3>
+          <p>
+            <strong>{TEXTO_ESCENARIO}</strong>
+          </p>
+          {escenario.length > 0 && (
+            <ul>
+              {escenario.map((e) => (
+                <li key={e.clientes}>
+                  {num(e.clientes)} clientes: {num(e.ingresosMes)} €/mes
+                </li>
+              ))}
+            </ul>
+          )}
+          <ul>
+            {hipoteticas.map((m) => (
+              <MetricaVista key={m.clave} m={m} />
+            ))}
+          </ul>
+        </section>
       )}
     </>
   );
@@ -156,7 +226,9 @@ function AdnVista({ c }: { c: unknown }) {
     <>
       <Bloque titulo="Qué es" b={a.queEs} />
       <Bloque titulo="Propuesta de valor" b={a.propuestaValor} />
-      <p>Tipo de negocio: {a.tipoNegocio}</p>
+      <p>
+        Modelo de negocio: {a.tipoNegocio} ({a.modeloEstado ?? "desconocido"})
+      </p>
       {arr<Adn["lineas"][number]>(a.lineas).map((l, i) => (
         <section key={i}>
           <h3>{l.nombre}</h3>
@@ -170,6 +242,32 @@ function AdnVista({ c }: { c: unknown }) {
         </section>
       ))}
       <Bloque titulo="Cómo funciona" b={a.comoFunciona} />
+      {arr<Adn["canales"][number]>(a.canales).length > 0 && (
+        <>
+          <h3>Canales de conversión</h3>
+          <ul>
+            {arr<Adn["canales"][number]>(a.canales).map((k, i) => (
+              <li key={i}>
+                {k.tipo}
+                <Evidencias lista={k.evidencias} />
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {arr<AdnBloque>(a.afirmaciones).length > 0 && (
+        <>
+          <h3>Lo que la empresa dice de sí misma</h3>
+          <ul>
+            {arr<AdnBloque>(a.afirmaciones).map((f, i) => (
+              <li key={i}>
+                La empresa afirma: {f.texto}
+                <Evidencias lista={f.evidencias} />
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </>
   );
 }
@@ -184,32 +282,90 @@ function Saber({ c }: { c: unknown }) {
   );
 }
 
+function IndicadorVista({ i }: { i: Indicador }) {
+  return (
+    <li>
+      {i.nombre}:{" "}
+      {i.evaluado ? (
+        <>
+          {i.puntos}/{i.maximo} — {i.motivo}
+        </>
+      ) : (
+        <>No evaluado{i.motivo ? ` — ${i.motivo}` : ""}</>
+      )}
+      <Evidencias lista={i.evidencias} />
+    </li>
+  );
+}
+
 function ScoreVista({ c, cierre }: { c: unknown; cierre: unknown }) {
-  // Task 5 reescribe esta vista (indicadores, cobertura, avisos). Aquí solo se adapta al nuevo DnaScore.
   const s = c as DnaScore;
   const motivos = (cierre as Cierre | null)?.motivos ?? {};
   return (
     <>
       <p>
-        Puntuación global: <strong>{s.global === null ? "DNA Score no disponible" : `${s.global} / 100`}</strong>
+        Puntuación global: <strong>{s.global === null || s.global === undefined ? "DNA Score no disponible" : `${s.global} / 100`}</strong>
       </p>
-      <ul>
-        {arr<DnaScore["dimensiones"][number]>(s.dimensiones).map((k) => (
-          <li key={k.clave}>
-            <strong>{k.nombre}:</strong> {k.valor === null ? "No puntuable" : `${k.valor} / 100`}
-            <small> (cobertura {Math.round(k.cobertura * 100)} %)</small>
-            {arr<string>(motivos[k.clave]).map((m, i) => (
-              <p key={i}>{m}</p>
+      <p>
+        <small>
+          Cobertura global: {Math.round((s.coberturaGlobal ?? 0) * 100)} %. Metodología: {s.metodologia}
+        </small>
+      </p>
+      {arr<DnaScore["dimensiones"][number]>(s.dimensiones).map((k) => (
+        <section key={k.clave}>
+          <h3>{k.nombre}</h3>
+          <p>
+            <strong>{k.valor === null ? "No puntuable" : `${k.valor} / 100`}</strong>
+            <small>
+              {" "}
+              (cobertura {Math.round(k.cobertura * 100)} %, peso {Math.round(k.peso * 100)} %)
+            </small>
+          </p>
+          {arr<string>((motivos as Record<string, unknown>)[k.clave]).map((m, i) => (
+            <p key={i}>{m}</p>
+          ))}
+          <ul>
+            {arr<Indicador>(k.indicadores).map((i) => (
+              <IndicadorVista key={i.clave} i={i} />
             ))}
-            <Evidencias lista={arr<DnaScore["dimensiones"][number]["indicadores"][number]>(k.indicadores).flatMap((i) => arr<Evidence>(i.evidencias))} />
-          </li>
-        ))}
-      </ul>
+          </ul>
+        </section>
+      ))}
       {arr<string>(s.avisos).map((a, i) => (
         <p key={i}>
           <small>{a}</small>
         </p>
       ))}
+    </>
+  );
+}
+
+const CONF_REV: Record<string, string> = { alta: "Confianza alta", media: "Confianza media", baja: "Confianza baja" };
+
+function Ficha({ x }: { x: { relevancia?: string; confianza?: string; limitaciones?: string[] } }) {
+  return (
+    <>
+      {x.relevancia ? (
+        <>
+          <br />
+          <small>Relevancia: {x.relevancia}</small>
+        </>
+      ) : null}
+      {x.confianza ? (
+        <>
+          <br />
+          <small>{CONF_REV[x.confianza] ?? x.confianza}</small>
+        </>
+      ) : null}
+      {arr<string>(x.limitaciones).length > 0 && (
+        <ul>
+          {arr<string>(x.limitaciones).map((l, i) => (
+            <li key={i}>
+              <small>Limitación: {l}</small>
+            </li>
+          ))}
+        </ul>
+      )}
     </>
   );
 }
@@ -223,6 +379,7 @@ function RevisionVista({ c }: { c: unknown }) {
         {arr<Revision["bien"][number]>(r.bien).map((b, i) => (
           <li key={i}>
             {b.texto}
+            <Ficha x={b} />
             <Evidencias lista={b.evidencias} />
           </li>
         ))}
@@ -234,6 +391,7 @@ function RevisionVista({ c }: { c: unknown }) {
             <strong>{p.linea}:</strong> {p.problema}
             <br />
             Mejora: {p.mejora}
+            <Ficha x={p} />
             <Evidencias lista={p.evidencias} />
           </li>
         ))}
@@ -292,12 +450,29 @@ function CierreVista({ c }: { c: unknown }) {
     <ol>
       {acciones.map((a, i) => (
         <li key={i}>
-          <strong>{a.hallazgo}</strong>
-          <p>{a.accion}</p>
-          <p>
-            Prioridad: {a.prioridad}. Impacto: {a.impactoNivel}. Esfuerzo: {a.esfuerzo}. Riesgo: {a.riesgo}. ({a.confianza === "comprobado" ? "Comprobado en la web" : "Hipótesis"})
-          </p>
-          <Evidencias lista={a.evidencias} />
+          <article>
+            <h3>{a.hallazgo}</h3>
+            <p>
+              <small>{a.confianza === "comprobado" ? "Comprobado" : "Hipótesis"}</small>
+            </p>
+            <p>Impacto esperado: {a.impacto}</p>
+            <p>Acción: {a.accion}</p>
+            <p>
+              Prioridad: {a.prioridad}. Impacto: {a.impactoNivel}. Esfuerzo: {a.esfuerzo}. Riesgo: {a.riesgo}.
+            </p>
+            <p>Cómo validarlo: {a.validacion}</p>
+            {arr<string>(a.supuestos).length > 0 && (
+              <>
+                <p>Supuestos:</p>
+                <ul>
+                  {arr<string>(a.supuestos).map((s, j) => (
+                    <li key={j}>{s}</li>
+                  ))}
+                </ul>
+              </>
+            )}
+            <Evidencias lista={a.evidencias} />
+          </article>
         </li>
       ))}
     </ol>

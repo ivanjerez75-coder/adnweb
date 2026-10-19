@@ -112,6 +112,18 @@ describe("buildReportV3", () => {
     expect(Array.isArray(d.precios)).toBe(true);
   });
 
+  it("datos se emite antes que adn, con el escenario", async () => {
+    const orden: string[] = [];
+    let escenarioPresente = false;
+    await buildReportV3(raw, deps(fakeModels()), async (c, x) => {
+      orden.push(c);
+      if (c === "datos") escenarioPresente = "escenario" in (x as object);
+    });
+    expect(orden.indexOf("datos")).toBeLessThan(orden.indexOf("adn"));
+    expect(orden.filter((c) => c === "datos")).toHaveLength(1);
+    expect(escenarioPresente).toBe(true);
+  });
+
   it("un competidores que falla da error y el resto sigue lista", async () => {
     const r = await buildReportV3(raw, deps(fakeModels({ competidores: true })), async () => {});
     expect(r.estados.competidores).toBe("error");
