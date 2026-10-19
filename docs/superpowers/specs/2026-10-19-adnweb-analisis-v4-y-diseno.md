@@ -248,3 +248,78 @@ Nunca lleva plazos, presupuestos ni incrementos de ingresos inventados.
   1. diseño de la app y login;
   2. motor v4 y página del informe;
   3. interacciones.
+
+## 11. Estructura definitiva: 5 bloques (sustituye a la presentación en 7 secciones)
+
+**Origen.** Documento del usuario "ADNWeb — Estructura definitiva de la pestaña Análisis", pegado el 2026-10-19. Las 7 secciones de §3 siguen siendo los datos que genera el motor. En pantalla se presentan en **5 bloques**, y lo detallado (auditorías técnicas, tablas completas, fuentes) va desplegable dentro de cada bloque.
+
+### Los 5 bloques
+
+1. **El negocio**: qué es y cómo funciona. Es una síntesis breve: qué ofrece, qué problema resuelve, para quién, cómo monetiza y su propuesta de valor. Si un negocio combina varios modelos, se marca como "Negocio híbrido".
+2. **Datos clave**: qué sabemos realmente. Son los indicadores relevantes **según la tipología**, cada uno con una condición de publicación (§11.2).
+3. **Competencia**: con quién compite y qué diferencias importan. Competidores justificados, precios públicos y diferencias demostrables.
+4. **Hallazgos**: fortalezas, debilidades, riesgos y diferencias. Cada uno usa el formato estándar: **título + estado (Comprobado / Por comprobar) + HALLAZGO + EVIDENCIA + POR QUÉ IMPORTA + QUÉ HACER**.
+5. **Oportunidades**: ordenadas por relevancia, con justificación y con lo que falta validar. Las acciones del plan (comprobar, experimentar, medir) aparecen dentro de cada oportunidad.
+
+### §11.1 Indicadores según la tipología
+
+Cada tipología activa sus datos clave. Una empresa híbrida usa la unión.
+
+- **SaaS:**
+  - planes y precios publicados;
+  - prueba o plan gratuito;
+  - funcionalidades principales;
+  - competidores y diferencias funcionales;
+  - claridad de la oferta y contratación.
+- **E-commerce:**
+  - catálogo, como número aproximado de productos según el sitemap;
+  - rango de precios;
+  - envíos y devoluciones publicados (página detectada);
+  - medios de pago visibles;
+  - confianza (aviso legal, CIF, opiniones).
+- **Agencia o servicios:**
+  - servicios y especialización;
+  - modelo de contratación o precios, si los hay;
+  - casos de éxito y testimonios;
+  - clientes citados.
+- **Marketplace o plataforma:**
+  - qué conecta (los dos lados);
+  - categorías;
+  - modelo de monetización (comisión, suscripción) si se publica.
+- **Negocio local o tradicional:**
+  - actividad;
+  - ubicación;
+  - teléfono, contacto y horario;
+  - presencia digital;
+  - facilidad para pedir el servicio.
+- **Organización social:**
+  - actividad;
+  - fuentes de financiación declaradas;
+  - transparencia (aviso legal, memoria);
+  - contacto.
+
+### §11.2 Condiciones de publicación
+
+Un dato clave solo se muestra si tiene fuente verificable.
+
+- El tráfico solo aparece con una fuente adecuada, siempre etiquetado.
+- Los ingresos y el valor no se muestran sin datos verificables.
+- Lo que falta se indica como "Sin datos fiables", nunca con una cifra.
+
+### §11.3 Priorización
+
+Cada hallazgo pasa tres filtros:
+
+- **relevancia**: responde a una pregunta importante;
+- **fiabilidad**: está comprobado o es una hipótesis;
+- **utilidad**: ayuda a comparar, entender, decidir o actuar.
+
+El código ordena los hallazgos por esos tres filtros: la IA da cada nivel y el código combina. En el resumen solo aparecen los que superan los tres. Se excluye lo repetido o lo que no está respaldado.
+
+### §11.4 Criterios de éxito
+
+- El usuario entiende qué hace la empresa en menos de 30 segundos.
+- Encuentra rápido los datos de su categoría.
+- Ve las diferencias competitivas sin comparar a mano.
+- Cada hallazgo tiene justificación verificable.
+- El informe termina con una acción útil.
