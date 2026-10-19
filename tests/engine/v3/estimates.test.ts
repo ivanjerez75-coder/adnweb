@@ -106,8 +106,26 @@ describe("construirMetricas: CrUX y PageSpeed", () => {
       const m = get(ms, c);
       expect(m.estado).toBe("error");
       expect(m.valor).toBeNull();
-      expect(m.motivoConfianza).toContain("cuota agotada");
+      expect(m.motivoConfianza).toBe("Cuota de PageSpeed agotada");
     }
+  });
+  it("móvil falla y escritorio responde: escritorio disponible; nunca se muestra el error en bruto", () => {
+    const raw = makeRaw({ pagespeed: { ...ps(null, 92), error: "móvil no disponible: PageSpeed respondió 500" } });
+    const ms = construirMetricas(raw, NOW);
+    expect(get(ms, "pagespeed_escritorio")).toMatchObject({ estado: "disponible", valor: 92 });
+    for (const c of ["pagespeed_movil", "accesibilidad", "seo_tecnico", "buenas_practicas", "usuarios_reales_crux"]) {
+      const m = get(ms, c);
+      expect(m.estado, c).toBe("error");
+      expect(m.motivoConfianza, c).toBe("PageSpeed no respondió");
+    }
+    for (const m of ms) expect(m.motivoConfianza).not.toMatch(/respondió 500|móvil no disponible/);
+  });
+  it("cada métrica depende de su propio valor, no del campo error", () => {
+    const raw = makeRaw({ pagespeed: { ...ps(70, 90), seo: 85, error: "algo raro" } });
+    const ms = construirMetricas(raw, NOW);
+    expect(get(ms, "pagespeed_movil")).toMatchObject({ estado: "disponible", valor: 70 });
+    expect(get(ms, "seo_tecnico")).toMatchObject({ estado: "disponible", valor: 85 });
+    expect(get(ms, "accesibilidad").motivoConfianza).toBe("PageSpeed no respondió");
   });
   it("pagespeed ausente: nunca omitida", () => {
     const ms = construirMetricas(makeRaw({ pagespeed: null }), NOW);

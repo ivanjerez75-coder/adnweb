@@ -246,19 +246,25 @@ function popularidad(raw: RawData): Metrica[] {
 const FUENTE_PS = "Google PageSpeed Insights";
 const URL_PS = "https://pagespeed.web.dev/";
 
+/** Texto para el usuario: nunca el error en bruto de la API. */
+export function motivoErrorPageSpeed(error: string): string {
+  return /cuota|quota|429/i.test(error) ? "Cuota de PageSpeed agotada" : "PageSpeed no respondió";
+}
+
 /** Cinco puntuaciones de Lighthouse y, al final, los datos reales de usuarios (CrUX). */
 function pagespeedMetricas(raw: RawData): Metrica[] {
   const ps = raw.pagespeed;
   const obtenidoEn = ps?.obtenidoEn ?? raw.collectedAt;
   const sinDato = (): { estado: EstadoMetrica; motivo: string } =>
     ps?.error
-      ? { estado: "error", motivo: `PageSpeed no respondió: ${ps.error}` }
+      ? { estado: "error", motivo: motivoErrorPageSpeed(ps.error) }
       : !ps
         ? { estado: raw.fuentes.pagespeed === "fallo" ? "error" : "insuficiente", motivo: "No se consultó PageSpeed para este dominio." }
         : { estado: "insuficiente", motivo: "Google no devolvió esta puntuación." };
 
   const puntuacion = (clave: string, etiqueta: string, valor: number | null | undefined, que: string, dispositivo: string): Metrica => {
-    if (ps && !ps.error && valor != null) {
+    // Cada puntuación depende de su propio valor: si el móvil falla, el escritorio sigue disponible.
+    if (ps && valor != null) {
       return metrica({
         clave,
         etiqueta,
@@ -289,7 +295,7 @@ function pagespeedMetricas(raw: RawData): Metrica[] {
 
   const c = ps?.campo;
   let crux: Metrica;
-  if (ps && !ps.error && c) {
+  if (ps && c) {
     const partes = [
       c.lcpMs != null ? `LCP ${Math.round(c.lcpMs)} ms` : null,
       c.inpMs != null ? `INP ${Math.round(c.inpMs)} ms` : null,

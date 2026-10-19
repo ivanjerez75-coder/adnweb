@@ -240,7 +240,7 @@ function experiencia(raw: RawData, metricas: Metrica[], reg: Reg): Indicador[] {
       ? sinDato(clave, nombre, max, motivoMetrica(metricas, mclave, "PageSpeed no devolvió este dato."))
       : ind(clave, nombre, (max * v) / 100, max, `${v} sobre 100 en PageSpeed (Lighthouse).`, evPs);
   };
-  const campo = raw.pagespeed && !raw.pagespeed.error ? raw.pagespeed.campo : null;
+  const campo = raw.pagespeed?.campo ?? null;
   const cruxOk = metrica(metricas, "usuarios_reales_crux")?.estado === "disponible" && campo?.categoria;
   const crux = cruxOk
     ? ind(

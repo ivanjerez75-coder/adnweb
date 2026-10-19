@@ -157,7 +157,7 @@ describe("calcularScore: cobertura", () => {
   });
 
   it("error de PageSpeed: experiencia null y sus indicadores no evaluados", () => {
-    const raw = makeRaw({ pagespeed: { ...ps(80, 90), accesibilidad: 90, error: "timeout" } });
+    const raw = makeRaw({ pagespeed: { ...ps(null, null), error: "timeout" } });
     const e = dim(score(raw), "experiencia");
     expect(e.indicadores.every((i) => !i.evaluado)).toBe(true);
     expect(e.cobertura).toBe(0);

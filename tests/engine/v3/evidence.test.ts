@@ -80,6 +80,10 @@ describe("buildEvidence: datos v3.1", () => {
     expect(reg.has("dato:precio:3")).toBe(false);
   });
 
+  it("PageSpeed parcial (móvil falla): dato:pagespeed con el escritorio", () => {
+    const reg = buildEvidence(makeRaw({ pagespeed: { ...ps(null, 92), error: "móvil no disponible: x" } }), []);
+    expect(reg.get("dato:pagespeed")?.texto).toBe("PageSpeed (sobre 100): escritorio 92");
+  });
   it("PageSpeed con error no genera dato:pagespeed", () => {
     const reg = buildEvidence(makeRaw({ pagespeed: { ...ps(null, null), error: "cuota" } }), []);
     expect(reg.has("dato:pagespeed")).toBe(false);

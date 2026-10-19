@@ -48,7 +48,7 @@ export function buildEvidence(raw: RawData, signals: Signal[]): Map<string, Evid
   }
 
   const ps = raw.pagespeed;
-  if (ps && !ps.error) {
+  if (ps) {
     const partes = [
       ps.mobile != null ? `móvil ${ps.mobile}` : null,
       ps.desktop != null ? `escritorio ${ps.desktop}` : null,
