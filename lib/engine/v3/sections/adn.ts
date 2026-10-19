@@ -5,6 +5,7 @@ import { citar, type Evidence } from "../evidence";
 import { SeccionVaciaError } from "../errors";
 import { runSection, type SectionDeps } from "../llm";
 import { bloqueDatosWeb, REGLAS_COMUNES } from "../prompt";
+import { limpiarAfirmacionesNoRespaldadas } from "../filtro";
 
 export const TIPOS_NEGOCIO_V3 = [...TIPOS_NEGOCIO_V2, "organizacion_social", "negocio_local"] as [
   (typeof TIPOS_NEGOCIO_V2)[number],
@@ -100,6 +101,8 @@ Devuelve SOLO un JSON con esta forma:
 
 Reglas:
 ${REGLAS_COMUNES}
+- "ingresos" de cada línea: la fuente de ingresos, sin cifras (por ejemplo "cuota mensual", "venta de productos", "subvenciones"). Nunca importes, porcentajes ni volúmenes.
+- Lo que la empresa dice de sí misma ("más de 60 años", "líderes", número de clientes) va solo en "afirmaciones", nunca en "queEs", "propuestaValor" ni en las líneas.
 - "lineas": de 1 a 6 líneas de negocio reales. Cada elemento debe citar en "evidencias" al menos un id válido; los que no lo hagan se descartan.
 - "modeloEstado": "confirmado" solo si la web explica cómo se contrata Y muestra un precio o un canal claro; "probable" si se deduce pero no está explícito; "desconocido" si no se puede saber. El sistema lo revisa y puede rebajarlo.
 - "canales": las vías reales para convertirse en cliente que ves en la web. Un formulario de contacto, un teléfono o un correo de contacto visibles en la web cuentan como canal "contacto" (si no hay otra vía, inclúyelo). Cada canal cita al menos un extracto de página (ids tipo p1-e1); si no, se descarta.
@@ -133,9 +136,10 @@ function canalContactoDeRespaldo(raw: RawData, reg: Map<string, Evidence>): AdnC
   return null;
 }
 
-function resolver(b: { texto: string; evidencias: string[] }, reg: Map<string, Evidence>): AdnBloque | null {
+function resolver(b: { texto: string; evidencias: string[] }, reg: Map<string, Evidence>, filtrar = false): AdnBloque | null {
+  const texto = filtrar ? limpiarAfirmacionesNoRespaldadas(b.texto) : b.texto;
   const ev = citar(b.evidencias, reg);
-  return ev ? { texto: b.texto, evidencias: ev } : null;
+  return ev && (!filtrar || texto) ? { texto, evidencias: ev } : null;
 }
 
 export async function generarAdn(raw: RawData, reg: Map<string, Evidence>, deps: SectionDeps): Promise<Adn> {
@@ -143,7 +147,7 @@ export async function generarAdn(raw: RawData, reg: Map<string, Evidence>, deps:
   const lineas: AdnLinea[] = [];
   for (const l of ia.lineas) {
     const ev = citar(l.evidencias, reg);
-    if (ev) lineas.push({ ...l, evidencias: ev });
+    if (ev) lineas.push({ ...l, ingresos: limpiarAfirmacionesNoRespaldadas(l.ingresos), evidencias: ev });
   }
   if (lineas.length === 0) throw new SeccionVaciaError("adn");
 
@@ -165,8 +169,9 @@ export async function generarAdn(raw: RawData, reg: Map<string, Evidence>, deps:
   }
 
   return {
-    queEs: resolver(ia.queEs, reg),
-    propuestaValor: resolver(ia.propuestaValor, reg),
+    // Respaldo de código: cifras y autoafirmaciones ("más de 60 años") no van en qué es ni en la propuesta.
+    queEs: resolver(ia.queEs, reg, true),
+    propuestaValor: resolver(ia.propuestaValor, reg, true),
     tipoNegocio: ia.tipoNegocio,
     lineas,
     comoFunciona: resolver(ia.comoFunciona, reg),

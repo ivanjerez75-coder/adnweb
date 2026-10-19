@@ -66,6 +66,12 @@ describe("generarNoSabemos", () => {
       "Ratio de inserción",
     ]);
   });
+  it("filtro de código: quita los items con cifras inventadas pero conserva los que nombran lo que no se sabe", async () => {
+    const { deps } = fake(JSON.stringify({ items: ["Factura unos 2 M€ al año", "Tiene 5.000 usuarios", "No se conoce la tasa de conversión ni el churn", "Margen real"] }));
+    const r = await generarNoSabemos(raw, adn, deps);
+    expect(r).toEqual(["No se conoce la tasa de conversión ni el churn", "Margen real", BACKLINKS_ITEM]);
+  });
+
   it("el prompt incluye el tipo y las líneas", async () => {
     const { deps, prompts } = fake(JSON.stringify({ items: ["a", "b", "c"] }));
     await generarNoSabemos(raw, adn, deps);

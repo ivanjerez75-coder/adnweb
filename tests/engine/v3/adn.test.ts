@@ -46,6 +46,30 @@ const raw = makeRaw({ paginas });
 const reg = buildEvidence(raw, []);
 
 describe("generarAdn", () => {
+  it("filtro de código: ingresos con cifras queda vacío y queEs pierde la frase de años", async () => {
+    const out = JSON.stringify({
+      queEs: { texto: "Cooperativa de inserción laboral. Cuenta con más de 60 años de trayectoria.", evidencias: ["p1-e1"] },
+      propuestaValor: { texto: "Líderes con más de 60 años de trayectoria", evidencias: ["p1-e1"] },
+      tipoNegocio: "saas",
+      lineas: [linea({ ingresos: "≈2 M€ al año" }), linea({ nombre: "Otra", ingresos: "Cuota mensual. Factura un 20 % más cada año." })],
+      comoFunciona: { texto: "Se contrata online", evidencias: ["p1-e2"] },
+    });
+    const adn = await generarAdn(raw, reg, fake(out).deps);
+    expect(adn.lineas[0].ingresos).toBe("");
+    expect(adn.lineas[1].ingresos).toBe("Cuota mensual.");
+    expect(adn.queEs?.texto).toBe("Cooperativa de inserción laboral.");
+    expect(adn.propuestaValor).toBeNull(); // solo tenía la afirmación: no queda texto
+    // Las citas literales de la web no se filtran.
+    expect(adn.queEs?.evidencias[0].texto).toBe("Facturas en 1 minuto");
+  });
+
+  it("el prompt pide la fuente de ingresos sin cifras y deja las autoafirmaciones en afirmaciones", async () => {
+    const { deps, prompts } = fake(salida([linea()]));
+    await generarAdn(raw, reg, deps);
+    expect(prompts[0]).toContain("fuente de ingresos, sin cifras");
+    expect(prompts[0]).toMatch(/nunca en "queEs", "propuestaValor" ni en las líneas/);
+  });
+
   it("resuelve evidencias y descarta elementos sin evidencia válida", async () => {
     const { deps } = fake(salida([linea(), linea({ nombre: "Fantasma", evidencias: ["zzz"] })]));
     const adn = await generarAdn(raw, reg, deps);

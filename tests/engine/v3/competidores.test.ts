@@ -56,6 +56,12 @@ describe("generarCompetidores", () => {
     expect(r.textosVerificados).toHaveLength(1);
     expect(r.textosVerificados[0]).toContain("facturacion y presupuestos");
   });
+  it("filtro de código en las diferencias: sin cifras ni promesas de ventas", async () => {
+    const getPage = getter({ "alfa.com": "<html><body>FACTURACION y Presupuestos online</body></html>", "beta.com": new Error("down") });
+    const diff = model(() => JSON.stringify({ diferencias: [{ nombre: "Alfa", items: ["Tiene 10.000 clientes", "Ofrece contabilidad. Cuesta 20 € al mes."] }] }));
+    const r = await generarCompetidores(raw, adn, { searchModels: [searchOk], models: [diff], getPage, runOpts });
+    expect(r.lista[0].diferencias).toEqual(["Ofrece contabilidad."]);
+  });
   it("homepage con un solo término no verifica", async () => {
     const getPage = getter({ "alfa.com": "solo facturacion", "beta.com": "inventario" });
     const r = await generarCompetidores(raw, adn, { searchModels: [searchOk], models: [searchOk], getPage, runOpts });

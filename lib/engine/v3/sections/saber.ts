@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { RawData } from "../../types";
 import { runSection, type SectionDeps } from "../llm";
 import { bloqueDatosWeb, REGLAS_COMUNES } from "../prompt";
+import { limpiarAfirmacionesNoRespaldadas } from "../filtro";
 import type { Adn } from "./adn";
 
 export const BACKLINKS_ITEM = "Backlinks y palabras clave (requieren herramientas de pago)";
@@ -50,7 +51,7 @@ ${bloqueDatosWeb(raw)}`;
 
 export async function generarNoSabemos(raw: RawData, adn: Adn, deps: SectionDeps): Promise<string[]> {
   const ia = await runSection("saber", prompt(raw, adn), NoSabemosIA, deps.models, deps.runOpts);
-  const otros = ia.items.map(quitarIdsEvidencia).filter((x) => x.length > 0 && x !== BACKLINKS_ITEM);
+  const otros = ia.items.map((x) => limpiarAfirmacionesNoRespaldadas(quitarIdsEvidencia(x), { soloCifras: true })).filter((x) => x.length > 0 && x !== BACKLINKS_ITEM);
   // El item de backlinks va siempre: ocupa un hueco y el resto se recorta.
   return [...otros.slice(0, MAX_ITEMS - 1), BACKLINKS_ITEM];
 }

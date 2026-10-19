@@ -5,6 +5,7 @@ import type { PageGetter } from "../../safe-fetch";
 import type { JsonModel } from "../../ai/providers";
 import { runSection, type RunSectionOpts } from "../llm";
 import { bloqueDatosWeb, REGLAS_COMUNES } from "../prompt";
+import { limpiarAfirmacionesNoRespaldadas } from "../filtro";
 import type { Adn } from "./adn";
 import { resumenAdn } from "./saber";
 
@@ -146,7 +147,7 @@ ${REGLAS_COMUNES}`;
   try {
     const r = await runSection("competidores-dif", p, DiferenciasIA, deps.models, deps.runOpts);
     for (const d of r.diferencias) {
-      const items = d.items.map((x) => x.trim()).filter(Boolean).slice(0, 3);
+      const items = d.items.map((x) => limpiarAfirmacionesNoRespaldadas(x)).filter(Boolean).slice(0, 3);
       if (items.length) out.set(d.nombre.trim().toLowerCase(), items);
     }
   } catch {

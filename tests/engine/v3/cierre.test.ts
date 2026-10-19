@@ -137,6 +137,23 @@ describe("generarCierre", () => {
     const { deps } = fake({ oportunidades: [] });
     expect((await generarCierre(raw, adn, null, score, reg, deps)).oportunidades).toEqual([]);
   });
+  it("filtro de código: quita del impacto, la acción y la validación las frases con cifras o promesas de ventas", async () => {
+    const { deps } = fake({
+      oportunidades: [
+        op("Compra", {
+          impacto: "Añadir opciones de compra impulsará las ventas online de los productos.",
+          accion: "Añadir botones de compra. Subirá un 30 % la conversión.",
+          validacion: "Comprobar los botones. Medir 1.000 visitas al mes.",
+        }),
+      ],
+    });
+    const o = (await generarCierre(raw, adn, null, score, reg, deps)).oportunidades[0];
+    expect(o.impacto).toBe("");
+    expect(o.accion).toBe("Añadir botones de compra.");
+    expect(o.validacion).toBe("Comprobar los botones.");
+    expect(o.evidencias.map((e) => e.texto)).toEqual(["Hola", "Adios"]);
+  });
+
   it("no pide ni devuelve motivos de la IA: los resúmenes del score salen del código", async () => {
     const { deps, prompts } = fake({ motivos: { propuesta: "Se entiende bien" }, oportunidades: [] });
     const r = await generarCierre(raw, adn, null, score, reg, deps);

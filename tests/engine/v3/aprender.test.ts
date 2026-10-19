@@ -43,6 +43,12 @@ describe("generarAprender", () => {
     const { deps } = fake({ items: [...items(1), { texto: "malo", evidencias: ["zzz"] }] });
     expect(await generarAprender(raw, adn, null, reg, deps)).toHaveLength(1);
   });
+  it("filtro de código: quita las frases con cifras o promesas; un item que queda vacío se descarta", async () => {
+    const { deps } = fake({ items: [{ texto: "Ofrecer prueba gratis. Atraerá más clientes.", evidencias: ["p1-e1"] }, { texto: "Crece un 30 % al año", evidencias: ["p1-e1"] }] });
+    const r = await generarAprender(raw, adn, null, reg, deps);
+    expect(r.map((i) => i.texto)).toEqual(["Ofrecer prueba gratis."]);
+  });
+
   it("el prompt incluye competidores verificados y delimitador", async () => {
     const { deps, prompts } = fake({ items: items(2) });
     await generarAprender(raw, adn, null, reg, deps, [

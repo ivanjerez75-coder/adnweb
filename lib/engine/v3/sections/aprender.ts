@@ -4,6 +4,7 @@ import { citar, type Evidence } from "../evidence";
 import { SeccionVaciaError } from "../errors";
 import { runSection, type SectionDeps } from "../llm";
 import { bloqueDatosWeb, REGLAS_COMUNES } from "../prompt";
+import { limpiarAfirmacionesNoRespaldadas } from "../filtro";
 import type { Adn } from "./adn";
 import type { Competidor } from "./competidores";
 import type { Revision } from "./revision";
@@ -59,7 +60,8 @@ export async function generarAprender(
   const out: ItemAprender[] = [];
   for (const i of ia.items) {
     const ev = citar(i.evidencias, reg);
-    if (ev && i.texto.trim()) out.push({ texto: i.texto.trim(), evidencias: ev });
+    const texto = limpiarAfirmacionesNoRespaldadas(i.texto);
+    if (ev && texto) out.push({ texto, evidencias: ev });
   }
   if (out.length === 0) throw new SeccionVaciaError("aprender");
   return out.slice(0, MAX_ITEMS);

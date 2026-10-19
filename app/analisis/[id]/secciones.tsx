@@ -236,7 +236,7 @@ function AdnVista({ c }: { c: unknown }) {
             <li>Qué ofrece: {arr<string>(l.queOfrece).join(", ")}</li>
             <li>Público: {l.publico}</li>
             <li>Cómo se contrata: {l.comoSeContrata}</li>
-            <li>Ingresos: {l.ingresos}</li>
+            {l.ingresos ? <li>Fuente de ingresos: {l.ingresos}</li> : null}
           </ul>
           <Evidencias lista={l.evidencias} />
         </section>
@@ -454,7 +454,8 @@ function CierreVista({ c }: { c: unknown }) {
             <p>
               <small>{a.confianza === "comprobado" ? "Comprobado" : "Hipótesis"}</small>
             </p>
-            <p>Impacto esperado: {a.impacto}</p>
+            {/* "Comprobado" se refiere al hallazgo; el impacto siempre es una hipótesis. */}
+            <p>Impacto esperado (hipótesis): {a.impacto || "sin estimar"}</p>
             <p>Acción: {a.accion}</p>
             <p>
               Prioridad: {a.prioridad}. Impacto: {a.impactoNivel}. Esfuerzo: {a.esfuerzo}. Riesgo: {a.riesgo}.

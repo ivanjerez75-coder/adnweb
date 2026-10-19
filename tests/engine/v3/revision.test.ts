@@ -104,6 +104,18 @@ describe("generarRevision", () => {
     expect(prompts[0]).toContain("<<<DATOS_WEB");
   });
 
+  it("filtro de código en relevancia (bien) y mejora (problemas); las citas no se tocan", async () => {
+    const { deps } = fake({
+      bien: [{ texto: "Ok", evidencias: ["p1-e1"], relevancia: "Ayuda a decidir. Aumentará las ventas un 20 %." }],
+      lineas: [],
+      problemas: [{ linea: "A", problema: "p", evidencias: ["p1-e1"], mejora: "Añadir precios. Reducirá la tasa de conversión perdida.", relevancia: "r" }],
+    });
+    const r = await generarRevision(raw, mkAdn(["A"]), reg, deps);
+    expect(r.bien[0].relevancia).toBe("Ayuda a decidir.");
+    expect(r.problemas[0].mejora).toBe("Añadir precios.");
+    expect(r.problemas[0].evidencias[0].texto).toBe(paginas[0].extractos[0].cita);
+  });
+
   it("añade relevancia, confianza y limitaciones con valores por defecto seguros", async () => {
     const { deps } = fake({
       bien: [{ texto: "Ok", evidencias: ["p1-e1"], relevancia: "Ayuda a decidir", confianza: "alta", limitaciones: ["a", "b", "c", "d", "e"] }, { texto: "Raro", evidencias: ["p1-e2"], confianza: "segura" }],

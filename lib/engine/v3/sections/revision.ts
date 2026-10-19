@@ -3,6 +3,7 @@ import type { RawData } from "../../types";
 import { citar, type Evidence } from "../evidence";
 import { runSection, type SectionDeps } from "../llm";
 import { bloqueDatosWeb, REGLAS_COMUNES } from "../prompt";
+import { limpiarAfirmacionesNoRespaldadas } from "../filtro";
 import type { Adn } from "./adn";
 import { resumenAdn } from "./saber";
 
@@ -108,7 +109,7 @@ export async function generarRevision(
       limitaciones.splice(MAX_LIMITACIONES - 1);
       limitaciones.push("Se apoya solo en lo que la empresa afirma de sí misma; no está comprobado.");
     }
-    bien.push({ texto: b.texto, evidencias: ev, relevancia: b.relevancia.trim(), confianza, limitaciones });
+    bien.push({ texto: b.texto, evidencias: ev, relevancia: limpiarAfirmacionesNoRespaldadas(b.relevancia), confianza, limitaciones });
   }
 
   const lineas: Revision["lineas"] = [];
@@ -134,7 +135,7 @@ export async function generarRevision(
         linea,
         problema: p.problema,
         evidencias: ev,
-        mejora: p.mejora,
+        mejora: limpiarAfirmacionesNoRespaldadas(p.mejora),
         relevancia: p.relevancia.trim(),
         confianza: p.confianza,
         limitaciones: limpiar(p.limitaciones),

@@ -3,6 +3,7 @@ import type { RawData } from "../../types";
 import { citar, type Evidence } from "../evidence";
 import { runSection, type SectionDeps } from "../llm";
 import { bloqueDatosWeb, REGLAS_COMUNES } from "../prompt";
+import { limpiarAfirmacionesNoRespaldadas as limpiar } from "../filtro";
 import type { DnaScore } from "../score";
 import type { Adn } from "./adn";
 import type { Revision } from "./revision";
@@ -123,7 +124,7 @@ export async function generarCierre(
   const vistas = new Set<string>();
   for (const o of ia.oportunidades) {
     const hallazgo = o.hallazgo.trim();
-    const accion = o.accion.trim();
+    const accion = limpiar(o.accion);
     const impactoNivel = o.impactoNivel.trim().toLowerCase();
     const esfuerzo = o.esfuerzo.trim().toLowerCase();
     const riesgoIa = o.riesgo.trim().toLowerCase();
@@ -139,13 +140,13 @@ export async function generarCierre(
     oportunidades.push({
       hallazgo,
       evidencias: ev,
-      impacto: o.impacto.trim(),
+      impacto: limpiar(o.impacto),
       impactoNivel,
       esfuerzo,
       riesgo,
       prioridad: calcularPrioridad(impactoNivel, esfuerzo, riesgo),
       accion,
-      validacion: o.validacion.trim(),
+      validacion: limpiar(o.validacion),
       confianza: comprobado ? "comprobado" : "hipotesis",
       supuestos: o.supuestos.map((s) => s.trim()).filter(Boolean),
     });
