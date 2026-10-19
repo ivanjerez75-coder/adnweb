@@ -36,6 +36,8 @@ export interface PrecioPublicado {
   plan: string | null;
   url: string;
   texto: string;
+  /** true si la periodicidad anual se ha deducido (no aparece junto al precio). */
+  periodicidadInferida?: boolean;
 }
 
 export const TEXTO_ESCENARIO = "Escenario ilustrativo: no son los ingresos de la empresa";
@@ -110,7 +112,29 @@ export function preciosPublicados(raw: RawData): PrecioPublicado[] {
     if (!p) continue;
     out.push({ ...p, plan: null, url: urlDe(texto), texto });
   }
-  return out;
+  return inferirAnuales(out);
+}
+
+/** Entre 9 y 12,5 veces otro precio de la misma moneda: el patrón típico de "29 al mes / 290 al año". */
+const RATIO_ANUAL = { min: 9, max: 12.5 };
+export const SUPUESTO_ANUAL_INFERIDO =
+  "Los precios sin periodicidad que son unas 10-12 veces otro precio de la misma moneda se interpretan como anuales.";
+
+/** Marca como anual (inferida) un precio sin periodicidad que es ~10-12× otro precio de su moneda. */
+export function inferirAnuales(precios: PrecioPublicado[]): PrecioPublicado[] {
+  return precios.map((p) => {
+    if (p.periodicidad !== null) return p;
+    const esAnual = precios.some(
+      (q) =>
+        q !== p &&
+        q.moneda === p.moneda &&
+        q.periodicidad !== "unico" &&
+        q.importe > 0 &&
+        p.importe / q.importe >= RATIO_ANUAL.min &&
+        p.importe / q.importe <= RATIO_ANUAL.max,
+    );
+    return esAnual ? { ...p, periodicidad: "año", periodicidadInferida: true } : p;
+  });
 }
 
 const mediana = (xs: number[]): number => {
@@ -360,6 +384,7 @@ function escenarioMetrica(raw: RawData, precios: PrecioPublicado[]): Metrica | n
     "Todos los clientes pagan el precio mediano publicado.",
   ];
   if (usados.some((p) => p.periodicidad === null)) supuestos.push(SUPUESTO_PERIODICIDAD);
+  if (usados.some((p) => p.periodicidadInferida)) supuestos.push(SUPUESTO_ANUAL_INFERIDO);
   if (usados.some((p) => p.periodicidad === "año")) supuestos.push("Los precios anuales se dividen entre 12.");
   if (usados.some((p) => p.moneda !== "EUR")) supuestos.push("Los precios en otras monedas se convierten a euros con un tipo de cambio fijo.");
   if (usados.length < precios.length) supuestos.push("Los pagos únicos no se incluyen en el escenario.");

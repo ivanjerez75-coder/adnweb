@@ -12,7 +12,23 @@ import { generarAprender } from "./sections/aprender";
 import { generarCierre } from "./sections/cierre";
 import { generarCompetidores } from "./sections/competidores";
 import { generarRevision, type Revision } from "./sections/revision";
-import { generarNoSabemos } from "./sections/saber";
+import { generarNoSabemos, quitarIdsEvidencia } from "./sections/saber";
+
+/** Secciones escritas por la IA: sus textos pueden traer ids de evidencia sueltos ("[p8-e7]"). */
+const SECCIONES_IA: readonly SeccionClave[] = ["adn", "saber", "competidores", "revision", "aprender", "cierre"];
+
+const esEvidencia = (v: object): boolean => "id" in v && "tipo" in v && "texto" in v && "fuente" in v;
+
+/** Limpia los ids de evidencia de todos los textos, sin tocar las evidencias (sus citas son literales). */
+export function limpiarTextos(v: unknown): unknown {
+  if (typeof v === "string") return quitarIdsEvidencia(v);
+  if (Array.isArray(v)) return v.map(limpiarTextos);
+  if (v && typeof v === "object") {
+    if (esEvidencia(v)) return v;
+    return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, limpiarTextos(x)]));
+  }
+  return v;
+}
 
 export type SeccionClave = "datos" | "adn" | "saber" | "competidores" | "revision" | "aprender" | "score" | "cierre";
 export type EstadoSeccion = "pendiente" | "lista" | "error";
@@ -61,7 +77,8 @@ export async function buildReportV3(raw: RawData, deps: ReportV3Deps, onSection:
   };
 
   /** Registra la sección y avisa. Un fallo de onSection solo se propaga si `propagar` (adn). */
-  const emitir = async (clave: SeccionClave, contenido: unknown | null, estado: EstadoSeccion, propagar = false) => {
+  const emitir = async (clave: SeccionClave, bruto: unknown | null, estado: EstadoSeccion, propagar = false) => {
+    const contenido = bruto !== null && SECCIONES_IA.includes(clave) ? limpiarTextos(bruto) : bruto;
     estados[clave] = estado;
     if (contenido !== null && estado === "lista") secciones[clave] = contenido;
     try {

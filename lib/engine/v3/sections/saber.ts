@@ -16,11 +16,13 @@ const NoSabemosIA = z.object({
 
 const ID_EVIDENCIA = String.raw`(?:p\d+(?:-e\d+)?|dato:[a-z_:0-9]+)`;
 const PARENTESIS_IDS = new RegExp(String.raw`\s*\(\s*${ID_EVIDENCIA}(?:\s*,\s*${ID_EVIDENCIA})*\s*\)`, "gi");
+const CORCHETES_IDS = new RegExp(String.raw`\s*\[\s*${ID_EVIDENCIA}(?:\s*,\s*${ID_EVIDENCIA})*\s*\]`, "gi");
 
-/** Quita los paréntesis que solo contienen ids de evidencia ("(p3, p4)") y ordena los espacios. */
+/** Quita los paréntesis o corchetes que solo contienen ids de evidencia ("(p3, p4)", "[p8-e7]") y ordena los espacios. */
 export function quitarIdsEvidencia(texto: string): string {
   return texto
     .replace(PARENTESIS_IDS, "")
+    .replace(CORCHETES_IDS, "")
     .replace(/\s+([.,;:])/g, "$1")
     .replace(/\s{2,}/g, " ")
     .trim();

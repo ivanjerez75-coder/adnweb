@@ -195,3 +195,20 @@ describe("construirMetricas: SEO", () => {
     }
   });
 });
+
+describe("inferirAnuales", () => {
+  it("interpreta como anual un precio sin periodicidad ~10-12 veces otro de su moneda", async () => {
+    const { inferirAnuales, escenarioIngresos } = await import("../../../lib/engine/v3/estimates");
+    const base = { plan: null, url: "https://x.example/pricing" };
+    const precios = inferirAnuales([
+      { ...base, importe: 29, moneda: "USD", periodicidad: null, texto: "$29" },
+      { ...base, importe: 290, moneda: "USD", periodicidad: null, texto: "$290" },
+      { ...base, importe: 20, moneda: "EUR", periodicidad: null, texto: "€20" },
+    ]);
+    expect(precios.map((p) => p.periodicidad)).toEqual([null, "año", null]);
+    expect(precios[1].periodicidadInferida).toBe(true);
+    const sinInferir = escenarioIngresos([{ ...base, importe: 29, moneda: "USD", periodicidad: null, texto: "$29" }, { ...base, importe: 290, moneda: "USD", periodicidad: null, texto: "$290" }]);
+    const inferido = escenarioIngresos(precios.slice(0, 2));
+    expect(inferido![0].ingresosMes).toBeLessThan(sinInferir![0].ingresosMes);
+  });
+});

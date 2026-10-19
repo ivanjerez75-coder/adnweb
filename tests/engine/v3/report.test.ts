@@ -167,3 +167,15 @@ describe("buildReportV3", () => {
     expect(t.max).toBeLessThanOrEqual(3);
   });
 });
+
+describe("limpiarTextos", () => {
+  it("quita ids sueltos de los textos pero no toca las evidencias", async () => {
+    const { limpiarTextos } = await import("../../../lib/engine/v3/report");
+    const ev = { id: "p8-e7", tipo: "pagina", texto: "Cita literal [p1-e1]", fuente: "https://x.example" };
+    expect(limpiarTextos({ ofrece: "Formularios [p8-e7].", lista: ["Algo (p3, p4)"], evidencias: [ev] })).toEqual({
+      ofrece: "Formularios.",
+      lista: ["Algo"],
+      evidencias: [ev],
+    });
+  });
+});
