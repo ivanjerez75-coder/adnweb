@@ -14,6 +14,18 @@ const NoSabemosIA = z.object({
     .transform((xs) => xs.map((x) => x.trim()).filter((x) => x.length > 0)),
 });
 
+const ID_EVIDENCIA = String.raw`(?:p\d+(?:-e\d+)?|dato:[a-z_:0-9]+)`;
+const PARENTESIS_IDS = new RegExp(String.raw`\s*\(\s*${ID_EVIDENCIA}(?:\s*,\s*${ID_EVIDENCIA})*\s*\)`, "gi");
+
+/** Quita los paréntesis que solo contienen ids de evidencia ("(p3, p4)") y ordena los espacios. */
+export function quitarIdsEvidencia(texto: string): string {
+  return texto
+    .replace(PARENTESIS_IDS, "")
+    .replace(/\s+([.,;:])/g, "$1")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 /** Resumen compacto del adn para los prompts (no se pasa el objeto entero). */
 export function resumenAdn(adn: Adn): string {
   const lineas = adn.lineas.map((l) => `- ${l.nombre}: ${l.queOfrece.join(", ")}`).join("\n");
@@ -36,7 +48,7 @@ ${bloqueDatosWeb(raw)}`;
 
 export async function generarNoSabemos(raw: RawData, adn: Adn, deps: SectionDeps): Promise<string[]> {
   const ia = await runSection("saber", prompt(raw, adn), NoSabemosIA, deps.models, deps.runOpts);
-  const otros = ia.items.filter((x) => x !== BACKLINKS_ITEM);
+  const otros = ia.items.map(quitarIdsEvidencia).filter((x) => x.length > 0 && x !== BACKLINKS_ITEM);
   // El item de backlinks va siempre: ocupa un hueco y el resto se recorta.
   return [...otros.slice(0, MAX_ITEMS - 1), BACKLINKS_ITEM];
 }

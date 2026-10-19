@@ -43,6 +43,29 @@ describe("generarNoSabemos", () => {
     expect(r.length).toBe(8);
     expect(r).toContain(BACKLINKS_ITEM);
   });
+  it("quita los ids de evidencia entre paréntesis y deja el resto del texto", async () => {
+    const { deps } = fake(
+      JSON.stringify({
+        items: [
+          "Margen real de cada servicio (p3, p4) no visible en la web",
+          "Número de usuarios atendidos (p2-e1, p2-e2).",
+          "Ocupación de los centros (dato:contacto)",
+          "Financiación pública (p1, dato:precio:1 , p2-e3) y privada",
+          "Retención (véase la memoria anual) de las familias",
+          "Ratio de inserción ( p5 )",
+        ],
+      }),
+    );
+    const r = await generarNoSabemos(raw, adn, deps);
+    expect(r.slice(0, -1)).toEqual([
+      "Margen real de cada servicio no visible en la web",
+      "Número de usuarios atendidos.",
+      "Ocupación de los centros",
+      "Financiación pública y privada",
+      "Retención (véase la memoria anual) de las familias",
+      "Ratio de inserción",
+    ]);
+  });
   it("el prompt incluye el tipo y las líneas", async () => {
     const { deps, prompts } = fake(JSON.stringify({ items: ["a", "b", "c"] }));
     await generarNoSabemos(raw, adn, deps);
