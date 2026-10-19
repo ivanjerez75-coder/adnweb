@@ -16,6 +16,9 @@ const adn: Adn = {
   tipoNegocio: "saas",
   lineas: [{ nombre: "A", queOfrece: ["x"], publico: "", comoSeContrata: "", ingresos: "", evidencias: [] }],
   comoFunciona: null,
+  modeloEstado: "desconocido",
+  canales: [],
+  afirmaciones: [],
 };
 function fake(obj: object) {
   const prompts: string[] = [];

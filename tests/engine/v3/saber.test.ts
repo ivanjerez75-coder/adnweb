@@ -10,6 +10,9 @@ const adn: Adn = {
   tipoNegocio: "saas",
   lineas: [{ nombre: "Facturación", queOfrece: ["Facturas"], publico: "", comoSeContrata: "", ingresos: "", evidencias: [] }],
   comoFunciona: null,
+  modeloEstado: "desconocido",
+  canales: [],
+  afirmaciones: [],
 };
 function fake(answer: string) {
   const prompts: string[] = [];

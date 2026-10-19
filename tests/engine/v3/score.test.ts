@@ -20,7 +20,7 @@ const lineaAdn = (over: Partial<Adn["lineas"][number]> = {}) => ({
   evidencias: [],
   ...over,
 });
-const mkAdn = (over: Partial<Adn> = {}): Adn => ({ queEs: null, propuestaValor: null, tipoNegocio: "saas", lineas: [lineaAdn()], comoFunciona: null, ...over });
+const mkAdn = (over: Partial<Adn> = {}): Adn => ({ queEs: null, propuestaValor: null, tipoNegocio: "saas", lineas: [lineaAdn()], comoFunciona: null, modeloEstado: "desconocido", canales: [], afirmaciones: [], ...over });
 const checks = (v: string) => ({ propuestaClara: v, diceAQuien: v, muestraCasos: v, facilContacto: v, orientacionPrecio: v });
 const mkRev = (c: object[]): Revision =>
   ({ bien: [], problemas: [], lineas: c.map((ch, i) => ({ nombre: `L${i}`, checks: ch, evidenciasChecks: [] })) }) as unknown as Revision;
@@ -101,7 +101,13 @@ function completo(over: Partial<RawData> = {}): RawData {
   });
 }
 const adnCompleto = () =>
-  mkAdn({ queEs: bloque("p1-e1"), propuestaValor: bloque("p1-e2"), lineas: [lineaAdn({ comoSeContrata: "Suscripción mensual", evidencias: [pagina("p1-e1")] })] });
+  mkAdn({
+    queEs: bloque("p1-e1"),
+    propuestaValor: bloque("p1-e2"),
+    lineas: [lineaAdn({ comoSeContrata: "Suscripción mensual", evidencias: [pagina("p1-e1")] })],
+    modeloEstado: "confirmado",
+    canales: [{ tipo: "prueba_gratuita", evidencias: [pagina("p1-e1")] }],
+  });
 const revCompleta = () => mkRev([checks("si")]);
 
 describe("calcularScore: estructura y textos", () => {
@@ -249,12 +255,25 @@ describe("calcularScore: indicadores", () => {
     expect(reciente.puntos).toBe(0);
   });
 
-  it("propuesta: modelo de negocio exige comoSeContrata con evidencia de página", () => {
+  it("propuesta: el modelo de negocio puntúa según el estado calculado en código", () => {
     const sin = score(makeRaw(), { adn: mkAdn() });
     expect(ind(sin, "propuesta", "modelo_negocio").puntos).toBe(0);
+    // comoSeContrata con página pero sin estado confirmado: no cuenta como confirmado.
+    const soloTexto = mkAdn({ lineas: [lineaAdn({ comoSeContrata: "Suscripción", evidencias: [pagina("p1-e1")] })] });
+    expect(ind(score(makeRaw(), { adn: soloTexto }), "propuesta", "modelo_negocio").puntos).toBe(0);
+    const probable = score(makeRaw(), { adn: mkAdn({ modeloEstado: "probable" }) });
+    expect(ind(probable, "propuesta", "modelo_negocio").puntos).toBe(10);
     const con = score(makeRaw(), { adn: adnCompleto() });
     expect(ind(con, "propuesta", "modelo_negocio").puntos).toBe(20);
     expect(ind(con, "propuesta", "modelo_negocio").evidencias).toHaveLength(1);
+  });
+
+  it("oferta: el canal de conversión exige un canal con evidencia, no basta un CTA", () => {
+    const raw = makeRaw();
+    expect(ind(score(raw, { adn: mkAdn() }), "oferta", "canal_conversion").puntos).toBe(0);
+    const con = ind(score(raw, { adn: adnCompleto() }), "oferta", "canal_conversion");
+    expect(con.puntos).toBe(20);
+    expect(con.evidencias).toHaveLength(1);
   });
 
   it("propuesta: la claridad agrega propuestaClara y diceAQuien de la revisión", () => {

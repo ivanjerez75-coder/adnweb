@@ -287,17 +287,16 @@ function AprenderVista({ c }: { c: unknown }) {
 }
 
 function CierreVista({ c }: { c: unknown }) {
-  const acciones = arr<Cierre["acciones"][number]>((c as Cierre | null)?.acciones);
+  const acciones = arr<Cierre["oportunidades"][number]>((c as Cierre | null)?.oportunidades);
   return (
     <ol>
       {acciones.map((a, i) => (
         <li key={i}>
-          <strong>{a.que}</strong>
-          <p>{a.porque}</p>
+          <strong>{a.hallazgo}</strong>
+          <p>{a.accion}</p>
           <p>
-            Impacto: {a.impacto}. Esfuerzo: {a.esfuerzo}.
+            Prioridad: {a.prioridad}. Impacto: {a.impactoNivel}. Esfuerzo: {a.esfuerzo}. Riesgo: {a.riesgo}. ({a.confianza === "comprobado" ? "Comprobado en la web" : "Hipótesis"})
           </p>
-          {arr(a.datosQueFaltan).length > 0 && <p>Datos que faltan: {arr<string>(a.datosQueFaltan).join("; ")}</p>}
           <Evidencias lista={a.evidencias} />
         </li>
       ))}

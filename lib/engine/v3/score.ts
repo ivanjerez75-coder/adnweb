@@ -126,13 +126,16 @@ function propuesta(raw: RawData, adn: Adn, revision: Revision | null): Indicador
       ? ind("claridad_web", "La web deja claro qué es y para quién", (30 * si) / validos, 30, `${si} de ${validos} comprobaciones de claridad cumplidas (propuesta clara y a quién se dirige).`, unicas(...evCheck))
       : sinDato("claridad_web", "La web deja claro qué es y para quién", 30, "No hay revisión de la web con comprobaciones aplicables.");
 
-  // Task 4: usar adn.modeloEstado ("confirmado" / "probable") cuando exista.
-  const lineasContratacion = adn.lineas.filter((l) => l.comoSeContrata.trim() !== "" && l.evidencias.some((e) => e.tipo === "pagina"));
+  // El estado del modelo lo calcula el código al generar el adn (confirmado exige respaldo en la web).
+  const evContratacion = unicas(...adn.lineas.filter((l) => l.comoSeContrata.trim() !== "").map((l) => l.evidencias.filter((e) => e.tipo === "pagina")));
+  const NOMBRE_MODELO = "Se entiende cómo gana dinero";
   const modelo = !raw.site
-    ? sinDato("modelo_negocio", "Se entiende cómo gana dinero", 20, "No se pudo leer la web, así que no se evalúa.")
-    : lineasContratacion.length > 0
-      ? ind("modelo_negocio", "Se entiende cómo gana dinero", 20, 20, "Alguna línea de negocio explica cómo se contrata, con cita de la web.", unicas(...lineasContratacion.map((l) => l.evidencias.filter((e) => e.tipo === "pagina"))))
-      : ind("modelo_negocio", "Se entiende cómo gana dinero", 0, 20, "Ninguna línea de negocio explica cómo se contrata con respaldo en la web.");
+    ? sinDato("modelo_negocio", NOMBRE_MODELO, 20, "No se pudo leer la web, así que no se evalúa.")
+    : adn.modeloEstado === "confirmado"
+      ? ind("modelo_negocio", NOMBRE_MODELO, 20, 20, "El modelo de negocio está confirmado: se explica cómo se contrata y hay precio o canal visible en la web.", evContratacion)
+      : adn.modeloEstado === "probable"
+        ? ind("modelo_negocio", NOMBRE_MODELO, 10, 20, "El modelo de negocio se deduce de la web pero no está confirmado.", evContratacion)
+        : ind("modelo_negocio", NOMBRE_MODELO, 0, 20, "No se pudo determinar cómo gana dinero el negocio a partir de la web.");
 
   return [
     bloque("que_es", "Se explica qué es el negocio", adn.queEs, raw, 25),
@@ -168,19 +171,18 @@ function oferta(raw: RawData, facts: Facts, adn: Adn, reg: Reg): Indicador[] {
         : sinDato("pagina_precios", "Página de precios", 15, "No se pudo comprobar si hay página de precios."),
   );
 
-  // Task 4: usar adn.canales (canal de conversión evidenciado) cuando exista.
-  const lineasContratacion = adn.lineas.filter((l) => l.comoSeContrata.trim() !== "" && l.evidencias.some((e) => e.tipo === "pagina"));
+  const canales = adn.canales.filter((c) => c.evidencias.some((e) => e.tipo === "pagina"));
   if (!site) {
     out.push(sinDato("canal_conversion", "Canal de conversión evidenciado", 20, "No se pudo leer la web."));
-  } else if (lineasContratacion.length > 0 || site.ctas.length > 0) {
+  } else if (canales.length > 0) {
     out.push(
       ind(
         "canal_conversion",
         "Canal de conversión evidenciado",
         20,
         20,
-        lineasContratacion.length > 0 ? "Hay una forma de contratar explicada con cita de la web." : `La web ofrece llamadas a la acción: ${site.ctas.slice(0, 3).join(", ")}.`,
-        unicas(...lineasContratacion.map((l) => l.evidencias.filter((e) => e.tipo === "pagina"))),
+        `La web ofrece ${canales.length === 1 ? "un canal" : `${canales.length} canales`} para convertirse en cliente (${canales.map((c) => c.tipo.replace("_", " ")).join(", ")}), con cita de la web.`,
+        unicas(...canales.map((c) => c.evidencias.filter((e) => e.tipo === "pagina"))),
       ),
     );
   } else if (fin) {

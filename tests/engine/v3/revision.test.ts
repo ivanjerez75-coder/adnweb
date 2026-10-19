@@ -27,6 +27,9 @@ const mkAdn = (nombres: string[]): Adn => ({
   tipoNegocio: "saas",
   lineas: nombres.map((nombre) => ({ nombre, queOfrece: ["x"], publico: "", comoSeContrata: "", ingresos: "", evidencias: [] })),
   comoFunciona: null,
+  modeloEstado: "desconocido",
+  canales: [],
+  afirmaciones: [],
 });
 const checks = (v = "si") => ({ propuestaClara: v, diceAQuien: v, muestraCasos: "no", facilContacto: v, orientacionPrecio: "no" });
 function fake(obj: object) {
@@ -99,5 +102,39 @@ describe("generarRevision", () => {
     await generarRevision(raw, mkAdn(["Mi línea"]), reg, deps);
     expect(prompts[0]).toContain("Mi línea");
     expect(prompts[0]).toContain("<<<DATOS_WEB");
+  });
+
+  it("añade relevancia, confianza y limitaciones con valores por defecto seguros", async () => {
+    const { deps } = fake({
+      bien: [{ texto: "Ok", evidencias: ["p1-e1"], relevancia: "Ayuda a decidir", confianza: "alta", limitaciones: ["a", "b", "c", "d", "e"] }, { texto: "Raro", evidencias: ["p1-e2"], confianza: "segura" }],
+      lineas: [],
+      problemas: [{ linea: "A", problema: "p", evidencias: ["p1-e1"], mejora: "m", relevancia: "r", confianza: "baja", limitaciones: ["no se vio el checkout"] }],
+    });
+    const r = await generarRevision(raw, mkAdn(["A"]), reg, deps);
+    expect(r.bien[0]).toMatchObject({ relevancia: "Ayuda a decidir", confianza: "alta" });
+    expect(r.bien[0].limitaciones).toHaveLength(3);
+    expect(r.bien[1]).toMatchObject({ relevancia: "", confianza: "media", limitaciones: [] });
+    expect(r.problemas[0]).toMatchObject({ relevancia: "r", confianza: "baja", limitaciones: ["no se vio el checkout"] });
+  });
+  it("un bien que solo se apoya en afirmaciones de la empresa no se marca como comprobado", async () => {
+    const adn = { ...mkAdn(["A"]), afirmaciones: [{ texto: "Somos los mejores", evidencias: [reg.get("p1-e2")!] }] };
+    const { deps } = fake({
+      bien: [
+        { texto: "Presume", evidencias: ["p1-e2"], confianza: "alta" },
+        { texto: "Mixto", evidencias: ["p1-e2", "p1-e1"], confianza: "alta" },
+      ],
+      lineas: [],
+      problemas: [],
+    });
+    const r = await generarRevision(raw, adn, reg, deps);
+    expect(r.bien[0].confianza).toBe("baja");
+    expect(r.bien[0].limitaciones.join(" ")).toMatch(/afirma/i);
+    expect(r.bien[1].confianza).toBe("alta");
+  });
+  it("el prompt prohíbe afirmar conversión, abandono o clientes perdidos", async () => {
+    const { deps, prompts } = fake({ bien: [], lineas: [], problemas: [] });
+    await generarRevision(raw, mkAdn(["A"]), reg, deps);
+    expect(prompts[0]).toMatch(/conversión/i);
+    expect(prompts[0]).toMatch(/clientes perdidos/i);
   });
 });

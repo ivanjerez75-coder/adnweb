@@ -2,8 +2,9 @@ import { describe, it, expect } from "vitest";
 import { generarAdn } from "../../../lib/engine/v3/sections/adn";
 import { buildEvidence } from "../../../lib/engine/v3/evidence";
 import { SeccionVaciaError } from "../../../lib/engine/v3/errors";
-import { makeRaw } from "../raw-fixture";
+import { makeRaw, makeSite } from "../raw-fixture";
 import type { JsonModel } from "../../../lib/engine/ai/providers";
+import type { Signal } from "../../../lib/engine/types";
 
 const paginas = [
   {
@@ -84,5 +85,83 @@ describe("generarAdn con muchas líneas", () => {
     const adn = await generarAdn(raw, reg, deps);
     expect(adn.lineas).toHaveLength(6);
     expect(prompts).toHaveLength(1);
+  });
+});
+
+describe("generarAdn: modelo, canales y afirmaciones", () => {
+  const sinPrecio = makeRaw({ paginas, site: makeSite({ pricesFound: [] }) });
+  const regSinPrecio = buildEvidence(sinPrecio, []);
+  const conPrecio = makeRaw({
+    paginas,
+    site: makeSite({ pricesFound: ["19 €/mes"] }),
+    legal: { avisoLegal: null, privacidad: null, cookies: null, condiciones: null, cif: "B12345678", razonSocial: "Facturo SL", email: null, telefono: null, direccion: null, fuentes: { cif: "https://facturo.example/aviso" } },
+  });
+  const regPrecio = buildEvidence(conPrecio, []);
+  const sig = { id: "s1", family: "tecnica", source: "web", label: "Usa Stripe", polarity: "positiva" } as unknown as Signal;
+  const regSig = buildEvidence(sinPrecio, [sig]);
+  const con = (extra: object, lineas = [linea()]) => JSON.stringify({ ...JSON.parse(salida(lineas)), ...extra });
+
+  it("sin los campos nuevos: desconocido, sin canales ni afirmaciones", async () => {
+    const adn = await generarAdn(sinPrecio, regSinPrecio, fake(salida([linea()])).deps);
+    expect(adn.modeloEstado).toBe("desconocido");
+    expect(adn.canales).toEqual([]);
+    expect(adn.afirmaciones).toEqual([]);
+  });
+  it("confirmado baja a probable sin precio publicado ni canal con página", async () => {
+    const adn = await generarAdn(sinPrecio, regSinPrecio, fake(con({ modeloEstado: "confirmado" })).deps);
+    expect(adn.modeloEstado).toBe("probable");
+  });
+  it("confirmado se mantiene con comoSeContrata de página y precio publicado", async () => {
+    const adn = await generarAdn(conPrecio, regPrecio, fake(con({ modeloEstado: "confirmado" })).deps);
+    expect(adn.modeloEstado).toBe("confirmado");
+  });
+  it("confirmado se mantiene con canal con página, sin precio", async () => {
+    const adn = await generarAdn(sinPrecio, regSinPrecio, fake(con({ modeloEstado: "confirmado", canales: [{ tipo: "demo", evidencias: ["p1-e1"] }] })).deps);
+    expect(adn.modeloEstado).toBe("confirmado");
+  });
+  it("confirmado baja a probable si la línea con comoSeContrata solo tiene evidencia de señal", async () => {
+    const adn = await generarAdn(
+      sinPrecio,
+      regSig,
+      fake(con({ modeloEstado: "confirmado", canales: [{ tipo: "demo", evidencias: ["p1-e1"] }] }, [linea({ evidencias: ["s1"] })])).deps,
+    );
+    expect(adn.modeloEstado).toBe("probable");
+  });
+  it("desconocido de la IA se respeta aunque haya precio", async () => {
+    const adn = await generarAdn(conPrecio, regPrecio, fake(con({ modeloEstado: "desconocido" })).deps);
+    expect(adn.modeloEstado).toBe("desconocido");
+  });
+  it("valor raro de modeloEstado se trata como desconocido sin reintentar", async () => {
+    const f = fake(con({ modeloEstado: "seguro" }));
+    expect((await generarAdn(sinPrecio, regSinPrecio, f.deps)).modeloEstado).toBe("desconocido");
+    expect(f.prompts).toHaveLength(1);
+  });
+  it("descarta canales sin evidencia de página o de tipo desconocido", async () => {
+    const adn = await generarAdn(
+      sinPrecio,
+      regSig,
+      fake(con({ canales: [{ tipo: "demo", evidencias: ["s1"] }, { tipo: "contacto", evidencias: ["p1-e1"] }, { tipo: "telepatia", evidencias: ["p1-e1"] }, { tipo: "demo", evidencias: [] }] })).deps,
+    );
+    expect(adn.canales.map((c) => c.tipo)).toEqual(["contacto"]);
+    expect(adn.canales[0].evidencias[0].id).toBe("p1-e1");
+  });
+  it("afirmaciones: exigen evidencia de página", async () => {
+    const adn = await generarAdn(
+      sinPrecio,
+      regSig,
+      fake(con({ afirmaciones: [{ texto: "Somos líderes", evidencias: ["p1-e1"] }, { texto: "Sin página", evidencias: ["s1"] }, { texto: "Sin nada", evidencias: [] }] })).deps,
+    );
+    expect(adn.afirmaciones.map((a) => a.texto)).toEqual(["Somos líderes"]);
+  });
+  it("el prompt incluye CIF, razón social, precios y la regla de no afirmar conversión", async () => {
+    const f = fake(salida([linea()]));
+    await generarAdn(conPrecio, regPrecio, f.deps);
+    const p = f.prompts[0];
+    expect(p).toContain("dato:cif");
+    expect(p).toContain("B12345678");
+    expect(p).toContain("dato:razon_social");
+    expect(p).toContain("dato:precio:1");
+    expect(p).toMatch(/conversión/i);
+    expect(p).toMatch(/afirmación/i);
   });
 });

@@ -11,6 +11,9 @@ const adn: Adn = {
   tipoNegocio: "saas",
   lineas: [{ nombre: "Facturación", queOfrece: ["Facturas"], publico: "", comoSeContrata: "", ingresos: "", evidencias: [] }],
   comoFunciona: null,
+  modeloEstado: "desconocido",
+  canales: [],
+  afirmaciones: [],
 };
 const raw = makeRaw({});
 const ownHost = new URL(raw.url).hostname;

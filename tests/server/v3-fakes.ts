@@ -63,7 +63,7 @@ export function fakeV3Model(fail: Fail = {}): JsonModel {
         case "aprender":
           return JSON.stringify({ items: [{ texto: "Mostrar precio", evidencias: ev }] });
         default:
-          return JSON.stringify({ motivos: {}, acciones: [] });
+          return JSON.stringify({ motivos: {}, oportunidades: [] });
       }
     },
   };
