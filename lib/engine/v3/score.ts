@@ -32,6 +32,8 @@ export const DIMENSIONES_MIN = 3;
 export interface Indicador {
   clave: string;
   nombre: string;
+  /** false = no aplica a este tipo de negocio: no puntúa ni cuenta en la cobertura. */
+  aplica: boolean;
   evaluado: boolean;
   puntos: number;
   maximo: number;
@@ -44,7 +46,7 @@ export interface DimensionScore {
   peso: number;
   /** 0-100, o null = "No puntuable". */
   valor: number | null;
-  /** 0-1: indicadores evaluados / total. */
+  /** 0-1: indicadores evaluados / indicadores aplicables. */
   cobertura: number;
   indicadores: Indicador[];
 }
@@ -79,12 +81,26 @@ function unicas(...grupos: Evidence[][]): Evidence[] {
 
 /** Indicador con dato: puntos acotados a [0, máximo]. */
 function ind(clave: string, nombre: string, puntos: number, maximo: number, motivo: string, evidencias: Evidence[] = []): Indicador {
-  return { clave, nombre, evaluado: true, puntos: Math.max(0, Math.min(maximo, Math.round(puntos))), maximo, motivo, evidencias };
+  return { clave, nombre, aplica: true, evaluado: true, puntos: Math.max(0, Math.min(maximo, Math.round(puntos))), maximo, motivo, evidencias };
 }
 /** Indicador sin datos: no puntúa, no cuenta en la cobertura. */
 function sinDato(clave: string, nombre: string, maximo: number, motivo: string): Indicador {
-  return { clave, nombre, evaluado: false, puntos: 0, maximo, motivo, evidencias: [] };
+  return { clave, nombre, aplica: true, evaluado: false, puntos: 0, maximo, motivo, evidencias: [] };
 }
+export const MOTIVO_NO_APLICA = "No aplica a este tipo de negocio";
+/** Indicador que no aplica al tipo de negocio: ni puntúa ni cuenta en la cobertura. */
+function noAplica(clave: string, nombre: string, maximo: number): Indicador {
+  return { clave, nombre, aplica: false, evaluado: false, puntos: 0, maximo, motivo: MOTIVO_NO_APLICA, evidencias: [] };
+}
+
+type TipoNegocio = Adn["tipoNegocio"];
+/** Tipos de negocio a los que aplica cada indicador de monetización (el resto siempre aplica). */
+const APLICA_A: Record<string, readonly TipoNegocio[]> = {
+  plan_gratuito: ["saas", "app"],
+  pagos: ["ecommerce", "saas", "marketplace", "app"],
+  pagina_precios: ["saas", "ecommerce", "marketplace", "app"],
+};
+const aplicaA = (clave: string, tipo: TipoNegocio) => APLICA_A[clave]?.includes(tipo) ?? true;
 
 function metrica(metricas: Metrica[], clave: string): Metrica | undefined {
   return metricas.find((m) => m.clave === clave);
@@ -147,7 +163,7 @@ function propuesta(raw: RawData, adn: Adn, revision: Revision | null): Indicador
 
 // ---------- Oferta y monetización ----------
 
-function oferta(raw: RawData, facts: Facts, adn: Adn, reg: Reg): Indicador[] {
+function ofertaIndicadores(raw: RawData, facts: Facts, adn: Adn, reg: Reg): Indicador[] {
   const site = raw.site;
   const fin = legible(raw);
   const out: Indicador[] = [];
@@ -171,7 +187,8 @@ function oferta(raw: RawData, facts: Facts, adn: Adn, reg: Reg): Indicador[] {
         : sinDato("pagina_precios", "Página de precios", 15, "No se pudo comprobar si hay página de precios."),
   );
 
-  const canales = adn.canales.filter((c) => c.evidencias.some((e) => e.tipo === "pagina"));
+  // Un canal puede venir de un extracto de página o del dato de contacto publicado (respaldo del adn).
+  const canales = adn.canales.filter((c) => c.evidencias.length > 0);
   if (!site) {
     out.push(sinDato("canal_conversion", "Canal de conversión evidenciado", 20, "No se pudo leer la web."));
   } else if (canales.length > 0) {
@@ -181,8 +198,8 @@ function oferta(raw: RawData, facts: Facts, adn: Adn, reg: Reg): Indicador[] {
         "Canal de conversión evidenciado",
         20,
         20,
-        `La web ofrece ${canales.length === 1 ? "un canal" : `${canales.length} canales`} para convertirse en cliente (${canales.map((c) => c.tipo.replace("_", " ")).join(", ")}), con cita de la web.`,
-        unicas(...canales.map((c) => c.evidencias.filter((e) => e.tipo === "pagina"))),
+        `La web ofrece ${canales.length === 1 ? "un canal" : `${canales.length} canales`} para convertirse en cliente (${canales.map((c) => c.tipo.replace("_", " ")).join(", ")}), con evidencia de la web.`,
+        unicas(...canales.map((c) => c.evidencias)),
       ),
     );
   } else if (fin) {
@@ -204,6 +221,11 @@ function oferta(raw: RawData, facts: Facts, adn: Adn, reg: Reg): Indicador[] {
     else out.push(sinDato("pagos", "Cobra en línea (tecnología de pagos)", 25, "Se leyó poco texto de la web."));
   }
   return out;
+}
+
+/** Los indicadores que no aplican al tipo de negocio se sustituyen por "no aplica". */
+function oferta(raw: RawData, facts: Facts, adn: Adn, reg: Reg): Indicador[] {
+  return ofertaIndicadores(raw, facts, adn, reg).map((i) => (aplicaA(i.clave, adn.tipoNegocio) ? i : noAplica(i.clave, i.nombre, i.maximo)));
 }
 
 // ---------- Experiencia y rendimiento ----------
@@ -356,8 +378,9 @@ function confianza(raw: RawData, revision: Revision | null, reg: Reg): Indicador
 // ---------- Agregación ----------
 
 function dimension(clave: DimensionClave, nombre: string, indicadores: Indicador[]): DimensionScore {
-  const evaluados = indicadores.filter((i) => i.evaluado);
-  const cobertura = indicadores.length === 0 ? 0 : evaluados.length / indicadores.length;
+  const aplicables = indicadores.filter((i) => i.aplica);
+  const evaluados = aplicables.filter((i) => i.evaluado);
+  const cobertura = aplicables.length === 0 ? 0 : evaluados.length / aplicables.length;
   const maximo = evaluados.reduce((a, i) => a + i.maximo, 0);
   const puntos = evaluados.reduce((a, i) => a + i.puntos, 0);
   const valor = cobertura >= COBERTURA_MIN_DIMENSION && maximo > 0 ? Math.round((100 * puntos) / maximo) : null;

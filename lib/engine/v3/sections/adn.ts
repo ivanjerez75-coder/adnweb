@@ -102,10 +102,35 @@ Reglas:
 ${REGLAS_COMUNES}
 - "lineas": de 1 a 6 líneas de negocio reales. Cada elemento debe citar en "evidencias" al menos un id válido; los que no lo hagan se descartan.
 - "modeloEstado": "confirmado" solo si la web explica cómo se contrata Y muestra un precio o un canal claro; "probable" si se deduce pero no está explícito; "desconocido" si no se puede saber. El sistema lo revisa y puede rebajarlo.
-- "canales": las vías reales para convertirse en cliente que ves en la web. Cada canal cita al menos un extracto de página (ids tipo p1-e1); si no, se descarta.
+- "canales": las vías reales para convertirse en cliente que ves en la web. Un formulario de contacto, un teléfono o un correo de contacto visibles en la web cuentan como canal "contacto" (si no hay otra vía, inclúyelo). Cada canal cita al menos un extracto de página (ids tipo p1-e1); si no, se descarta.
 - "afirmaciones": frases en las que la empresa se atribuye méritos, cifras o clientes (por ejemplo "líderes del sector"). Cada una cita al menos un extracto de página. Se mostrarán como "La empresa afirma…", nunca como hechos.
 
 ${bloqueDatosWeb(raw)}`;
+}
+
+const RUTA_CONTACTO = /(?:^|\/)(?:contacto|contact|contacta|contacte|contato|kontakt)(?:[-_.\/]|$)/i;
+
+/**
+ * Si la IA no devuelve canales: una página leída cuya ruta es de contacto (con su primer extracto),
+ * o, si no, el correo/teléfono publicados en el aviso legal (dato:contacto).
+ */
+function canalContactoDeRespaldo(raw: RawData, reg: Map<string, Evidence>): AdnCanal | null {
+  for (const pg of raw.paginas ?? []) {
+    let ruta: string;
+    try {
+      ruta = new URL(pg.url).pathname;
+    } catch {
+      continue;
+    }
+    if (!RUTA_CONTACTO.test(ruta) || pg.extractos.length === 0) continue;
+    const ev = citar([pg.extractos[0].id], reg, { requierePagina: true });
+    if (ev) return { tipo: "contacto", evidencias: ev };
+  }
+  if (raw.legal?.email || raw.legal?.telefono) {
+    const ev = citar(["dato:contacto"], reg);
+    if (ev) return { tipo: "contacto", evidencias: ev };
+  }
+  return null;
 }
 
 function resolver(b: { texto: string; evidencias: string[] }, reg: Map<string, Evidence>): AdnBloque | null {
@@ -127,6 +152,10 @@ export async function generarAdn(raw: RawData, reg: Map<string, Evidence>, deps:
     const tipo = c.tipo.trim().toLowerCase();
     const ev = citar(c.evidencias, reg, { requierePagina: true });
     if (esTipoCanal(tipo) && ev) canales.push({ tipo, evidencias: ev });
+  }
+  if (canales.length === 0) {
+    const respaldo = canalContactoDeRespaldo(raw, reg);
+    if (respaldo) canales.push(respaldo);
   }
   const afirmaciones: AdnBloque[] = [];
   for (const a of ia.afirmaciones) {

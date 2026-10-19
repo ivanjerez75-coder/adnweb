@@ -286,7 +286,9 @@ function IndicadorVista({ i }: { i: Indicador }) {
   return (
     <li>
       {i.nombre}:{" "}
-      {i.evaluado ? (
+      {i.aplica === false ? (
+        <>No aplica a este tipo de negocio</>
+      ) : i.evaluado ? (
         <>
           {i.puntos}/{i.maximo} — {i.motivo}
         </>

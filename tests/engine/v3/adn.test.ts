@@ -145,6 +145,73 @@ describe("generarAdn: modelo, canales y afirmaciones", () => {
     expect(adn.canales.map((c) => c.tipo)).toEqual(["contacto"]);
     expect(adn.canales[0].evidencias[0].id).toBe("p1-e1");
   });
+  describe("canal de contacto de respaldo (caso teb.org)", () => {
+    const pagsContacto = [
+      ...paginas,
+      {
+        id: "p2",
+        url: "https://teb.example/contacta/",
+        titulo: "Contacta",
+        tieneDescripcion: true,
+        extractos: [
+          { id: "p2-e1", cita: "Escriu-nos o truca'ns per a qualsevol consulta" },
+          { id: "p2-e2", cita: "Som a Barcelona" },
+        ],
+      },
+    ];
+    const legalConContacto = (extra: object = {}) => ({
+      avisoLegal: null, privacidad: null, cookies: null, condiciones: null, cif: null, razonSocial: null,
+      email: "teb@teb.example", telefono: "933600387", direccion: null, fuentes: { email: "https://teb.example/" }, ...extra,
+    });
+
+    it("sin canales de la IA y con una página de contacto: añade contacto con su primer extracto", async () => {
+      const r = makeRaw({ paginas: pagsContacto, site: makeSite({ pricesFound: [] }) });
+      const adn = await generarAdn(r, buildEvidence(r, []), fake(con({})).deps);
+      expect(adn.canales).toHaveLength(1);
+      expect(adn.canales[0].tipo).toBe("contacto");
+      expect(adn.canales[0].evidencias.map((e) => e.id)).toEqual(["p2-e1"]);
+    });
+    it.each(["contacto", "contact", "contacte", "contato", "kontakt", "es/contacto"])("reconoce la ruta /%s", async (seg) => {
+      const pg = [paginas[0], { ...pagsContacto[1], url: `https://teb.example/${seg}/` }];
+      const r = makeRaw({ paginas: pg });
+      const adn = await generarAdn(r, buildEvidence(r, []), fake(con({})).deps);
+      expect(adn.canales.map((c) => c.tipo)).toEqual(["contacto"]);
+    });
+    it("sin página de contacto pero con correo o teléfono: contacto con dato:contacto", async () => {
+      const r = makeRaw({ paginas, legal: legalConContacto() });
+      const adn = await generarAdn(r, buildEvidence(r, []), fake(con({})).deps);
+      expect(adn.canales).toHaveLength(1);
+      expect(adn.canales[0].tipo).toBe("contacto");
+      expect(adn.canales[0].evidencias.map((e) => e.id)).toEqual(["dato:contacto"]);
+    });
+    it("el canal de respaldo por dato no basta para 'confirmado': modeloEstado exige un extracto de página", async () => {
+      const r = makeRaw({ paginas, site: makeSite({ pricesFound: [] }), legal: legalConContacto() });
+      const adn = await generarAdn(r, buildEvidence(r, []), fake(con({ modeloEstado: "confirmado" })).deps);
+      expect(adn.canales[0].evidencias[0].tipo).toBe("dato");
+      expect(adn.modeloEstado).toBe("probable");
+    });
+    it("el canal de respaldo por página sí permite 'confirmado'", async () => {
+      const r = makeRaw({ paginas: pagsContacto, site: makeSite({ pricesFound: [] }) });
+      const adn = await generarAdn(r, buildEvidence(r, []), fake(con({ modeloEstado: "confirmado" })).deps);
+      expect(adn.modeloEstado).toBe("confirmado");
+    });
+    it("si la IA ya devuelve canales no se añade nada", async () => {
+      const r = makeRaw({ paginas: pagsContacto, legal: legalConContacto() });
+      const adn = await generarAdn(r, buildEvidence(r, []), fake(con({ canales: [{ tipo: "demo", evidencias: ["p1-e1"] }] })).deps);
+      expect(adn.canales.map((c) => c.tipo)).toEqual(["demo"]);
+    });
+    it("sin página de contacto ni datos de contacto: sigue sin canales", async () => {
+      const r = makeRaw({ paginas });
+      const adn = await generarAdn(r, buildEvidence(r, []), fake(con({})).deps);
+      expect(adn.canales).toEqual([]);
+    });
+    it("el prompt dice que un formulario, teléfono o correo de contacto cuenta como canal 'contacto'", async () => {
+      const f = fake(salida([linea()]));
+      await generarAdn(raw, reg, f.deps);
+      expect(f.prompts[0]).toContain("formulario de contacto");
+      expect(f.prompts[0]).toContain('canal "contacto"');
+    });
+  });
   it("afirmaciones: exigen evidencia de página", async () => {
     const adn = await generarAdn(
       sinPrecio,

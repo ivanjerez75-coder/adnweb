@@ -10,10 +10,11 @@
 ## Reglas generales
 
 - **Dimensiones** (peso 0,2 cada una, en `PESOS_DNA`): propuesta de valor, oferta y monetización, experiencia y rendimiento, adquisición y visibilidad, confianza y transparencia.
-- **Indicador:** `{ clave, nombre, evaluado, puntos, maximo, motivo, evidencias }`.
+- **Indicador:** `{ clave, nombre, aplica, evaluado, puntos, maximo, motivo, evidencias }`.
   - Un dato que falta es **no evaluado** (`evaluado: false`, 0 puntos, no cuenta). Nunca es un 0 puntuado.
   - Una ausencia solo puntúa 0 si se pudo comprobar: la web se leyó con texto suficiente (≥ 1.500 caracteres, como en `facts`), la página legal se analizó, etc. Con poco texto, "no vi precios" no prueba nada y el indicador queda no evaluado.
-- **Dimensión:** `round(100 × Σ puntos / Σ máximo)` sobre los indicadores evaluados. Cobertura = evaluados / total. Con cobertura < 50 % la dimensión es "No puntuable" (`valor: null`).
+- **No aplica:** un indicador que no corresponde al tipo de negocio (`adn.tipoNegocio`) sale con `aplica: false`, `evaluado: false`, 0 puntos y el motivo "No aplica a este tipo de negocio". No puntúa y se excluye de la cobertura. No es lo mismo que "no evaluado" (faltan datos): es un 0 que no se debe a la empresa. Ver "Indicadores que no aplican".
+- **Dimensión:** `round(100 × Σ puntos / Σ máximo)` sobre los indicadores evaluados. Cobertura = evaluados / aplicables (los que no aplican no cuentan). Con cobertura < 50 % la dimensión es "No puntuable" (`valor: null`).
 - **Global:** media ponderada de las dimensiones puntuables con los pesos renormalizados. Cobertura global = media de las coberturas. Si es < 60 % o hay menos de 3 dimensiones puntuables, `global: null` ("DNA Score no disponible").
 - **Sale del score:** Novedad y los competidores. Las señales (`signals`) tampoco puntúan. Las puntuaciones no se comparan entre empresas.
 - **Métricas:** los indicadores de PageSpeed, SEO y popularidad leen el array `metricas` y solo cuentan si `estado === "disponible"`.
@@ -34,10 +35,22 @@
 | Clave | Regla | Puntos |
 |---|---|---|
 | `precios_publicados` | `site.pricesFound` o evidencias `dato:precio:N`: 25. Sin precios y web legible: 0. Web poco legible: no evaluado | 25 |
-| `pagina_precios` | `facts.paginaPrecios`: `si` 15, `no` 0, `desconocido` no evaluado | 15 |
-| `canal_conversion` | Línea con cómo se contrata (con página) o `site.ctas` no vacío: 20. Sin ninguno y web legible: 0. *Task 4: usar `adn.canales` cuando exista* | 20 |
-| `plan_gratuito` | `site.hasFreePlanOrTrial`: 15. Si no y web legible: 0 | 15 |
-| `pagos` | Tecnología de categoría `pagos` (`allTechnologies`): 25. Si no y web legible: 0 | 25 |
+| `pagina_precios` | `facts.paginaPrecios`: `si` 15, `no` 0, `desconocido` no evaluado. Solo aplica a saas, ecommerce, marketplace y app | 15 |
+| `canal_conversion` | Algún canal de `adn.canales` con evidencia (extracto de página o, en el respaldo de contacto, `dato:contacto`): 20. Sin canales y web legible: 0 | 20 |
+| `plan_gratuito` | `site.hasFreePlanOrTrial`: 15. Si no y web legible: 0. Solo aplica a saas y app | 15 |
+| `pagos` | Tecnología de categoría `pagos` (`allTechnologies`): 25. Si no y web legible: 0. Solo aplica a ecommerce, saas, marketplace y app | 25 |
+
+### Indicadores que no aplican (informe v3.1, caso teb.org)
+
+Una cooperativa social sacaba 0/100 en "Oferta y monetización" por no tener plan gratuito, cobro en línea ni página de precios: se la penalizaba por no ser un SaaS. Ahora esos indicadores dependen de `adn.tipoNegocio`:
+
+| Indicador | Aplica solo a |
+|---|---|
+| `plan_gratuito` | saas, app |
+| `pagos` | ecommerce, saas, marketplace, app |
+| `pagina_precios` | saas, ecommerce, marketplace, app |
+
+`precios_publicados` y `canal_conversion` aplican siempre. Para el resto de tipos (servicios, contenido_ads, organizacion_social, negocio_local, otro) los tres quedan como "no aplica" y la dimensión se puntúa con los dos que quedan.
 
 ### Experiencia y rendimiento
 
@@ -86,5 +99,5 @@ Cada indicador adjunta los `Evidence` que lo respaldan, tomados del registro (`r
 ## Pendiente de calibrar
 
 - Los puntos de cada indicador y los tramos son orientativos; los pesos son provisionales. Contrastarlos con casos reales antes de usarlos para comparar.
-- `modelo_negocio` y `canal_conversion` usan hoy una aproximación (líneas con cómo se contrata y CTAs). Task 4 los conectará a `adn.modeloEstado` y `adn.canales`.
+- La tabla de aplicabilidad por tipo de negocio es una primera aproximación; revisarla con más casos reales.
 - La antigüedad del dominio no es la de la empresa.

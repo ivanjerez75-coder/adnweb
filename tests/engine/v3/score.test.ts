@@ -291,6 +291,71 @@ describe("calcularScore: indicadores", () => {
   });
 });
 
+describe("calcularScore: indicadores que no aplican al tipo de negocio", () => {
+  const datoContacto: Evidence = { id: "dato:contacto", tipo: "dato", texto: "Contacto publicado: correo teb@teb.example", fuente: "legal" };
+  const tebRaw = () => makeRaw({ site: makeSite({ pricesFound: [], hasPricingPage: false, hasFreePlanOrTrial: false, technologies: [], ctas: [], textLength: 4000 }) });
+  const tebAdn = (tipo: Adn["tipoNegocio"]) => mkAdn({ tipoNegocio: tipo, canales: [{ tipo: "contacto", evidencias: [pagina("p2-e1")] }] });
+  const NO_APLICAN = ["plan_gratuito", "pagos", "pagina_precios"];
+
+  it("organización social (caso TEB): plan gratuito, pagos y página de precios no aplican ni puntúan", () => {
+    const s = score(tebRaw(), { adn: tebAdn("organizacion_social") });
+    for (const c of NO_APLICAN) {
+      const i = ind(s, "oferta", c);
+      expect(i.aplica, c).toBe(false);
+      expect(i.evaluado, c).toBe(false);
+      expect(i.puntos, c).toBe(0);
+      expect(i.motivo, c).toBe("No aplica a este tipo de negocio");
+    }
+    // Precios publicados y canal de conversión siempre aplican.
+    expect(ind(s, "oferta", "precios_publicados").aplica).toBe(true);
+    expect(ind(s, "oferta", "canal_conversion").aplica).toBe(true);
+  });
+
+  it("la cobertura y el valor se calculan solo sobre los indicadores aplicables (no se penaliza por no ser SaaS)", () => {
+    const o = dim(score(tebRaw(), { adn: tebAdn("organizacion_social") }), "oferta");
+    expect(o.cobertura).toBe(1); // 2 evaluados / 2 aplicables, no 2/5
+    expect(o.valor).toBe(Math.round((100 * 20) / 45)); // canal 20 de (precios 25 + canal 20)
+  });
+
+  it("el mismo negocio como SaaS sí puntúa 0 en plan gratuito, pagos y página de precios", () => {
+    const s = score(tebRaw(), { adn: tebAdn("saas") });
+    for (const c of NO_APLICAN) expect(ind(s, "oferta", c).aplica, c).toBe(true);
+    expect(ind(s, "oferta", "plan_gratuito").evaluado).toBe(true);
+    expect(ind(s, "oferta", "pagos").evaluado).toBe(true);
+    expect(dim(s, "oferta").valor).toBeLessThan(50);
+  });
+
+  it.each([
+    ["saas", [true, true, true]],
+    ["app", [true, true, true]],
+    ["ecommerce", [false, true, true]],
+    ["marketplace", [false, true, true]],
+    ["servicios", [false, false, false]],
+    ["contenido_ads", [false, false, false]],
+    ["negocio_local", [false, false, false]],
+    ["otro", [false, false, false]],
+  ] as const)("tipo %s: aplica plan_gratuito, pagos, pagina_precios = %j", (tipo, [plan, pagos, precios]) => {
+    const s = score(tebRaw(), { adn: tebAdn(tipo) });
+    expect(ind(s, "oferta", "plan_gratuito").aplica).toBe(plan);
+    expect(ind(s, "oferta", "pagos").aplica).toBe(pagos);
+    expect(ind(s, "oferta", "pagina_precios").aplica).toBe(precios);
+  });
+
+  it("todos los demás indicadores aplican siempre", () => {
+    const s = score(completo(), { adn: tebAdn("organizacion_social"), rev: revCompleta() });
+    const noAplican = s.dimensiones.flatMap((d) => d.indicadores).filter((i) => !i.aplica).map((i) => i.clave);
+    expect(noAplican.sort()).toEqual([...NO_APLICAN].sort());
+  });
+
+  it("canal de contacto de respaldo (evidencia dato:contacto) cuenta en el indicador de conversión", () => {
+    const adn = mkAdn({ tipoNegocio: "organizacion_social", canales: [{ tipo: "contacto", evidencias: [datoContacto] }] });
+    const i = ind(score(tebRaw(), { adn }), "oferta", "canal_conversion");
+    expect(i.evaluado).toBe(true);
+    expect(i.puntos).toBe(20);
+    expect(i.evidencias.map((e) => e.id)).toEqual(["dato:contacto"]);
+  });
+});
+
 describe("calcularScore: fixture completo con global calculado a mano", () => {
   it("global = media de las 5 dimensiones", () => {
     const s = score(completo(), { adn: adnCompleto(), rev: revCompleta() });
