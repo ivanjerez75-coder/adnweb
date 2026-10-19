@@ -23,8 +23,14 @@ export default function Home() {
     <>
       <main className="flex-1">
         {/* Hero */}
-        <section className="mx-auto flex min-h-svh w-full max-w-7xl flex-col items-center px-4 pt-8 pb-16 text-center sm:px-6">
+        <section className="relative mx-auto flex min-h-svh w-full max-w-7xl flex-col items-center px-4 pt-8 pb-16 text-center sm:px-6">
           <Marca className="text-2xl" />
+          <Link
+            href="/login"
+            className="absolute top-8 right-4 rounded-full border border-borde bg-superficie px-4 py-1.5 text-sm font-semibold text-grafito transition-colors hover:border-teal hover:text-teal sm:right-6"
+          >
+            {t("auth.entrar")}
+          </Link>
           <div className="flex w-full flex-1 flex-col items-center justify-center py-14 sm:py-16">
             <p className="max-w-3xl text-xs font-medium tracking-[0.14em] text-grafito uppercase sm:text-sm md:text-base">
               <Destacado texto={t("landing.subtitulo")} />

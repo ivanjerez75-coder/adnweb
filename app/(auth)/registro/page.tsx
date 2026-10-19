@@ -1,22 +1,23 @@
 import { Suspense } from "react";
-import { registrar } from "../actions";
-import { AuthForm } from "../auth-form";
+import { redirect } from "next/navigation";
 
 type SP = Promise<{ [key: string]: string | string[] | undefined }>;
 
-function uno(v: string | string[] | undefined): string {
-  return typeof v === "string" ? v : "";
-}
-
-async function Formulario({ searchParams }: { searchParams: SP }) {
+async function Redirigir({ searchParams }: { searchParams: SP }): Promise<null> {
   const sp = await searchParams;
-  return <AuthForm action={registrar} modo="registro" next={uno(sp.next)} url={uno(sp.url)} />;
+  const qs = new URLSearchParams();
+  for (const k of ["next", "url"]) {
+    const v = sp[k];
+    if (typeof v === "string" && v) qs.set(k, v);
+  }
+  redirect(qs.toString() ? `/login?${qs.toString()}` : "/login");
+  return null;
 }
 
 export default function Page({ searchParams }: { searchParams: SP }) {
   return (
     <Suspense fallback={null}>
-      <Formulario searchParams={searchParams} />
+      <Redirigir searchParams={searchParams} />
     </Suspense>
   );
 }

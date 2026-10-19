@@ -8,6 +8,6 @@ export async function empezar(formData: FormData): Promise<void> {
   const url = typeof v === "string" ? v.trim() : "";
   const supabase = await createServerSupabase();
   const { data } = await supabase.auth.getUser();
-  const destino = data.user ? "/dashboard" : "/registro";
+  const destino = data.user ? "/dashboard" : "/login";
   redirect(url ? `${destino}?url=${encodeURIComponent(url)}` : destino);
 }

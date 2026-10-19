@@ -27,9 +27,9 @@ describe("empezar (landing)", () => {
     estado.user = null;
   });
 
-  it("sin sesión lleva al registro conservando la URL", async () => {
+  it("sin sesión lleva al login conservando la URL", async () => {
     await expect(empezar(form("  canva.com "))).rejects.toThrow(
-      "REDIRECT:/registro?url=canva.com",
+      "REDIRECT:/login?url=canva.com",
     );
   });
 
@@ -42,8 +42,8 @@ describe("empezar (landing)", () => {
 
   it("codifica la URL y omite el parámetro si viene vacía", async () => {
     await expect(empezar(form("a b&c"))).rejects.toThrow(
-      "REDIRECT:/registro?url=a%20b%26c",
+      "REDIRECT:/login?url=a%20b%26c",
     );
-    await expect(empezar(form("   "))).rejects.toThrow(/REDIRECT:\/registro$/);
+    await expect(empezar(form("   "))).rejects.toThrow(/REDIRECT:\/login$/);
   });
 });
