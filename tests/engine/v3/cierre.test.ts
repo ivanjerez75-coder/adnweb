@@ -29,11 +29,13 @@ const adn: Adn = {
   comoFunciona: null,
 };
 const score: DnaScore = {
-  aviso: "Resume indicadores públicos; no es una valoración financiera.",
+  metodologia: "dna-score-1.0",
   global: 60,
-  criterios: [
-    { clave: "claridad", nombre: "Claridad", valor: 80, motivos: ["+1: x"], evidencias: [] },
-    { clave: "novedad", nombre: "Novedad", valor: null, motivos: [], evidencias: [] },
+  coberturaGlobal: 0.8,
+  avisos: ["Resume indicadores públicos; no es una valoración financiera.", "Pesos provisionales, pendientes de validación."],
+  dimensiones: [
+    { clave: "propuesta", nombre: "Propuesta de valor", peso: 0.2, valor: 80, cobertura: 1, indicadores: [] },
+    { clave: "oferta", nombre: "Oferta y monetización", peso: 0.2, valor: null, cobertura: 0.25, indicadores: [] },
   ],
 };
 function fake(obj: object) {
@@ -75,10 +77,10 @@ describe("generarCierre", () => {
     expect((await generarCierre(raw, adn, null, score, reg, deps)).acciones).toEqual([]);
   });
   it("motivos: solo claves conocidas, como array de una línea", async () => {
-    const { deps, prompts } = fake({ motivos: { claridad: "Se entiende bien", inventada: "x", novedad: "  " }, acciones: [] });
+    const { deps, prompts } = fake({ motivos: { propuesta: "Se entiende bien", inventada: "x", oferta: "  " }, acciones: [] });
     const r = await generarCierre(raw, adn, null, score, reg, deps);
-    expect(r.motivos).toEqual({ claridad: ["Se entiende bien"] });
-    expect(prompts[0]).toContain("claridad");
+    expect(r.motivos).toEqual({ propuesta: ["Se entiende bien"] });
+    expect(prompts[0]).toContain("propuesta");
     expect(prompts[0]).toContain("<<<DATOS_WEB");
   });
 });

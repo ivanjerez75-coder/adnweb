@@ -3,35 +3,67 @@ import type { Facts } from "../facts";
 import { allTechnologies } from "../signals";
 import { radarRank, validRank } from "../anchors";
 import type { Evidence } from "./evidence";
+import type { Metrica } from "./estimates";
 import type { Adn } from "./sections/adn";
 import type { Revision } from "./sections/revision";
-import { contienePalabra, normalizarTexto } from "./sections/competidores";
 
+export const METODOLOGIA_DNA = "dna-score-1.0" as const;
 export const AVISO_SCORE = "Resume indicadores públicos; no es una valoración financiera." as const;
+export const AVISO_PESOS = "Pesos provisionales, pendientes de validación." as const;
 
-export type ClaveCriterio = "claridad" | "visibilidad" | "monetizacion" | "confianza" | "presencia" | "novedad";
+export type DimensionClave = "propuesta" | "oferta" | "experiencia" | "adquisicion" | "confianza";
 
-export interface CriterioScore {
-  clave: ClaveCriterio;
+/** Pesos provisionales y versionados con la metodología. */
+export const PESOS_DNA: Record<DimensionClave, number> = {
+  propuesta: 0.2,
+  oferta: 0.2,
+  experiencia: 0.2,
+  adquisicion: 0.2,
+  confianza: 0.2,
+};
+
+/** Cobertura mínima de una dimensión para ser puntuable (< 50 % = "No puntuable"). */
+export const COBERTURA_MIN_DIMENSION = 0.5;
+/** Cobertura global mínima (< 60 % = "DNA Score no disponible"). */
+export const COBERTURA_MIN_GLOBAL = 0.6;
+/** Dimensiones puntuables mínimas para dar una puntuación global. */
+export const DIMENSIONES_MIN = 3;
+
+export interface Indicador {
+  clave: string;
   nombre: string;
-  /** 0-100, o null = "No puntuable" (faltan datos). */
-  valor: number | null;
-  motivos: string[];
+  evaluado: boolean;
+  puntos: number;
+  maximo: number;
+  motivo: string;
   evidencias: Evidence[];
 }
+export interface DimensionScore {
+  clave: DimensionClave;
+  nombre: string;
+  peso: number;
+  /** 0-100, o null = "No puntuable". */
+  valor: number | null;
+  /** 0-1: indicadores evaluados / total. */
+  cobertura: number;
+  indicadores: Indicador[];
+}
 export interface DnaScore {
-  criterios: CriterioScore[];
+  metodologia: typeof METODOLOGIA_DNA;
+  dimensiones: DimensionScore[];
+  /** null = "DNA Score no disponible". */
   global: number | null;
-  aviso: typeof AVISO_SCORE;
+  coberturaGlobal: number;
+  avisos: [typeof AVISO_SCORE, typeof AVISO_PESOS];
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
+const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
+/** Texto mínimo de la home para afirmar que algo no está (igual que en facts). */
+const TEXTO_LEGIBLE = 1500;
 
-type Parcial = Omit<CriterioScore, "clave" | "nombre">;
-const NULO: Parcial = { valor: null, motivos: [], evidencias: [] };
+type Reg = Map<string, Evidence>;
 
-function ev(reg: Map<string, Evidence>, ids: (string | null | undefined | false)[]): Evidence[] {
+function ev(reg: Reg, ids: (string | null | undefined | false)[]): Evidence[] {
   const out: Evidence[] = [];
   for (const id of ids) {
     const e = id ? reg.get(id) : undefined;
@@ -39,186 +71,321 @@ function ev(reg: Map<string, Evidence>, ids: (string | null | undefined | false)
   }
   return out;
 }
+function unicas(...grupos: Evidence[][]): Evidence[] {
+  const out: Evidence[] = [];
+  for (const g of grupos) for (const e of g) if (!out.some((o) => o.id === e.id)) out.push(e);
+  return out;
+}
 
-function claridad(revision: Revision | null): Parcial {
-  if (!revision) return NULO;
+/** Indicador con dato: puntos acotados a [0, máximo]. */
+function ind(clave: string, nombre: string, puntos: number, maximo: number, motivo: string, evidencias: Evidence[] = []): Indicador {
+  return { clave, nombre, evaluado: true, puntos: Math.max(0, Math.min(maximo, Math.round(puntos))), maximo, motivo, evidencias };
+}
+/** Indicador sin datos: no puntúa, no cuenta en la cobertura. */
+function sinDato(clave: string, nombre: string, maximo: number, motivo: string): Indicador {
+  return { clave, nombre, evaluado: false, puntos: 0, maximo, motivo, evidencias: [] };
+}
+
+function metrica(metricas: Metrica[], clave: string): Metrica | undefined {
+  return metricas.find((m) => m.clave === clave);
+}
+/** Valor numérico de una métrica solo si está disponible. */
+function numero(metricas: Metrica[], clave: string): number | null {
+  const m = metrica(metricas, clave);
+  return m && m.estado === "disponible" && typeof m.valor === "number" && Number.isFinite(m.valor) ? m.valor : null;
+}
+function motivoMetrica(metricas: Metrica[], clave: string, defecto: string): string {
+  return metrica(metricas, clave)?.motivoConfianza || defecto;
+}
+
+const legible = (raw: RawData) => !!raw.site && raw.site.textLength >= TEXTO_LEGIBLE;
+
+// ---------- Propuesta de valor ----------
+
+function bloque(clave: string, nombre: string, b: Adn["queEs"], raw: RawData, maximo: number): Indicador {
+  if (!raw.site) return sinDato(clave, nombre, maximo, "No se pudo leer la web, así que no se evalúa.");
+  if (b && b.texto.trim() !== "" && b.evidencias.length > 0) return ind(clave, nombre, maximo, maximo, "Se explica y está respaldado por citas de la web.", b.evidencias);
+  return ind(clave, nombre, 0, maximo, "La web se leyó pero no se encontró una explicación citable.");
+}
+
+function propuesta(raw: RawData, adn: Adn, revision: Revision | null): Indicador[] {
   let si = 0;
   let validos = 0;
-  for (const l of revision.lineas) {
-    for (const v of Object.values(l.checks)) {
+  const evCheck: Evidence[][] = [];
+  for (const l of revision?.lineas ?? []) {
+    for (const k of ["propuestaClara", "diceAQuien"] as const) {
+      const v = l.checks[k];
       if (v === "no_aplica") continue;
       validos++;
       if (v === "si") si++;
     }
+    evCheck.push(l.evidenciasChecks);
   }
-  if (validos < 3) return NULO;
-  const evidencias: Evidence[] = [];
-  for (const l of revision.lineas) for (const e of l.evidenciasChecks) if (!evidencias.some((o) => o.id === e.id)) evidencias.push(e);
-  return { valor: clamp((si / validos) * 100), motivos: [`${si} de ${validos} comprobaciones de claridad cumplidas`], evidencias };
-}
+  const claridad =
+    revision && validos > 0
+      ? ind("claridad_web", "La web deja claro qué es y para quién", (30 * si) / validos, 30, `${si} de ${validos} comprobaciones de claridad cumplidas (propuesta clara y a quién se dirige).`, unicas(...evCheck))
+      : sinDato("claridad_web", "La web deja claro qué es y para quién", 30, "No hay revisión de la web con comprobaciones aplicables.");
 
-function visibilidad(raw: RawData, ids: Set<string>, reg: Map<string, Evidence>): Parcial {
-  if (!raw.tranco && !raw.radar) return NULO;
-  const rank = validRank(raw.tranco?.rank) ?? radarRank(raw.radar);
-  let base: number;
-  let tramo: string;
-  if (rank !== null && rank <= 10_000) [base, tramo] = [85, "top 10.000"];
-  else if (rank !== null && rank <= 100_000) [base, tramo] = [65, "top 100.000"];
-  else if (rank !== null && rank <= 1_000_000) [base, tramo] = [45, "top 1 millón"];
-  else [base, tramo] = [25, "fuera del top 1 millón"];
-  const motivos = [`${base}: tráfico ${tramo}`];
-  let v = base;
-  if (ids.has("blog_activo")) {
-    v += 10;
-    motivos.push("+10: blog activo");
-  }
-  if (ids.has("pagespeed_movil_bajo")) {
-    v -= 10;
-    motivos.push("-10: rendimiento móvil bajo");
-  }
-  return {
-    valor: clamp(v),
-    motivos,
-    evidencias: ev(reg, ["dato:trafico", ids.has("blog_activo") && "blog_activo", ids.has("pagespeed_movil_bajo") && "pagespeed_movil_bajo"]),
-  };
-}
-
-function monetizacion(raw: RawData, facts: Facts, adn: Adn): Parcial {
-  if (!raw.site) return NULO;
-  let v = 30;
-  const motivos = ["30: base"];
-  const evidencias: Evidence[] = [];
-  if (raw.site.pricesFound.length > 0 || facts.paginaPrecios === "si") {
-    v += 30;
-    motivos.push("+30: precios detectados");
-  }
+  // Task 4: usar adn.modeloEstado ("confirmado" / "probable") cuando exista.
   const lineasContratacion = adn.lineas.filter((l) => l.comoSeContrata.trim() !== "" && l.evidencias.some((e) => e.tipo === "pagina"));
-  if (lineasContratacion.length > 0) {
-    v += 20;
-    motivos.push("+20: se explica cómo se contrata");
-    for (const l of lineasContratacion) for (const e of l.evidencias) if (!evidencias.some((o) => o.id === e.id)) evidencias.push(e);
-  }
-  if (allTechnologies(raw).some((t) => t.category === "pagos")) {
-    v += 20;
-    motivos.push("+20: tecnología de pagos detectada");
-  }
-  return { valor: clamp(v), motivos, evidencias };
+  const modelo = !raw.site
+    ? sinDato("modelo_negocio", "Se entiende cómo gana dinero", 20, "No se pudo leer la web, así que no se evalúa.")
+    : lineasContratacion.length > 0
+      ? ind("modelo_negocio", "Se entiende cómo gana dinero", 20, 20, "Alguna línea de negocio explica cómo se contrata, con cita de la web.", unicas(...lineasContratacion.map((l) => l.evidencias.filter((e) => e.tipo === "pagina"))))
+      : ind("modelo_negocio", "Se entiende cómo gana dinero", 0, 20, "Ninguna línea de negocio explica cómo se contrata con respaldo en la web.");
+
+  return [
+    bloque("que_es", "Se explica qué es el negocio", adn.queEs, raw, 25),
+    bloque("propuesta_valor", "Se explica la propuesta de valor", adn.propuestaValor, raw, 25),
+    claridad,
+    modelo,
+  ];
 }
 
-function confianza(raw: RawData, ids: Set<string>, revision: Revision | null, reg: Map<string, Evidence>): Parcial {
-  let v = 0;
-  let inputs = 0;
-  const motivos: string[] = [];
-  const evId: (string | false)[] = [];
+// ---------- Oferta y monetización ----------
 
-  if (raw.rdap) {
-    inputs++;
-    if (ids.has("empresa_consolidada")) {
-      v += 25;
-      motivos.push("+25: empresa consolidada");
-      evId.push("empresa_consolidada");
-    }
+function oferta(raw: RawData, facts: Facts, adn: Adn, reg: Reg): Indicador[] {
+  const site = raw.site;
+  const fin = legible(raw);
+  const out: Indicador[] = [];
+
+  const evPrecios = [...reg.keys()].filter((k) => k.startsWith("dato:precio:")).map((k) => reg.get(k)!);
+  if (!site) {
+    out.push(sinDato("precios_publicados", "Precios publicados", 25, "No se pudo leer la web."));
+  } else if (site.pricesFound.length > 0 || evPrecios.length > 0) {
+    out.push(ind("precios_publicados", "Precios publicados", 25, 25, `Se detectaron ${Math.max(site.pricesFound.length, evPrecios.length)} precio(s) publicados.`, evPrecios.slice(0, 3)));
+  } else if (fin) {
+    out.push(ind("precios_publicados", "Precios publicados", 0, 25, "La web se leyó y no muestra precios."));
+  } else {
+    out.push(sinDato("precios_publicados", "Precios publicados", 25, "Se leyó poco texto de la web: no se puede afirmar que no haya precios."));
   }
-  const casosSi = revision?.lineas.some((l) => l.checks.muestraCasos === "si") ?? false;
-  const casosConocidos = revision?.lineas.some((l) => l.checks.muestraCasos !== "no_aplica") ?? false;
-  if (raw.site || casosConocidos) {
-    inputs++;
-    if (raw.site?.hasTestimonials || casosSi) {
-      v += 25;
-      motivos.push("+25: testimonios o casos de éxito");
-    }
+
+  out.push(
+    facts.paginaPrecios === "si"
+      ? ind("pagina_precios", "Página de precios", 15, 15, "Existe una página o ruta de precios.")
+      : facts.paginaPrecios === "no"
+        ? ind("pagina_precios", "Página de precios", 0, 15, "Se comprobó por varias vías y no hay página de precios.")
+        : sinDato("pagina_precios", "Página de precios", 15, "No se pudo comprobar si hay página de precios."),
+  );
+
+  // Task 4: usar adn.canales (canal de conversión evidenciado) cuando exista.
+  const lineasContratacion = adn.lineas.filter((l) => l.comoSeContrata.trim() !== "" && l.evidencias.some((e) => e.tipo === "pagina"));
+  if (!site) {
+    out.push(sinDato("canal_conversion", "Canal de conversión evidenciado", 20, "No se pudo leer la web."));
+  } else if (lineasContratacion.length > 0 || site.ctas.length > 0) {
+    out.push(
+      ind(
+        "canal_conversion",
+        "Canal de conversión evidenciado",
+        20,
+        20,
+        lineasContratacion.length > 0 ? "Hay una forma de contratar explicada con cita de la web." : `La web ofrece llamadas a la acción: ${site.ctas.slice(0, 3).join(", ")}.`,
+        unicas(...lineasContratacion.map((l) => l.evidencias.filter((e) => e.tipo === "pagina"))),
+      ),
+    );
+  } else if (fin) {
+    out.push(ind("canal_conversion", "Canal de conversión evidenciado", 0, 20, "No se encontró ninguna forma clara de contratar o contactar."));
+  } else {
+    out.push(sinDato("canal_conversion", "Canal de conversión evidenciado", 20, "Se leyó poco texto de la web."));
   }
-  if (raw.fuentes.wikidata === "ok") {
-    inputs++;
-    if (raw.wikidata) {
-      v += 25;
-      motivos.push("+25: datos públicos en Wikidata");
-      evId.push("dato:fundacion", "dato:empleados", "dato:ingresos", "dato:sede");
-    }
+
+  if (!site) out.push(sinDato("plan_gratuito", "Plan gratuito o prueba", 15, "No se pudo leer la web."));
+  else if (site.hasFreePlanOrTrial) out.push(ind("plan_gratuito", "Plan gratuito o prueba", 15, 15, "La web ofrece un plan gratuito o una prueba."));
+  else if (fin) out.push(ind("plan_gratuito", "Plan gratuito o prueba", 0, 15, "La web se leyó y no ofrece plan gratuito ni prueba."));
+  else out.push(sinDato("plan_gratuito", "Plan gratuito o prueba", 15, "Se leyó poco texto de la web."));
+
+  if (!site) out.push(sinDato("pagos", "Cobra en línea (tecnología de pagos)", 25, "No se pudo leer la web."));
+  else {
+    const pagos = allTechnologies(raw).filter((t) => t.category === "pagos");
+    if (pagos.length > 0) out.push(ind("pagos", "Cobra en línea (tecnología de pagos)", 25, 25, `Tecnología de pagos detectada: ${pagos.map((t) => t.name).join(", ")}.`));
+    else if (fin) out.push(ind("pagos", "Cobra en línea (tecnología de pagos)", 0, 25, "No se detectó tecnología de pagos en la web."));
+    else out.push(sinDato("pagos", "Cobra en línea (tecnología de pagos)", 25, "Se leyó poco texto de la web."));
   }
-  if (raw.dns) {
-    inputs++;
-    if (raw.dns.emailProvider !== "Ninguno") {
-      v += 25;
-      motivos.push("+25: correo corporativo");
-      evId.push("dato:email");
-    }
-  }
-  if (raw.rdap) {
-    inputs++;
-    if (ids.has("dominio_reciente")) {
-      v -= 25;
-      motivos.push("-25: dominio reciente");
-      evId.push("dominio_reciente");
-    }
-  }
-  if (inputs < 2) return NULO;
-  return { valor: clamp(v), motivos, evidencias: ev(reg, evId) };
+  return out;
 }
 
-function presencia(raw: RawData, facts: Facts, reg: Map<string, Evidence>): Parcial {
-  if (!raw.site) return NULO;
-  let v = 0;
-  const motivos: string[] = [];
-  const n = facts.redes.length;
-  if (n >= 3) {
-    v += 30;
-    motivos.push(`+30: ${n} redes sociales`);
-  } else if (n >= 1) {
-    v += 15;
-    motivos.push(`+15: ${n} red(es) social(es)`);
-  }
-  if (facts.blog === "si") {
-    v += 20;
-    motivos.push("+20: tiene blog");
-  }
-  if (facts.app === "si") {
-    v += 20;
-    motivos.push("+20: tiene app");
-  }
-  const lm = raw.sitemap?.lastModified ? Date.parse(raw.sitemap.lastModified) : NaN;
-  const ref = Date.parse(raw.collectedAt);
-  if (Number.isFinite(lm) && Number.isFinite(ref) && ref - lm >= 0 && ref - lm <= 90 * DAY_MS) {
-    v += 30;
-    motivos.push("+30: actividad reciente (últimos 90 días)");
-  }
-  return { valor: clamp(v), motivos, evidencias: ev(reg, [facts.app === "si" && raw.appstore && "dato:app"]) };
-}
+// ---------- Experiencia y rendimiento ----------
 
-function novedad(adn: Adn, textosCompetidores: string[]): Parcial {
-  if (textosCompetidores.length < 2) return NULO;
-  const textos = textosCompetidores.map(normalizarTexto);
-  const items = [...new Set(adn.lineas.flatMap((l) => l.queOfrece).map(normalizarTexto).filter((t) => t.length > 0))];
-  if (items.length === 0) return NULO;
-  const nuevos = items.filter((i) => !textos.some((t) => contienePalabra(t, i)));
-  return {
-    valor: clamp(50 + 10 * nuevos.length),
-    motivos: nuevos.length > 0 ? ["50: base", `+${10 * nuevos.length}: ${nuevos.length} oferta(s) que no aparecen en ${textos.length} competidores verificados`] : ["50: base"],
-    evidencias: [],
+function experiencia(raw: RawData, metricas: Metrica[], reg: Reg): Indicador[] {
+  const evPs = ev(reg, ["dato:pagespeed"]);
+  const puntuacion = (clave: string, nombre: string, mclave: string, max: number): Indicador => {
+    const v = numero(metricas, mclave);
+    return v === null
+      ? sinDato(clave, nombre, max, motivoMetrica(metricas, mclave, "PageSpeed no devolvió este dato."))
+      : ind(clave, nombre, (max * v) / 100, max, `${v} sobre 100 en PageSpeed (Lighthouse).`, evPs);
   };
+  const campo = raw.pagespeed && !raw.pagespeed.error ? raw.pagespeed.campo : null;
+  const cruxOk = metrica(metricas, "usuarios_reales_crux")?.estado === "disponible" && campo?.categoria;
+  const crux = cruxOk
+    ? ind(
+        "crux",
+        "Experiencia de usuarios reales (CrUX)",
+        campo!.categoria === "FAST" ? 20 : campo!.categoria === "AVERAGE" ? 10 : 0,
+        20,
+        `Veredicto de Google sobre usuarios reales de Chrome: ${campo!.categoria}.`,
+        ev(reg, ["dato:crux"]),
+      )
+    : sinDato("crux", "Experiencia de usuarios reales (CrUX)", 20, motivoMetrica(metricas, "usuarios_reales_crux", "Chrome no tiene datos de usuarios reales."));
+  return [
+    puntuacion("pagespeed_movil", "Velocidad en móvil", "pagespeed_movil", 35),
+    puntuacion("accesibilidad", "Accesibilidad", "accesibilidad", 25),
+    puntuacion("buenas_practicas", "Buenas prácticas web", "buenas_practicas", 20),
+    crux,
+  ];
 }
 
-/** DNA Score: reglas transparentes calculadas por código. Un criterio sin datos suficientes es null. */
+// ---------- Adquisición y visibilidad ----------
+
+function adquisicion(raw: RawData, facts: Facts, metricas: Metrica[], reg: Reg): Indicador[] {
+  const out: Indicador[] = [];
+
+  const seo = numero(metricas, "seo_tecnico");
+  out.push(
+    seo === null
+      ? sinDato("seo_tecnico", "SEO técnico", 20, motivoMetrica(metricas, "seo_tecnico", "PageSpeed no devolvió este dato."))
+      : ind("seo_tecnico", "SEO técnico", (20 * seo) / 100, 20, `${seo} sobre 100 en la auditoría SEO de Lighthouse.`, ev(reg, ["dato:pagespeed"])),
+  );
+
+  const paginas = raw.paginas ?? [];
+  if (metrica(metricas, "titulos_descripciones")?.estado === "disponible" && paginas.length > 0) {
+    const t = paginas.filter((p) => p.titulo.trim().length > 0).length;
+    const d = paginas.filter((p) => p.tieneDescripcion).length;
+    out.push(ind("titulos_descripciones", "Títulos y descripciones", (15 * (t + d)) / (2 * paginas.length), 15, `${t} de ${paginas.length} páginas con título y ${d} con descripción.`));
+  } else out.push(sinDato("titulos_descripciones", "Títulos y descripciones", 15, motivoMetrica(metricas, "titulos_descripciones", "No se leyeron páginas en profundidad.")));
+
+  const n = numero(metricas, "paginas_sitemap");
+  out.push(
+    n === null
+      ? sinDato("sitemap", "Sitemap con contenido", 15, motivoMetrica(metricas, "paginas_sitemap", "No se encontró un sitemap legible."))
+      : ind("sitemap", "Sitemap con contenido", n >= 50 ? 15 : n >= 10 ? 10 : 5, 15, `El sitemap declara ${n} página(s).`, ev(reg, ["dato:paginas_sitemap"])),
+  );
+
+  const blog = metrica(metricas, "blog_activo");
+  out.push(
+    blog?.estado === "disponible"
+      ? ind("blog_activo", "Blog activo", blog.valor === "Sí" ? 15 : 0, 15, blog.valor === "Sí" ? "Hay entradas de blog de los últimos 90 días." : "No hay entradas de blog recientes en el sitemap.")
+      : sinDato("blog_activo", "Blog activo", 15, motivoMetrica(metricas, "blog_activo", "Sin sitemap no se puede saber si el blog está activo.")),
+  );
+
+  const nRedes = facts.redes.length;
+  if (!raw.site) out.push(sinDato("redes", "Redes sociales", 15, "No se pudo leer la web."));
+  else if (nRedes > 0) out.push(ind("redes", "Redes sociales", nRedes >= 3 ? 15 : 8, 15, `${nRedes} red(es) social(es) enlazadas desde la web.`));
+  else if (legible(raw)) out.push(ind("redes", "Redes sociales", 0, 15, "La web se leyó y no enlaza redes sociales."));
+  else out.push(sinDato("redes", "Redes sociales", 15, "Se leyó poco texto de la web."));
+
+  // Popularidad: solo con datos de ranking. "No aparece" puntúa bajo solo si Tranco respondió bien.
+  const tr = numero(metricas, "popularidad_tranco");
+  const ra = numero(metricas, "popularidad_radar");
+  const rank = tr !== null ? validRank(tr) : ra !== null ? radarRank(raw.radar) : null;
+  if (rank !== null) {
+    const p = rank <= 10_000 ? 20 : rank <= 100_000 ? 15 : rank <= 1_000_000 ? 10 : 5;
+    out.push(ind("popularidad", "Popularidad en rankings públicos", p, 20, `Aparece en rankings públicos (puesto o franja ${rank}). No equivale a visitas.`, ev(reg, ["dato:trafico"])));
+  } else if (raw.fuentes.tranco === "ok" && metrica(metricas, "popularidad_tranco")?.estado === "insuficiente") {
+    out.push(ind("popularidad", "Popularidad en rankings públicos", 3, 20, "No aparece en el ranking Tranco (que respondió correctamente)."));
+  } else out.push(sinDato("popularidad", "Popularidad en rankings públicos", 20, "No hay datos de rankings de popularidad."));
+  return out;
+}
+
+// ---------- Confianza y transparencia ----------
+
+function confianza(raw: RawData, revision: Revision | null, reg: Reg): Indicador[] {
+  const lg = raw.legal;
+  const sinLegal = (clave: string, nombre: string, max: number) => sinDato(clave, nombre, max, "No se analizaron las páginas legales.");
+  const out: Indicador[] = [];
+
+  out.push(
+    !lg
+      ? sinLegal("aviso_legal", "Aviso legal", 15)
+      : lg.avisoLegal
+        ? ind("aviso_legal", "Aviso legal", 15, 15, "Publica un aviso legal.", ev(reg, ["dato:aviso_legal"]))
+        : ind("aviso_legal", "Aviso legal", 0, 15, "No se encontró un aviso legal."),
+  );
+  out.push(
+    !lg
+      ? sinLegal("privacidad", "Política de privacidad", 15)
+      : lg.privacidad
+        ? ind("privacidad", "Política de privacidad", 15, 15, "Publica una política de privacidad.", ev(reg, ["dato:privacidad"]))
+        : ind("privacidad", "Política de privacidad", 0, 15, "No se encontró una política de privacidad."),
+  );
+  out.push(
+    !lg
+      ? sinLegal("identidad_legal", "CIF y razón social", 15)
+      : lg.cif && lg.razonSocial
+        ? ind("identidad_legal", "CIF y razón social", 15, 15, "Publica CIF y razón social.", ev(reg, ["dato:cif", "dato:razon_social"]))
+        : lg.cif || lg.razonSocial
+          ? ind("identidad_legal", "CIF y razón social", 8, 15, lg.cif ? "Publica el CIF pero no la razón social." : "Publica la razón social pero no el CIF.", ev(reg, ["dato:cif", "dato:razon_social"]))
+          : ind("identidad_legal", "CIF y razón social", 0, 15, "No se encontró CIF ni razón social."),
+  );
+  if (!lg) out.push(sinLegal("contacto", "Contacto visible", 15));
+  else {
+    const n = [lg.email, lg.telefono, lg.direccion].filter(Boolean).length;
+    out.push(
+      n >= 2
+        ? ind("contacto", "Contacto visible", 15, 15, `Publica ${n} vías de contacto (correo, teléfono o dirección).`, ev(reg, ["dato:contacto"]))
+        : n === 1
+          ? ind("contacto", "Contacto visible", 8, 15, "Publica una sola vía de contacto.", ev(reg, ["dato:contacto"]))
+          : ind("contacto", "Contacto visible", 0, 15, "No se encontró ningún dato de contacto."),
+    );
+  }
+
+  const casosSi = revision?.lineas.some((l) => l.checks.muestraCasos === "si") ?? false;
+  if (!raw.site) out.push(sinDato("testimonios", "Testimonios o casos de éxito", 10, "No se pudo leer la web."));
+  else if (raw.site.hasTestimonials || casosSi) out.push(ind("testimonios", "Testimonios o casos de éxito", 10, 10, "La web muestra testimonios o casos de éxito."));
+  else if (legible(raw)) out.push(ind("testimonios", "Testimonios o casos de éxito", 0, 10, "La web se leyó y no muestra testimonios ni casos."));
+  else out.push(sinDato("testimonios", "Testimonios o casos de éxito", 10, "Se leyó poco texto de la web."));
+
+  const reg0 = raw.rdap?.registeredAt ? Date.parse(raw.rdap.registeredAt) : NaN;
+  const ref = Date.parse(raw.collectedAt);
+  if (Number.isFinite(reg0) && Number.isFinite(ref) && ref >= reg0) {
+    const anios = (ref - reg0) / YEAR_MS;
+    out.push(ind("dominio_antiguo", "Antigüedad del dominio", anios >= 5 ? 15 : anios >= 2 ? 8 : 0, 15, `Dominio registrado hace ${Math.floor(anios)} año(s). No indica la edad de la empresa.`));
+  } else out.push(sinDato("dominio_antiguo", "Antigüedad del dominio", 15, "No hay fecha de registro del dominio (RDAP)."));
+
+  out.push(
+    !raw.dns
+      ? sinDato("email_corporativo", "Correo corporativo", 15, "No se pudo consultar el DNS del dominio.")
+      : raw.dns.emailProvider !== "Ninguno"
+        ? ind("email_corporativo", "Correo corporativo", 15, 15, `El dominio tiene correo propio (${raw.dns.emailProvider}).`, ev(reg, ["dato:email"]))
+        : ind("email_corporativo", "Correo corporativo", 0, 15, "El dominio no tiene correo propio configurado."),
+  );
+  return out;
+}
+
+// ---------- Agregación ----------
+
+function dimension(clave: DimensionClave, nombre: string, indicadores: Indicador[]): DimensionScore {
+  const evaluados = indicadores.filter((i) => i.evaluado);
+  const cobertura = indicadores.length === 0 ? 0 : evaluados.length / indicadores.length;
+  const maximo = evaluados.reduce((a, i) => a + i.maximo, 0);
+  const puntos = evaluados.reduce((a, i) => a + i.puntos, 0);
+  const valor = cobertura >= COBERTURA_MIN_DIMENSION && maximo > 0 ? Math.round((100 * puntos) / maximo) : null;
+  return { clave, nombre, peso: PESOS_DNA[clave], valor, cobertura, indicadores };
+}
+
+/** DNA Score v1.0: reglas publicadas y reproducibles. Lo que falta es "no evaluado", nunca 0. */
 export function calcularScore(
   raw: RawData,
   facts: Facts,
   signals: Signal[],
   adn: Adn,
   revision: Revision | null,
-  textosCompetidores: string[],
-  reg: Map<string, Evidence> = new Map(),
+  metricas: Metrica[],
+  reg: Reg = new Map(),
 ): DnaScore {
-  const ids = new Set(signals.map((s) => s.id));
-  const criterios: CriterioScore[] = [
-    { clave: "claridad", nombre: "Claridad", ...claridad(revision) },
-    { clave: "visibilidad", nombre: "Visibilidad", ...visibilidad(raw, ids, reg) },
-    { clave: "monetizacion", nombre: "Monetización", ...monetizacion(raw, facts, adn) },
-    { clave: "confianza", nombre: "Confianza y madurez", ...confianza(raw, ids, revision, reg) },
-    { clave: "presencia", nombre: "Presencia digital", ...presencia(raw, facts, reg) },
-    { clave: "novedad", nombre: "Novedad", ...novedad(adn, textosCompetidores) },
+  void signals; // v1.0 no usa señales: todo sale de datos y métricas.
+  const dimensiones: DimensionScore[] = [
+    dimension("propuesta", "Propuesta de valor", propuesta(raw, adn, revision)),
+    dimension("oferta", "Oferta y monetización", oferta(raw, facts, adn, reg)),
+    dimension("experiencia", "Experiencia y rendimiento", experiencia(raw, metricas, reg)),
+    dimension("adquisicion", "Adquisición y visibilidad", adquisicion(raw, facts, metricas, reg)),
+    dimension("confianza", "Confianza y transparencia", confianza(raw, revision, reg)),
   ];
-  const valores = criterios.map((c) => c.valor).filter((v): v is number => v !== null);
-  const global = valores.length >= 3 ? Math.round(valores.reduce((a, b) => a + b, 0) / valores.length) : null;
-  return { criterios, global, aviso: AVISO_SCORE };
+  const coberturaGlobal = dimensiones.reduce((a, d) => a + d.cobertura, 0) / dimensiones.length;
+  const puntuables = dimensiones.filter((d): d is DimensionScore & { valor: number } => d.valor !== null);
+  const pesoTotal = puntuables.reduce((a, d) => a + d.peso, 0);
+  const global =
+    coberturaGlobal >= COBERTURA_MIN_GLOBAL && puntuables.length >= DIMENSIONES_MIN && pesoTotal > 0
+      ? Math.round(puntuables.reduce((a, d) => a + d.valor * d.peso, 0) / pesoTotal)
+      : null;
+  return { metodologia: METODOLOGIA_DNA, dimensiones, global, coberturaGlobal, avisos: [AVISO_SCORE, AVISO_PESOS] };
 }
-

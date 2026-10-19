@@ -47,8 +47,8 @@ const CierreIA = z.object({
 const esNivel = (s: string): s is Nivel => (NIVELES as string[]).includes(s);
 
 function prompt(raw: RawData, adn: Adn, revision: Revision | null, score: DnaScore): string {
-  const crit = score.criterios
-    .map((c) => `- ${c.clave} (${c.nombre}): ${c.valor === null ? "No puntuable" : c.valor}${c.motivos.length ? ` [${c.motivos.join("; ")}]` : ""}`)
+  const crit = score.dimensiones
+    .map((d) => `- ${d.clave} (${d.nombre}): ${d.valor === null ? "No puntuable" : d.valor} [cobertura ${Math.round(d.cobertura * 100)} %]`)
     .join("\n");
   const problemas = revision?.problemas.length
     ? `\nProblemas detectados:\n${revision.problemas.map((p) => `- ${p.linea}: ${p.problema} (mejora: ${p.mejora})`).join("\n")}\n`
@@ -86,7 +86,7 @@ export async function generarCierre(
 ): Promise<Cierre> {
   const ia = await runSection("cierre", prompt(raw, adn, revision, score), CierreIA, deps.models, deps.runOpts);
 
-  const claves = new Set(score.criterios.map((c) => c.clave as string));
+  const claves = new Set(score.dimensiones.map((d) => d.clave as string));
   const motivos: Record<string, string[]> = {};
   for (const [k, v] of Object.entries(ia.motivos)) {
     const t = v.trim();

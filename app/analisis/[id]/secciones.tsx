@@ -185,25 +185,31 @@ function Saber({ c }: { c: unknown }) {
 }
 
 function ScoreVista({ c, cierre }: { c: unknown; cierre: unknown }) {
+  // Task 5 reescribe esta vista (indicadores, cobertura, avisos). Aquí solo se adapta al nuevo DnaScore.
   const s = c as DnaScore;
   const motivos = (cierre as Cierre | null)?.motivos ?? {};
   return (
     <>
       <p>
-        Puntuación global: <strong>{s.global === null ? "No puntuable" : `${s.global} / 100`}</strong>
+        Puntuación global: <strong>{s.global === null ? "DNA Score no disponible" : `${s.global} / 100`}</strong>
       </p>
       <ul>
-        {arr<DnaScore["criterios"][number]>(s.criterios).map((k) => (
+        {arr<DnaScore["dimensiones"][number]>(s.dimensiones).map((k) => (
           <li key={k.clave}>
             <strong>{k.nombre}:</strong> {k.valor === null ? "No puntuable" : `${k.valor} / 100`}
-            {arr(k.motivos).length > 0 && <small> ({arr<string>(k.motivos).join("; ")})</small>}
+            <small> (cobertura {Math.round(k.cobertura * 100)} %)</small>
             {arr<string>(motivos[k.clave]).map((m, i) => (
               <p key={i}>{m}</p>
             ))}
-            <Evidencias lista={k.evidencias} />
+            <Evidencias lista={arr<DnaScore["dimensiones"][number]["indicadores"][number]>(k.indicadores).flatMap((i) => arr<Evidence>(i.evidencias))} />
           </li>
         ))}
       </ul>
+      {arr<string>(s.avisos).map((a, i) => (
+        <p key={i}>
+          <small>{a}</small>
+        </p>
+      ))}
     </>
   );
 }

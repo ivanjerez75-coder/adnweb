@@ -1,13 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { calcularScore, AVISO_SCORE, type DnaScore } from "../../../lib/engine/v3/score";
+import { calcularScore, METODOLOGIA_DNA, PESOS_DNA, AVISO_SCORE, type DnaScore, type DimensionClave } from "../../../lib/engine/v3/score";
+import { construirMetricas } from "../../../lib/engine/v3/estimates";
 import type { Adn } from "../../../lib/engine/v3/sections/adn";
 import type { Revision } from "../../../lib/engine/v3/sections/revision";
-import { buildEvidence } from "../../../lib/engine/v3/evidence";
+import { buildEvidence, type Evidence } from "../../../lib/engine/v3/evidence";
 import { computeFacts } from "../../../lib/engine/facts";
-import { makeRaw, makeSite } from "../raw-fixture";
-import type { RawData, Signal } from "../../../lib/engine/types";
+import { makeRaw, makeSite, ps } from "../raw-fixture";
+import type { LegalData, PageSpeedData, RawData } from "../../../lib/engine/types";
 
-const sig = (id: string): Signal => ({ id, family: "confianza", source: "web", label: id, polarity: "positiva" });
+const NOW = new Date("2026-10-14T00:00:00.000Z");
+const pagina = (id: string): Evidence => ({ id, tipo: "pagina", texto: "cita", url: "https://facturo.example/", fuente: "https://facturo.example/" });
+const bloque = (id = "p1-e1") => ({ texto: "Texto", evidencias: [pagina(id)] });
 const lineaAdn = (over: Partial<Adn["lineas"][number]> = {}) => ({
   nombre: "A",
   queOfrece: ["facturas"],
@@ -17,117 +20,275 @@ const lineaAdn = (over: Partial<Adn["lineas"][number]> = {}) => ({
   evidencias: [],
   ...over,
 });
-const mkAdn = (lineas = [lineaAdn()]): Adn => ({ queEs: null, propuestaValor: null, tipoNegocio: "saas", lineas, comoFunciona: null });
+const mkAdn = (over: Partial<Adn> = {}): Adn => ({ queEs: null, propuestaValor: null, tipoNegocio: "saas", lineas: [lineaAdn()], comoFunciona: null, ...over });
 const checks = (v: string) => ({ propuestaClara: v, diceAQuien: v, muestraCasos: v, facilContacto: v, orientacionPrecio: v });
 const mkRev = (c: object[]): Revision =>
   ({ bien: [], problemas: [], lineas: c.map((ch, i) => ({ nombre: `L${i}`, checks: ch, evidenciasChecks: [] })) }) as unknown as Revision;
 
-function score(raw: RawData, o: { signals?: Signal[]; adn?: Adn; rev?: Revision | null; comp?: string[] } = {}): DnaScore {
-  const signals = o.signals ?? [];
-  return calcularScore(raw, computeFacts(raw), signals, o.adn ?? mkAdn(), o.rev ?? null, o.comp ?? [], buildEvidence(raw, signals));
+function score(raw: RawData, o: { adn?: Adn; rev?: Revision | null } = {}): DnaScore {
+  return calcularScore(raw, computeFacts(raw), [], o.adn ?? mkAdn(), o.rev ?? null, construirMetricas(raw, NOW), buildEvidence(raw, []));
 }
-const val = (s: DnaScore, clave: string) => s.criterios.find((c) => c.clave === clave)!.valor;
+const dim = (s: DnaScore, clave: DimensionClave) => s.dimensiones.find((d) => d.clave === clave)!;
+const ind = (s: DnaScore, d: DimensionClave, clave: string) => dim(s, d).indicadores.find((i) => i.clave === clave)!;
 
-describe("calcularScore", () => {
-  it("aviso exacto y 6 criterios", () => {
+const FUENTES = makeRaw().fuentes;
+/** Sin ningún dato: todo queda "no evaluado". */
+const vacio = (over: Partial<RawData> = {}) =>
+  makeRaw({
+    site: null,
+    tranco: null,
+    radar: null,
+    pagespeed: null,
+    rdap: null,
+    wayback: null,
+    sitemap: null,
+    dns: null,
+    legal: null,
+    paginas: null,
+    fuentes: { ...FUENTES, tranco: "fallo", radar: "fallo", pagespeed: "fallo", rdap: "fallo" },
+    ...over,
+  });
+
+const sitemap = (over: object = {}) => ({ urlCount: 60, sections: [], languages: [], lastModified: "2026-10-01", recentBlogPosts: 2, complete: true, candidatas: [], ...over });
+const pagespeed = (over: Partial<PageSpeedData> = {}): PageSpeedData => ({
+  mobile: 80,
+  desktop: 90,
+  accesibilidad: 100,
+  buenasPracticas: 50,
+  seo: 90,
+  campo: { fuente: "url", lcpMs: 1500, inpMs: 100, cls: 0.01, categoria: "FAST" },
+  obtenidoEn: "2026-10-14T00:00:00.000Z",
+  ...over,
+});
+const legalCompleto = (over: Partial<LegalData> = {}): LegalData => ({
+  avisoLegal: "https://facturo.example/aviso",
+  privacidad: "https://facturo.example/privacidad",
+  cookies: null,
+  condiciones: null,
+  cif: "B12345678",
+  razonSocial: "Facturo SL",
+  email: "hola@facturo.example",
+  telefono: "910000000",
+  direccion: null,
+  fuentes: {},
+  ...over,
+});
+const dns: RawData["dns"] = { emailProvider: "Google Workspace", tools: [] };
+
+/** Fixture completo: todas las dimensiones con cobertura 1. */
+function completo(over: Partial<RawData> = {}): RawData {
+  return makeRaw({
+    site: makeSite({
+      hasPricingPage: true,
+      pricesFound: ["9 €"],
+      hasFreePlanOrTrial: false,
+      technologies: [{ name: "Stripe", category: "pagos" }],
+      socialLinks: { x: "https://twitter.com/facturo", linkedin: "https://linkedin.com/company/facturo" },
+      hasTestimonials: true,
+      ctas: ["Empieza ya"],
+    }),
+    pagespeed: pagespeed(),
+    tranco: { rank: 5000, trend: "estable" },
+    rdap: { registeredAt: "2015-03-02" },
+    sitemap: sitemap(),
+    dns,
+    paginas: [
+      { id: "p1", url: "https://facturo.example/", titulo: "Facturo", tieneDescripcion: true, extractos: [] },
+      { id: "p2", url: "https://facturo.example/precios", titulo: "Precios", tieneDescripcion: false, extractos: [] },
+    ],
+    legal: legalCompleto(),
+    ...over,
+  });
+}
+const adnCompleto = () =>
+  mkAdn({ queEs: bloque("p1-e1"), propuestaValor: bloque("p1-e2"), lineas: [lineaAdn({ comoSeContrata: "Suscripción mensual", evidencias: [pagina("p1-e1")] })] });
+const revCompleta = () => mkRev([checks("si")]);
+
+describe("calcularScore: estructura y textos", () => {
+  it("metodología, pesos 0.2, 5 dimensiones y avisos exactos", () => {
     const s = score(makeRaw());
-    expect(s.aviso).toBe("Resume indicadores públicos; no es una valoración financiera.");
-    expect(AVISO_SCORE).toBe(s.aviso);
-    expect(s.criterios.map((c) => c.clave)).toEqual(["claridad", "visibilidad", "monetizacion", "confianza", "presencia", "novedad"]);
+    expect(METODOLOGIA_DNA).toBe("dna-score-1.0");
+    expect(s.metodologia).toBe("dna-score-1.0");
+    expect(s.dimensiones.map((d) => d.clave)).toEqual(["propuesta", "oferta", "experiencia", "adquisicion", "confianza"]);
+    expect(Object.values(PESOS_DNA)).toEqual([0.2, 0.2, 0.2, 0.2, 0.2]);
+    expect(s.dimensiones.every((d) => d.peso === 0.2)).toBe(true);
+    expect(s.avisos).toEqual(["Resume indicadores públicos; no es una valoración financiera.", "Pesos provisionales, pendientes de validación."]);
+    expect(AVISO_SCORE).toBe(s.avisos[0]);
+  });
+});
+
+describe("calcularScore: cobertura", () => {
+  it("1 de 4 indicadores evaluados: valor null y cobertura 0.25", () => {
+    const raw = vacio({ pagespeed: pagespeed({ accesibilidad: null, buenasPracticas: null, seo: null, campo: null }) });
+    const e = dim(score(raw), "experiencia");
+    expect(e.indicadores).toHaveLength(4);
+    expect(e.indicadores.filter((i) => i.evaluado)).toHaveLength(1);
+    expect(e.cobertura).toBe(0.25);
+    expect(e.valor).toBeNull();
   });
 
-  it("claridad: % de si entre los no no_aplica, null con menos de 3 checks válidos", () => {
-    const rev = mkRev([checks("si"), { ...checks("no_aplica"), propuestaClara: "no", diceAQuien: "no" }]);
-    expect(val(score(makeRaw(), { rev }), "claridad")).toBe(71); // 5/7
-    expect(val(score(makeRaw(), { rev: mkRev([{ ...checks("no_aplica"), propuestaClara: "si", diceAQuien: "no" }]) }), "claridad")).toBeNull();
-    expect(val(score(makeRaw(), { rev: null }), "claridad")).toBeNull();
+  it("sin datos: nada evaluado, nunca puntos 0 con evaluado true, y sin global", () => {
+    const s = score(vacio());
+    for (const d of s.dimensiones) {
+      for (const i of d.indicadores) {
+        expect(i.evaluado).toBe(false);
+        expect(i.puntos).toBe(0);
+        expect(i.motivo.length).toBeGreaterThan(0);
+      }
+      expect(d.cobertura).toBe(0);
+      expect(d.valor).toBeNull();
+    }
+    expect(s.coberturaGlobal).toBe(0);
+    expect(s.global).toBeNull();
   });
 
-  it("visibilidad: tramos de ranking, blog_activo y pagespeed, límites y null", () => {
-    const base = (rank: number | null) => makeRaw({ tranco: { rank, trend: null }, radar: null });
-    expect(val(score(base(5000)), "visibilidad")).toBe(85);
-    expect(val(score(base(50_000)), "visibilidad")).toBe(65);
-    expect(val(score(base(500_000)), "visibilidad")).toBe(45);
-    expect(val(score(base(null)), "visibilidad")).toBe(25);
-    expect(val(score(base(5000), { signals: [sig("blog_activo")] }), "visibilidad")).toBe(95);
-    expect(val(score(base(null), { signals: [sig("pagespeed_movil_bajo")] }), "visibilidad")).toBe(15);
-    expect(val(score(base(5000), { signals: [sig("blog_activo"), sig("pagespeed_movil_bajo")] }), "visibilidad")).toBe(85);
-    expect(val(score(makeRaw({ tranco: null, radar: null })), "visibilidad")).toBeNull();
+  it("con la mitad de cobertura la dimensión puntúa: round(100·Σpuntos/Σmáximo) sobre lo evaluado", () => {
+    // móvil 80 -> 28/35 y accesibilidad 50 -> 12.5 redondea a 13/25; buenas prácticas y CrUX sin dato.
+    const raw = vacio({ pagespeed: pagespeed({ accesibilidad: 50, buenasPracticas: null, seo: null, campo: null }) });
+    const e = dim(score(raw), "experiencia");
+    expect(e.cobertura).toBe(0.5);
+    expect(e.valor).toBe(Math.round((100 * (28 + 13)) / 60)); // 68
   });
 
-  it("monetización: base 30 y sumas; null sin web", () => {
-    const sinNada = makeRaw({ site: makeSite({ pricesFound: [], hasPricingPage: false }) });
-    expect(val(score(sinNada), "monetizacion")).toBe(30);
-    const pagos = makeRaw({ site: makeSite({ pricesFound: [], hasPricingPage: false, technologies: [{ name: "Stripe", category: "pagos" }] }) });
-    expect(val(score(pagos), "monetizacion")).toBe(50);
-    const adn = mkAdn([lineaAdn({ comoSeContrata: "Suscripción", evidencias: [{ id: "p1-e1", tipo: "pagina", texto: "t", fuente: "u" }] })]);
-    const todo = makeRaw({ site: makeSite({ technologies: [{ name: "Stripe", category: "pagos" }] }) });
-    expect(val(score(todo, { adn }), "monetizacion")).toBe(100);
-    expect(val(score(makeRaw({ site: null })), "monetizacion")).toBeNull();
+  it("error de PageSpeed: experiencia null y sus indicadores no evaluados", () => {
+    const raw = makeRaw({ pagespeed: { ...ps(80, 90), accesibilidad: 90, error: "timeout" } });
+    const e = dim(score(raw), "experiencia");
+    expect(e.indicadores.every((i) => !i.evaluado)).toBe(true);
+    expect(e.cobertura).toBe(0);
+    expect(e.valor).toBeNull();
   });
+});
 
-  it("confianza y madurez: suma, resta y mínimo de 2 inputs", () => {
-    const raw = makeRaw({
-      fuentes: { ...makeRaw().fuentes, wikidata: "ok" },
-      dns: { emailProvider: "Google Workspace", tools: [] },
-      wikidata: { id: "Q1", description: null, inception: 2000, founders: [], headquarters: null, employees: null, employeesYear: null, revenue: null },
+describe("calcularScore: global", () => {
+  it("cobertura global ~0.5 con 3 dimensiones puntuables: global null", () => {
+    // experiencia 4/4, confianza 6/7 (sin web no hay testimonios), adquisición 4/6 -> (1 + 6/7 + 4/6) / 5 ≈ 0.50
+    const raw = vacio({
+      pagespeed: pagespeed(),
+      legal: legalCompleto(),
+      rdap: { registeredAt: "2015-03-02" },
+      dns,
+      tranco: { rank: 5000, trend: null },
+      sitemap: sitemap(),
     });
-    expect(val(score(raw, { signals: [sig("empresa_consolidada")] }), "confianza")).toBe(100);
-    expect(val(score(raw, { signals: [sig("dominio_reciente")] }), "confianza")).toBe(50); // testimonios + wikidata + email - reciente
-    const pocos = makeRaw({ site: null, rdap: null, wikidata: null, dns: null, fuentes: { ...makeRaw().fuentes, wikidata: "fallo" } });
-    expect(val(score(pocos), "confianza")).toBeNull();
-    const soloWikidata = makeRaw({
-      site: null,
-      rdap: null,
-      dns: null,
-      fuentes: { ...makeRaw().fuentes, wikidata: "ok" },
-      wikidata: { id: "Q1", description: null, inception: 2000, founders: [], headquarters: null, employees: null, employeesYear: null, revenue: null },
-    });
-    expect(val(score(soloWikidata, { signals: [sig("empresa_consolidada")] }), "confianza")).toBeNull();
+    const s = score(raw);
+    for (const c of ["experiencia", "confianza", "adquisicion"] as const) expect(dim(s, c).valor).not.toBeNull();
+    expect(s.coberturaGlobal).toBeCloseTo(0.505, 2);
+    expect(s.global).toBeNull();
   });
 
-  it("presencia digital: redes, blog, app y actividad reciente", () => {
-    const sm = (lastModified: string) => ({ urlCount: 10, sections: [], languages: [], lastModified, recentBlogPosts: 0, complete: true, candidatas: [] });
-    const raw = makeRaw({
-      site: makeSite({ socialLinks: { a: "x", b: "y", c: "z" }, hasBlog: true, hasAppLinks: true }),
-      sitemap: sm("2026-10-01"),
-    });
-    expect(val(score(raw), "presencia")).toBe(100);
-    const vieja = makeRaw({
-      site: makeSite({ socialLinks: { a: "x" }, hasBlog: false, hasAppLinks: false }),
-      sitemap: sm("2025-01-01"),
-    });
-    expect(val(score(vieja), "presencia")).toBe(15);
-    expect(val(score(makeRaw({ site: null })), "presencia")).toBeNull();
+  it("cobertura global baja (solo experiencia y legal): global null", () => {
+    const raw = vacio({ pagespeed: pagespeed(), legal: legalCompleto() });
+    const s = score(raw);
+    expect(s.coberturaGlobal).toBeLessThan(0.6);
+    expect(s.global).toBeNull();
   });
 
-  it("novedad: necesita 2 competidores; 50 + 10 por item no encontrado, tope 100", () => {
-    const adn = mkAdn([lineaAdn({ queOfrece: ["Facturas", "Inventario", "Nóminas"] })]);
-    expect(val(score(makeRaw(), { adn, comp: ["solo facturas aqui"] }), "novedad")).toBeNull();
-    expect(val(score(makeRaw(), { adn, comp: ["vendemos facturas", "tambien facturas y nominas"] }), "novedad")).toBe(60);
-    const muchos = mkAdn([lineaAdn({ queOfrece: Array.from({ length: 8 }, (_, i) => `cosa${i} rara`) })]);
-    const sinNuevos = score(makeRaw(), { adn: mkAdn([lineaAdn({ queOfrece: ["facturas"] })]), comp: ["facturas", "mas facturas"] });
-    expect(sinNuevos.criterios.find((c) => c.clave === "novedad")!.motivos.some((m) => m.includes("+0"))).toBe(false);
-    const futura = makeRaw({
-      site: makeSite({ socialLinks: {}, hasBlog: false, hasAppLinks: false }),
-      sitemap: { urlCount: 1, sections: [], languages: [], lastModified: "2027-01-01", recentBlogPosts: 0, complete: true, candidatas: [] },
-    });
-    expect(val(score(futura), "presencia")).toBe(0);
-    expect(val(score(makeRaw(), { adn: muchos, comp: ["a", "b"] }), "novedad")).toBe(100);
+  it("menos de 3 dimensiones puntuables: global null aunque la cobertura sea alta", () => {
+    const s = score(completo(), { adn: adnCompleto(), rev: revCompleta() });
+    expect(s.global).not.toBeNull();
+    const parcial = score(vacio({ pagespeed: pagespeed(), legal: legalCompleto(), rdap: { registeredAt: "2015-03-02" }, dns }));
+    expect(parcial.dimensiones.filter((d) => d.valor !== null).length).toBeLessThan(3);
+    expect(parcial.global).toBeNull();
   });
 
-  it("global: media redondeada de los no nulos; null con menos de 3", () => {
-    const dos = score(makeRaw({ tranco: null, radar: null, site: null }), { rev: mkRev([checks("si")]) });
-    expect(dos.criterios.filter((c) => c.valor !== null).length).toBeLessThan(3);
-    expect(dos.global).toBeNull();
-    const ok = score(makeRaw(), { rev: mkRev([checks("si")]) });
-    const vals = ok.criterios.map((c) => c.valor).filter((v): v is number => v !== null);
-    expect(vals.length).toBeGreaterThanOrEqual(3);
-    expect(ok.global).toBe(Math.round(vals.reduce((a, b) => a + b, 0) / vals.length));
+  it("pesos renormalizados cuando una dimensión es null", () => {
+    // PageSpeed caído: experiencia null y a adquisición le falta SEO técnico; el global promedia las otras 4.
+    const raw = completo({ pagespeed: { ...ps(null, null), error: "timeout" } });
+    const s = score(raw, { adn: adnCompleto(), rev: revCompleta() });
+    expect(dim(s, "experiencia").valor).toBeNull();
+    expect(dim(s, "propuesta").valor).toBe(100);
+    expect(dim(s, "oferta").valor).toBe(85);
+    expect(dim(s, "adquisicion").valor).toBe(86); // (11 + 15 + 15 + 8 + 20) / 80 = 86.25
+    expect(dim(s, "confianza").valor).toBe(100);
+    // Cada peso pasa de 0.2 a 0.25: (100 + 85 + 86 + 100) / 4 = 92.75
+    expect(s.global).toBe(93);
+    expect(s.coberturaGlobal).toBeCloseTo((1 + 1 + 0 + 5 / 6 + 1) / 5, 5);
+  });
+});
+
+describe("calcularScore: indicadores", () => {
+  it("popularidad: fuera del ranking puntúa bajo solo si Tranco respondió ok; si falló no se evalúa", () => {
+    const fuera = vacio({ tranco: { rank: null, trend: null }, fuentes: { ...FUENTES, tranco: "ok", radar: "fallo" } });
+    const i = ind(score(fuera), "adquisicion", "popularidad");
+    expect(i.evaluado).toBe(true);
+    expect(i.puntos).toBe(3);
+    expect(ind(score(vacio()), "adquisicion", "popularidad").evaluado).toBe(false);
   });
 
-  it("los motivos son texto de código", () => {
-    const s = score(makeRaw(), { signals: [sig("blog_activo")] });
-    expect(s.criterios.find((c) => c.clave === "visibilidad")!.motivos.some((m) => m.includes("+10"))).toBe(true);
+  it("popularidad: tramos de ranking", () => {
+    const con = (rank: number) => ind(score(vacio({ tranco: { rank, trend: null } })), "adquisicion", "popularidad").puntos;
+    expect(con(5000)).toBe(20);
+    expect(con(50_000)).toBe(15);
+    expect(con(500_000)).toBe(10);
+    expect(con(5_000_000)).toBe(5);
+  });
+
+  it("confianza: sin raw.legal no se evalúan los 4 indicadores legales; con legal vacío valen 0 evaluados", () => {
+    const sin = score(vacio());
+    const claves = ["aviso_legal", "privacidad", "identidad_legal", "contacto"];
+    for (const c of claves) expect(ind(sin, "confianza", c).evaluado).toBe(false);
+    const vacioLegal = score(vacio({ legal: legalCompleto({ avisoLegal: null, privacidad: null, cif: null, razonSocial: null, email: null, telefono: null }) }));
+    for (const c of claves) {
+      expect(ind(vacioLegal, "confianza", c).evaluado).toBe(true);
+      expect(ind(vacioLegal, "confianza", c).puntos).toBe(0);
+    }
+  });
+
+  it("confianza: adjunta las evidencias dato:* correspondientes", () => {
+    const s = score(vacio({ legal: legalCompleto({ privacidad: null, razonSocial: null, email: null, telefono: null }) }));
+    expect(ind(s, "confianza", "aviso_legal").evidencias.map((e) => e.id)).toEqual(["dato:aviso_legal"]);
+    expect(ind(s, "confianza", "identidad_legal").puntos).toBe(8);
+    expect(ind(s, "confianza", "identidad_legal").evidencias.map((e) => e.id)).toEqual(["dato:cif"]);
+  });
+
+  it("dominio antiguo: usa collectedAt como referencia", () => {
+    expect(ind(score(vacio({ rdap: { registeredAt: "2015-03-02" } })), "confianza", "dominio_antiguo").puntos).toBe(15);
+    expect(ind(score(vacio({ rdap: { registeredAt: "2024-01-01" } })), "confianza", "dominio_antiguo").puntos).toBe(8);
+    const reciente = ind(score(vacio({ rdap: { registeredAt: "2026-01-01" } })), "confianza", "dominio_antiguo");
+    expect(reciente.evaluado).toBe(true);
+    expect(reciente.puntos).toBe(0);
+  });
+
+  it("propuesta: modelo de negocio exige comoSeContrata con evidencia de página", () => {
+    const sin = score(makeRaw(), { adn: mkAdn() });
+    expect(ind(sin, "propuesta", "modelo_negocio").puntos).toBe(0);
+    const con = score(makeRaw(), { adn: adnCompleto() });
+    expect(ind(con, "propuesta", "modelo_negocio").puntos).toBe(20);
+    expect(ind(con, "propuesta", "modelo_negocio").evidencias).toHaveLength(1);
+  });
+
+  it("propuesta: la claridad agrega propuestaClara y diceAQuien de la revisión", () => {
+    const rev = mkRev([{ ...checks("no_aplica"), propuestaClara: "si", diceAQuien: "no" }]);
+    const i = ind(score(makeRaw(), { rev }), "propuesta", "claridad_web");
+    expect(i.evaluado).toBe(true);
+    expect(i.puntos).toBe(15); // 1 de 2 sobre 30
+    expect(ind(score(makeRaw(), { rev: null }), "propuesta", "claridad_web").evaluado).toBe(false);
+  });
+
+  it("oferta: una web con poco texto no prueba que falten precios, plan gratuito ni pagos", () => {
+    const raw = makeRaw({ site: makeSite({ pricesFound: [], hasPricingPage: false, hasFreePlanOrTrial: false, ctas: [], textLength: 200 }) });
+    const s = score(raw);
+    for (const c of ["precios_publicados", "plan_gratuito", "pagos", "canal_conversion"]) expect(ind(s, "oferta", c).evaluado).toBe(false);
+  });
+});
+
+describe("calcularScore: fixture completo con global calculado a mano", () => {
+  it("global = media de las 5 dimensiones", () => {
+    const s = score(completo(), { adn: adnCompleto(), rev: revCompleta() });
+
+    // propuesta: qué es 25 + propuesta de valor 25 + claridad 30 + modelo 20 = 100/100
+    expect(dim(s, "propuesta").valor).toBe(100);
+    // oferta: precios 25 + página 15 + canal 20 + plan gratuito 0 + pagos 25 = 85/100
+    expect(dim(s, "oferta").valor).toBe(85);
+    // experiencia: móvil 80% de 35 = 28 + accesibilidad 25 + buenas prácticas 50% de 20 = 10 + CrUX FAST 20 = 83/100
+    expect(dim(s, "experiencia").valor).toBe(83);
+    // adquisición: SEO 18 + títulos (2+1)/4 de 15 = 11.25 -> 11 + sitemap 60 págs 15 + blog 15 + redes (2) 8 + popularidad top 10k 20 = 87/100
+    expect(dim(s, "adquisicion").valor).toBe(87);
+    // confianza: aviso 15 + privacidad 15 + identidad 15 + contacto 15 + testimonios 10 + dominio 15 + correo 15 = 100/100
+    expect(dim(s, "confianza").valor).toBe(100);
+
+    expect(s.dimensiones.every((d) => d.cobertura === 1)).toBe(true);
+    expect(s.coberturaGlobal).toBe(1);
+    expect(s.global).toBe(91); // (100 + 85 + 83 + 87 + 100) / 5 = 91
   });
 });

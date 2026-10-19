@@ -3,7 +3,7 @@ import { computeFacts } from "../facts";
 import type { PageGetter } from "../safe-fetch";
 import { extractSignals } from "../signals";
 import type { RawData } from "../types";
-import { construirMetricas, escenarioIngresos, preciosPublicados } from "./estimates";
+import { construirMetricas, escenarioIngresos, preciosPublicados, type Metrica } from "./estimates";
 import { buildEvidence } from "./evidence";
 import { limitarConcurrencia, type RunSectionOpts } from "./llm";
 import { calcularScore, type DnaScore } from "./score";
@@ -82,9 +82,11 @@ export async function buildReportV3(raw: RawData, deps: ReportV3Deps, onSection:
   const reg = buildEvidence(raw, signals);
 
   // Fase 1: datos desde código (métricas etiquetadas, precios publicados y escenario hipotético).
+  let metricas: Metrica[] = [];
   try {
     const precios = preciosPublicados(raw);
-    await emitir("datos", { metricas: construirMetricas(raw, now), precios, escenario: escenarioIngresos(precios) }, "lista");
+    metricas = construirMetricas(raw, now);
+    await emitir("datos", { metricas, precios, escenario: escenarioIngresos(precios) }, "lista");
   } catch {
     await emitir("datos", null, "error");
   }
@@ -103,7 +105,6 @@ export async function buildReportV3(raw: RawData, deps: ReportV3Deps, onSection:
   // aprender no espera a competidores ni a revision (recibe [] y null): así no queda en la cola
   // detrás de la sección más lenta y el tiempo total es el mínimo. Pierde algo de contexto.
   let revision: Revision | null = null;
-  let textosVerificados: string[] = [];
 
   const tarea = async <T>(clave: SeccionClave, fn: () => Promise<T>, ok: (v: T) => void = () => {}) => {
     let valor: T;
@@ -123,9 +124,6 @@ export async function buildReportV3(raw: RawData, deps: ReportV3Deps, onSection:
     tarea(
       "competidores",
       () => generarCompetidores(raw, adn, { searchModels, models, getPage: deps.getPage, runOpts: deps.runOpts }),
-      (r) => {
-        textosVerificados = r.textosVerificados;
-      },
     ),
     tarea("revision", () => generarRevision(raw, adn, reg, sectionDeps), (r) => {
       revision = r;
@@ -136,7 +134,7 @@ export async function buildReportV3(raw: RawData, deps: ReportV3Deps, onSection:
   // Fase 4: score (código puro).
   let score: DnaScore | null = null;
   try {
-    score = calcularScore(raw, facts, signals, adn, revision, textosVerificados, reg);
+    score = calcularScore(raw, facts, signals, adn, revision, metricas, reg);
   } catch {
     score = null;
   }
