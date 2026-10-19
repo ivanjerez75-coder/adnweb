@@ -48,3 +48,20 @@ describe("limpiarAfirmacionesNoRespaldadas", () => {
     expect(limpiarAfirmacionesNoRespaldadas("Software de facturación para autónomos. Se contrata en línea.")).toBe("Software de facturación para autónomos. Se contrata en línea.");
   });
 });
+
+describe("filtro sin sobrefiltrar", () => {
+  it("en texto descriptivo deja pasar precios y porcentajes, pero no promesas ni años", async () => {
+    const { limpiarAfirmacionesNoRespaldadas: f } = await import("../../../lib/engine/v3/filtro");
+    expect(f("Productos 100% ecológicos.", { descriptivo: true })).toBe("Productos 100% ecológicos.");
+    expect(f("Packs desde 29 €/mes.", { descriptivo: true })).toBe("Packs desde 29 €/mes.");
+    expect(f("Tienda online. Impulsará las ventas.", { descriptivo: true })).toBe("Tienda online.");
+    expect(f("Entidad con más de 60 años de trayectoria.", { descriptivo: true })).toBe("");
+    expect(f("Factura 2 M€ al año.")).toBe("");
+  });
+  it("'abandono' solo cuenta como métrica de conversión", async () => {
+    const { contieneCifraNoRespaldada: c } = await import("../../../lib/engine/v3/filtro");
+    expect(c("Luchamos contra el abandono escolar.")).toBe(false);
+    expect(c("Reducirá la tasa de abandono.")).toBe(true);
+    expect(c("Menos abandono del carrito.")).toBe(true);
+  });
+});

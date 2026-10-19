@@ -126,7 +126,7 @@ export async function generarCierre(
   const vistas = new Set<string>();
   for (const o of ia.oportunidades) {
     const hallazgo = o.hallazgo.trim();
-    const accion = limpiar(o.accion);
+    const accion = limpiar(o.accion, { descriptivo: true });
     const impactoNivel = o.impactoNivel.trim().toLowerCase();
     const esfuerzo = o.esfuerzo.trim().toLowerCase();
     const riesgoIa = o.riesgo.trim().toLowerCase();

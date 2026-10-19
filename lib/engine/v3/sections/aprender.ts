@@ -62,7 +62,7 @@ export async function generarAprender(
   const out: ItemAprender[] = [];
   for (const i of ia.items) {
     const ev = citar(i.evidencias, reg);
-    const texto = limpiarAfirmacionesNoRespaldadas(i.texto);
+    const texto = limpiarAfirmacionesNoRespaldadas(i.texto, { descriptivo: true });
     if (ev && texto) out.push({ texto, evidencias: ev });
   }
   if (out.length === 0) throw new SeccionVaciaError("aprender");

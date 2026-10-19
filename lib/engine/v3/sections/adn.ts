@@ -137,7 +137,7 @@ function canalContactoDeRespaldo(raw: RawData, reg: Map<string, Evidence>): AdnC
 }
 
 function resolver(b: { texto: string; evidencias: string[] }, reg: Map<string, Evidence>, filtrar = false): AdnBloque | null {
-  const texto = filtrar ? limpiarAfirmacionesNoRespaldadas(b.texto) : b.texto;
+  const texto = filtrar ? limpiarAfirmacionesNoRespaldadas(b.texto, { descriptivo: true }) : b.texto;
   const ev = citar(b.evidencias, reg);
   return ev && (!filtrar || texto) ? { texto, evidencias: ev } : null;
 }
