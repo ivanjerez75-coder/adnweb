@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { t } from "@/lib/i18n";
 
 export const EJEMPLOS_POR_DEFECTO = [
@@ -12,7 +12,14 @@ export const EJEMPLOS_POR_DEFECTO = [
 ];
 
 type Props = {
-  accion: (formData: FormData) => void | Promise<void>;
+  /** Server Action del formulario (p. ej. la landing). */
+  accion?: (formData: FormData) => void | Promise<void>;
+  /** Alternativa en cliente: recibe la URL sin recargar ni reiniciar el formulario. */
+  alEnviar?: (url: string) => void;
+  /** Mensaje de error, que se muestra justo bajo el campo. */
+  error?: string | null;
+  /** Mientras se envía: desactiva el botón. */
+  ocupado?: boolean;
   valorInicial?: string;
   placeholder?: string;
   ejemplos?: { nombre: string; dominio: string }[];
@@ -22,6 +29,9 @@ type Props = {
 
 export function BuscadorUrl({
   accion,
+  alEnviar,
+  error,
+  ocupado = false,
   valorInicial = "",
   placeholder,
   ejemplos = EJEMPLOS_POR_DEFECTO,
@@ -29,11 +39,21 @@ export function BuscadorUrl({
 }: Props) {
   const [valor, setValor] = useState(valorInicial);
   const ref = useRef<HTMLInputElement>(null);
+  const idError = useId();
 
   return (
     <div className="w-full max-w-2xl">
       <form
-        action={accion}
+        action={alEnviar ? undefined : accion}
+        onSubmit={
+          alEnviar
+            ? (e) => {
+                e.preventDefault();
+                alEnviar(valor);
+              }
+            : undefined
+        }
+        aria-busy={ocupado || undefined}
         className="pildora-brillo flex items-center gap-3 rounded-full bg-superficie p-2 pl-3"
       >
         <span
@@ -64,12 +84,15 @@ export function BuscadorUrl({
           onChange={(e) => setValor(e.target.value)}
           placeholder={placeholder ?? t("landing.placeholder")}
           aria-label={t("comun.campoUrl")}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? idError : undefined}
           className="min-w-0 flex-1 bg-transparent text-base text-grafito placeholder:text-suave focus:outline-none"
         />
         <button
           type="submit"
           aria-label={t("comun.analizarUrl")}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-teal text-white transition-colors hover:bg-teal/90"
+          disabled={ocupado}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-teal text-white transition-colors hover:bg-teal/90 disabled:cursor-wait disabled:opacity-60"
         >
           <svg
             width="20"
@@ -86,6 +109,11 @@ export function BuscadorUrl({
           </svg>
         </button>
       </form>
+      {error && (
+        <p id={idError} role="alert" className="mt-3 px-4 text-center text-sm font-medium text-rojo">
+          {error}
+        </p>
+      )}
       {ejemplos.length > 0 && (
         <ul
           className="mt-4 flex flex-wrap items-center justify-center gap-2"

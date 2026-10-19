@@ -5,6 +5,9 @@ import { repoDelUsuario } from "@/lib/server/auth/usuario";
 import { Progreso } from "./progreso";
 import { Secciones } from "./secciones";
 
+// Dentro del panel de la app; el diseño del informe llega en el Plan B.
+const MAIN = "mx-auto w-full max-w-4xl px-4 py-8 [overflow-wrap:anywhere] sm:px-8";
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function Contenido({ params }: { params: Promise<{ id: string }> }) {
@@ -16,7 +19,7 @@ async function Contenido({ params }: { params: Promise<{ id: string }> }) {
 
   if (a.version === 3 && a.estado !== "error") {
     return (
-      <main>
+      <main className={MAIN}>
         <h1>{a.dominio}</h1>
         <Secciones
           id={a.id}
@@ -31,7 +34,7 @@ async function Contenido({ params }: { params: Promise<{ id: string }> }) {
   }
   if (a.estado === "procesando") {
     return (
-      <main>
+      <main className={MAIN}>
         <h1>{a.dominio}</h1>
         <Progreso id={a.id} />
       </main>
@@ -39,7 +42,7 @@ async function Contenido({ params }: { params: Promise<{ id: string }> }) {
   }
   if (a.estado !== "listo") {
     return (
-      <main>
+      <main className={MAIN}>
         <h1>{a.dominio}</h1>
         <p role="alert">{a.error ?? "Ha ocurrido un error inesperado. Te hemos devuelto el crédito."}</p>
         <p>
@@ -51,7 +54,7 @@ async function Contenido({ params }: { params: Promise<{ id: string }> }) {
   // Informe antiguo (version 2).
   const informe = a.informe;
   return (
-    <main>
+    <main className={MAIN}>
       <h1>{a.dominio}</h1>
       <p>Informe de una versión anterior</p>
       {informe ? <p>{informe.resumen.queHace}</p> : <p>El informe no está disponible.</p>}

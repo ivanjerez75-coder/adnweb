@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => {} }) }));
-const { Secciones, claveContenido } = await import("../../app/analisis/[id]/secciones");
+const { Secciones, claveContenido } = await import("../../app/(app)/analisis/[id]/secciones");
 
 const render = (secciones: Record<string, { estado: string; contenido: unknown }>) =>
   renderToStaticMarkup(createElement(Secciones, { id: "x", createdAt: new Date().toISOString(), inicial: { estado: "lista", pasoActual: null, secciones } }));
