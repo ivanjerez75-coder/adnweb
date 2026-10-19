@@ -118,7 +118,7 @@ export const DiagnosticoIA = z.object({
 // ---------- Prompt ----------
 
 /** Extractos de los competidores verificados (ids c<n>-e<k>), dentro del delimitador y escapados. */
-function bloqueCompetidores(competencia: Competencia | null, reg: Map<string, Evidence>): string {
+function bloqueCompetidores(competencia: Pick<Competencia, "competidores"> | null, reg: Map<string, Evidence>): string {
   const verificados = (competencia?.competidores ?? []).filter((c) => c.verificado);
   if (verificados.length === 0) return "";
   const partes: string[] = ["Competidores verificados:"];
@@ -136,7 +136,7 @@ function bloqueCompetidores(competencia: Competencia | null, reg: Map<string, Ev
   return `\n<<<DATOS_WEB\n${escapeAngles(partes.join("\n"))}\nDATOS_WEB>>>\n`;
 }
 
-function prompt(raw: RawData, anatomia: Anatomia, competencia: Competencia | null, reg: Map<string, Evidence>, conPrecios: boolean): string {
+function prompt(raw: RawData, anatomia: Anatomia, competencia: Pick<Competencia, "competidores"> | null, reg: Map<string, Evidence>, conPrecios: boolean): string {
   const tiposFriccion = TIPOS_FRICCION.filter((t) => conPrecios || t !== "precio").join(" | ");
   return `Eres un consultor de estrategia. Haz el diagnóstico estratégico del negocio analizado: fortalezas, debilidades, riesgos y fricciones del cliente, y un diagnóstico integrado.
 
@@ -192,7 +192,7 @@ const texto = (s: string, descriptivo = false) => limpiar(quitarIdsEvidencia(s ?
 export async function generarDiagnostico(
   raw: RawData,
   anatomia: Anatomia,
-  competencia: Competencia | null,
+  competencia: Pick<Competencia, "competidores"> | null,
   regTotal: Map<string, Evidence>,
   deps: SectionDeps,
 ): Promise<Diagnostico> {

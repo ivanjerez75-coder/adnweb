@@ -77,6 +77,11 @@ export interface Competencia {
   matriz: { dimensiones: Dimension[]; filas: FilaMatriz[] };
   ganaPierde: GanaPierde[];
 }
+/** Lo que se sabe de la competencia tras buscar y leer sus webs (sin fichas ni comparación). */
+export interface CompetidoresVerificados {
+  competidores: CompetidorV4[];
+  regCompetidores: Map<string, Evidence>;
+}
 export interface CompetenciaDeps {
   searchModels: JsonModel[];
   models: JsonModel[];
@@ -87,6 +92,8 @@ export interface CompetenciaDeps {
   /** Tiempo máximo de toda la lectura de competidores (por defecto 2 × timeoutMs). */
   totalMs?: number;
   now?: () => Date;
+  /** Aviso temprano, antes de las llamadas de fichas y comparación (lo usa el informe para adelantar el diagnóstico). */
+  onVerificados?: (v: CompetidoresVerificados) => void;
 }
 
 // ---------- Utilidades de texto (verificación v3.1) ----------
@@ -581,6 +588,9 @@ export async function generarCompetencia(
     }
     return comp;
   });
+
+  // Ya se sabe quién está verificado y qué citas tiene: el diagnóstico puede arrancar sin esperar a fichas ni comparación.
+  deps.onVerificados?.({ competidores: competidores.map((c) => ({ ...c })), regCompetidores: new Map(regCompetidores) });
 
   if (leidos.length === 0) {
     return { competencia: { competidores, ...resolverComparacion(null, raw, [], reg) }, regCompetidores };

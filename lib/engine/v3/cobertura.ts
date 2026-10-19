@@ -1,4 +1,5 @@
 import type { RawData } from "../types";
+import type { EstadoSeccion, SeccionClaveV4 } from "./report";
 
 /** Qué se pudo estudiar y qué no. Un informe puede quedar con cobertura parcial. */
 export type ComponenteCobertura = "identidad" | "modelo" | "auditoria" | "rendimiento" | "competencia" | "diagnostico" | "oportunidades" | "plan";
@@ -7,14 +8,12 @@ export interface EstadoComponente {
   motivo: string;
 }
 
-/** Claves de sección v4. Provisional: la Tarea 6 crea `SeccionClaveV4` y sustituye este tipo local. */
-export type ClaveSeccionCobertura = "datos" | "anatomia" | "rendimiento" | "competencia" | "diagnostico" | "oportunidades" | "plan";
-type EstadoSec = "pendiente" | "lista" | "error";
+type EstadoSec = EstadoSeccion;
 
 export interface EntradaCobertura {
   raw: RawData;
-  secciones: Partial<Record<ClaveSeccionCobertura, unknown>>;
-  estados: Partial<Record<ClaveSeccionCobertura, EstadoSec>>;
+  secciones: Partial<Record<SeccionClaveV4, unknown>>;
+  estados: Partial<Record<SeccionClaveV4, EstadoSec>>;
 }
 
 const MIN_PAGINAS_AUDITORIA = 3;

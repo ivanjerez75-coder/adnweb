@@ -2,7 +2,35 @@ import { describe, it, expect } from "vitest";
 import { tipologiasDesdeTipoNegocio, type Tipologia } from "../../../lib/engine/v3/clases";
 import { calcularScore, METODOLOGIA_DNA, PESOS_DNA, AVISO_SCORE, type DnaScore, type DimensionClave } from "../../../lib/engine/v3/score";
 import { construirMetricas } from "../../../lib/engine/v3/estimates";
-import type { Adn } from "../../../lib/engine/v3/sections/anatomia";
+import { CAMPOS_IDENTIDAD, type AdnBloque, type AdnCanal, type Anatomia, type ModeloEstado } from "../../../lib/engine/v3/sections/anatomia";
+
+/** Forma corta de prueba: lo que el DNA Score lee de la anatomía. */
+interface Adn {
+  queEs: AdnBloque | null;
+  propuestaValor: AdnBloque | null;
+  tipoNegocio: string;
+  lineas: Anatomia["lineas"];
+  modeloEstado: ModeloEstado;
+  canales: AdnCanal[];
+}
+const VACIO = { declara: null, interpretamos: null };
+function aAnatomia(a: Adn): Anatomia {
+  const identidad = Object.fromEntries(CAMPOS_IDENTIDAD.map((k) => [k, VACIO])) as Anatomia["identidad"];
+  identidad.producto = { declara: a.queEs, interpretamos: null };
+  identidad.beneficio = { declara: a.propuestaValor, interpretamos: null };
+  return {
+    nombre: "Facturo",
+    fraseResumen: { texto: "", evidencias: [] },
+    identidad,
+    tipologias: tipologiasDesdeTipoNegocio(a.tipoNegocio).map((tipo) => ({ tipo, certeza: "alta", explicacion: "", evidencias: [] })),
+    lineas: a.lineas,
+    monetizacion: [],
+    cliente: { explicito: null, necesidades: [], sectores: [], mensaje: null, segmentosAlternativos: [] },
+    canales: a.canales,
+    afirmaciones: [],
+    modeloEstado: a.modeloEstado,
+  };
+}
 import type { ComprobacionesWeb as Revision } from "../../../lib/engine/v3/sections/diagnostico";
 import { buildEvidence, type Evidence } from "../../../lib/engine/v3/evidence";
 import { computeFacts } from "../../../lib/engine/facts";
@@ -17,18 +45,17 @@ const lineaAdn = (over: Partial<Adn["lineas"][number]> = {}) => ({
   queOfrece: ["facturas"],
   publico: "",
   comoSeContrata: "",
-  ingresos: "",
   evidencias: [],
   ...over,
 });
-const mkAdn = (over: Partial<Adn> = {}): Adn => ({ queEs: null, propuestaValor: null, tipoNegocio: "saas", lineas: [lineaAdn()], comoFunciona: null, modeloEstado: "desconocido", canales: [], afirmaciones: [], ...over });
+const mkAdn = (over: Partial<Adn> = {}): Adn => ({ queEs: null, propuestaValor: null, tipoNegocio: "saas", lineas: [lineaAdn()], modeloEstado: "desconocido", canales: [], ...over });
 const checks = (v: string) => ({ propuestaClara: v, diceAQuien: v, muestraCasos: v, facilContacto: v, orientacionPrecio: v });
 const mkRev = (c: object[]): Revision =>
   ({ bien: [], problemas: [], lineas: c.map((ch, i) => ({ nombre: `L${i}`, checks: ch, evidenciasChecks: [] })) }) as unknown as Revision;
 
 function score(raw: RawData, o: { adn?: Adn; rev?: Revision | null; tipologias?: Tipologia[] } = {}): DnaScore {
   const adn = o.adn ?? mkAdn();
-  return calcularScore(raw, computeFacts(raw), [], o.tipologias ?? tipologiasDesdeTipoNegocio(adn.tipoNegocio), adn, o.rev ?? null, construirMetricas(raw, NOW), buildEvidence(raw, []));
+  return calcularScore(raw, computeFacts(raw), [], o.tipologias ?? tipologiasDesdeTipoNegocio(adn.tipoNegocio), aAnatomia(adn), o.rev ?? null, construirMetricas(raw, NOW), buildEvidence(raw, []));
 }
 const dim = (s: DnaScore, clave: DimensionClave) => s.dimensiones.find((d) => d.clave === clave)!;
 const ind = (s: DnaScore, d: DimensionClave, clave: string) => dim(s, d).indicadores.find((i) => i.clave === clave)!;

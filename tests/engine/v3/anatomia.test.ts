@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generarAnatomia, adnDesdeAnatomia } from "../../../lib/engine/v3/sections/anatomia";
+import { generarAnatomia } from "../../../lib/engine/v3/sections/anatomia";
 import { buildEvidence } from "../../../lib/engine/v3/evidence";
 import { SeccionVaciaError } from "../../../lib/engine/v3/errors";
 import { makeRaw, makeSite } from "../raw-fixture";
@@ -261,24 +261,5 @@ describe("generarAnatomia: prompt", () => {
     expect(p).toContain('"confirmado" | "inferido" | "desconocido"');
     expect(p).toMatch(/hipótesis/);
     expect(p).toContain("formulario de contacto");
-  });
-});
-
-describe("adnDesdeAnatomia", () => {
-  it("adapta la anatomía al Adn de las secciones antiguas", async () => {
-    const out = json({
-      tipologias: [{ tipo: "servicio_profesional", certeza: "alta", explicacion: "e", evidencias: ["p1-e1"] }],
-      identidad: {
-        ...base().identidad,
-        beneficio: { declara: null, interpretamos: { texto: "Ahorra tiempo", evidencias: ["p1-e1"] } },
-      },
-    });
-    const a = await generarAnatomia(sinPrecio, regSinPrecio, fake(out).deps);
-    const adn = adnDesdeAnatomia(a);
-    expect(adn.tipoNegocio).toBe("servicios");
-    expect(adn.queEs?.texto).toBe("Software de facturas");
-    expect(adn.propuestaValor?.texto).toBe("Ahorra tiempo");
-    expect(adn.lineas[0]).toMatchObject({ nombre: "Facturación", ingresos: "" });
-    expect(adn.modeloEstado).toBe(a.modeloEstado);
   });
 });

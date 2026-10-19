@@ -3,20 +3,27 @@ import { computeFacts } from "../facts";
 import type { PageGetter } from "../safe-fetch";
 import { extractSignals } from "../signals";
 import type { RawData } from "../types";
+import { evaluarCobertura } from "./cobertura";
 import { construirMetricas, escenarioIngresos, preciosPublicados, type Metrica } from "./estimates";
 import { buildEvidence } from "./evidence";
 import { limitarConcurrencia, type RunSectionOpts } from "./llm";
 import { calcularScore, type DnaScore } from "./score";
-import { adnDesdeAnatomia, generarAnatomia } from "./sections/anatomia";
+import { generarAnatomia } from "./sections/anatomia";
+import { generarCompetencia, type CompetidoresVerificados } from "./sections/competencia";
+import { generarDiagnostico } from "./sections/diagnostico";
 import { generarOportunidades } from "./sections/oportunidades";
 import { generarPlan } from "./sections/plan";
-import { generarCompetencia } from "./sections/competencia";
-import { generarDiagnostico } from "./sections/diagnostico";
 import { generarRendimiento } from "./sections/rendimiento";
+import { construirResumen } from "./sections/resumen";
 import { quitarIdsEvidencia } from "./sections/comun";
 
-/** Secciones escritas por la IA: sus textos pueden traer ids de evidencia sueltos ("[p8-e7]"). */
-const SECCIONES_IA: readonly SeccionClave[] = ["anatomia", "rendimiento", "competencia", "diagnostico", "oportunidades", "plan"];
+/** Las 9 secciones del informe v4. El DNA Score va dentro de rendimiento. */
+export const SECCIONES_V4 = ["datos", "anatomia", "rendimiento", "competencia", "diagnostico", "oportunidades", "plan", "resumen", "cobertura"] as const;
+export type SeccionClaveV4 = (typeof SECCIONES_V4)[number];
+export type EstadoSeccion = "pendiente" | "lista" | "error";
+
+/** Secciones con texto de la IA: pueden traer ids de evidencia sueltos ("[p8-e7]"). El resumen copia textos suyos. */
+const SECCIONES_IA: readonly SeccionClaveV4[] = ["anatomia", "rendimiento", "competencia", "diagnostico", "oportunidades", "plan", "resumen"];
 
 const esEvidencia = (v: object): boolean => "id" in v && "tipo" in v && "texto" in v && "fuente" in v;
 
@@ -31,19 +38,15 @@ export function limpiarTextos(v: unknown): unknown {
   return v;
 }
 
-/** El DNA Score va dentro de rendimiento. */
-export type SeccionClave = "datos" | "anatomia" | "rendimiento" | "competencia" | "diagnostico" | "oportunidades" | "plan";
-export type EstadoSeccion = "pendiente" | "lista" | "error";
-
-export interface ReportV3 {
-  version: 3;
+export interface ReportV4 {
+  version: 4;
   dominio: string;
   generadoEn: string;
-  secciones: Partial<Record<SeccionClave, unknown>>;
-  estados: Record<SeccionClave, EstadoSeccion>;
+  secciones: Partial<Record<SeccionClaveV4, unknown>>;
+  estados: Record<SeccionClaveV4, EstadoSeccion>;
 }
 
-export interface ReportV3Deps {
+export interface ReportV4Deps {
   models: JsonModel[];
   searchModels: JsonModel[];
   getPage: PageGetter;
@@ -51,7 +54,7 @@ export interface ReportV3Deps {
   runOpts?: RunSectionOpts;
 }
 
-export type OnSection = (clave: SeccionClave, contenido: unknown | null, estado: EstadoSeccion) => Promise<void>;
+export type OnSection = (clave: SeccionClaveV4, contenido: unknown | null, estado: EstadoSeccion) => Promise<void>;
 
 const MAX_IA_SIMULTANEAS = 3;
 
@@ -64,21 +67,21 @@ function limitar(models: JsonModel[], limit: <T>(fn: () => Promise<T>) => Promis
   return models.map((m) => ({ ...m, generate: (p, o) => limit(() => m.generate(p, o)) }));
 }
 
-export async function buildReportV3(raw: RawData, deps: ReportV3Deps, onSection: OnSection): Promise<ReportV3> {
+/**
+ * Fases (v4):
+ * 1. datos (código) · 2. anatomía (fatal) ·
+ * 3. en paralelo: rendimiento, competencia y diagnóstico. El diagnóstico arranca en cuanto competencia
+ *    sabe qué competidores están verificados (búsqueda + lectura), sin esperar a sus fichas ni a la
+ *    comparación: así esas dos llamadas y la del diagnóstico comparten el limitador a la vez ·
+ * 4. oportunidades (diagnóstico + comparación) · 5. plan · 6. resumen y cobertura (código).
+ */
+export async function buildReportV4(raw: RawData, deps: ReportV4Deps, onSection: OnSection): Promise<ReportV4> {
   const generadoEn = deps.now().toISOString();
-  const secciones: ReportV3["secciones"] = {};
-  const estados: ReportV3["estados"] = {
-    datos: "pendiente",
-    anatomia: "pendiente",
-    rendimiento: "pendiente",
-    competencia: "pendiente",
-    diagnostico: "pendiente",
-    oportunidades: "pendiente",
-    plan: "pendiente",
-  };
+  const secciones: ReportV4["secciones"] = {};
+  const estados = Object.fromEntries(SECCIONES_V4.map((k) => [k, "pendiente"])) as ReportV4["estados"];
 
   /** Registra la sección y avisa. Un fallo de onSection solo se propaga si `propagar` (anatomia). */
-  const emitir = async (clave: SeccionClave, bruto: unknown | null, estado: EstadoSeccion, propagar = false) => {
+  const emitir = async (clave: SeccionClaveV4, bruto: unknown | null, estado: EstadoSeccion, propagar = false) => {
     const contenido = bruto !== null && SECCIONES_IA.includes(clave) ? limpiarTextos(bruto) : bruto;
     estados[clave] = estado;
     if (contenido !== null && estado === "lista") secciones[clave] = contenido;
@@ -118,16 +121,10 @@ export async function buildReportV3(raw: RawData, deps: ReportV3Deps, onSection:
     throw e;
   }
   await emitir("anatomia", anatomia, "lista", true);
-  // Puente: el DNA Score aún lee la forma Adn.
-  const adn = adnDesdeAnatomia(anatomia);
   const tipologias = anatomia.tipologias.map((t) => t.tipo);
 
-  // Fase 3: en paralelo (el limitador reparte los huecos de IA).
-  // - competencia → diagnóstico (recibe el registro unido web + competidores) → score (código).
-  // - rendimiento lanza su llamada de IA en seguida y espera al score y a las fricciones para cerrar.
-  // - oportunidades sale en cuanto hay diagnóstico (no espera a rendimiento).
   /** Ejecuta una sección aislada: si falla queda en error y devuelve null. */
-  const tarea = async <T>(clave: SeccionClave, fn: () => Promise<T>, emitido: (v: T) => unknown = (v) => v): Promise<T | null> => {
+  const tarea = async <T>(clave: SeccionClaveV4, fn: () => Promise<T>, emitido: (v: T) => unknown = (v) => v): Promise<T | null> => {
     let valor: T;
     try {
       valor = await fn();
@@ -140,38 +137,53 @@ export async function buildReportV3(raw: RawData, deps: ReportV3Deps, onSection:
     return valor;
   };
 
+  // Fase 3: competencia avisa en cuanto tiene los verificados; si falla antes, el diagnóstico va sin ellos.
+  let avisarVerificados: (v: CompetidoresVerificados | null) => void = () => {};
+  const pVerificados = new Promise<CompetidoresVerificados | null>((r) => (avisarVerificados = r));
   const pCompetencia = tarea(
     "competencia",
-    () => generarCompetencia(raw, anatomia, reg, { searchModels, models, getPage: deps.getPage, runOpts: deps.runOpts, now: deps.now }),
+    () =>
+      generarCompetencia(raw, anatomia, reg, {
+        searchModels,
+        models,
+        getPage: deps.getPage,
+        runOpts: deps.runOpts,
+        now: deps.now,
+        onVerificados: (v) => avisarVerificados(v),
+      }),
     (v) => v.competencia,
   );
-  // Registro unido (web + competidores): diagnóstico y oportunidades pueden citar extractos de competidores.
-  const pRegTotal = pCompetencia.then((c) => (c ? new Map([...reg, ...c.regCompetidores]) : reg));
-  const pDiagnostico = pCompetencia.then(async (c) => {
-    const regTotal = await pRegTotal;
-    return tarea("diagnostico", () => generarDiagnostico(raw, anatomia, c?.competencia ?? null, regTotal, sectionDeps));
-  });
-  // Fase 4: score (código puro), en cuanto hay diagnóstico (o su fallo).
+  // Si no avisó (falló antes de leer las webs), se resuelve aquí; si ya avisó, esto no cambia nada.
+  void pCompetencia.then((c) => avisarVerificados(c ? { competidores: c.competencia.competidores, regCompetidores: c.regCompetidores } : null));
+
+  const pDiagnostico = pVerificados.then((v) =>
+    tarea("diagnostico", () =>
+      generarDiagnostico(raw, anatomia, v ? { competidores: v.competidores } : null, v ? new Map([...reg, ...v.regCompetidores]) : reg, sectionDeps),
+    ),
+  );
+  // El score (código puro) en cuanto hay diagnóstico (o su fallo): lo espera rendimiento.
   const pScore: Promise<DnaScore> = pDiagnostico.then((d) =>
-    calcularScore(raw, facts, signals, tipologias, adn, d ? { lineas: d.comprobaciones } : null, metricas, reg),
+    calcularScore(raw, facts, signals, tipologias, anatomia, d ? { lineas: d.comprobaciones } : null, metricas, reg),
   );
   pScore.catch(() => {}); // el fallo lo recoge rendimiento
+  const pRendimiento = tarea("rendimiento", () =>
+    generarRendimiento(raw, metricas, anatomia, pScore, sectionDeps, pDiagnostico.then((d) => d?.fricciones ?? [])),
+  );
 
-  // Fase 5: oportunidades, tras el diagnóstico (enlazan a sus hallazgos y a la comparación).
-  const pOportunidades = pDiagnostico.then(async (d) => {
-    const c = await pCompetencia;
-    return tarea("oportunidades", async () => generarOportunidades(raw, anatomia, d, c?.competencia ?? null, await pRegTotal, sectionDeps));
-  });
-  // Fase 6: plan, tras las oportunidades (si fallan, se apoya solo en debilidades y fricciones).
-  const pPlan = pOportunidades.then(async (o) => {
-    const d = await pDiagnostico;
-    return tarea("plan", () => generarPlan(o ?? [], d, sectionDeps));
-  });
+  // Fase 4: oportunidades, con el diagnóstico y la comparación (dónde gana / pierde).
+  const [diagnostico, competencia] = await Promise.all([pDiagnostico, pCompetencia]);
+  const regTotal = competencia ? new Map([...reg, ...competencia.regCompetidores]) : reg;
+  const pOportunidades = tarea("oportunidades", () => generarOportunidades(raw, anatomia, diagnostico, competencia?.competencia ?? null, regTotal, sectionDeps));
+  // Fase 5: plan, tras las oportunidades (si fallan, se apoya solo en debilidades y fricciones).
+  const pPlan = pOportunidades.then((o) => tarea("plan", () => generarPlan(o ?? [], diagnostico, sectionDeps)));
+  const [oportunidades] = await Promise.all([pOportunidades, pPlan, pRendimiento]);
 
-  await Promise.all([
-    pPlan,
-    tarea("rendimiento", () => generarRendimiento(raw, metricas, anatomia, pScore, sectionDeps, pDiagnostico.then((d) => d?.fricciones ?? []))),
-  ]);
+  // Fase 6: resumen y cobertura (código). La cobertura se evalúa sin el resumen, que la incluye.
+  const cobertura = evaluarCobertura({ raw, secciones, estados });
+  await tarea("resumen", async () =>
+    construirResumen(anatomia, diagnostico, oportunidades, metricas, cobertura, { dominio: raw.domain, fecha: generadoEn }),
+  );
+  await emitir("cobertura", cobertura, "lista");
 
-  return { version: 3, dominio: raw.domain, generadoEn, secciones, estados };
+  return { version: 4, dominio: raw.domain, generadoEn, secciones, estados };
 }

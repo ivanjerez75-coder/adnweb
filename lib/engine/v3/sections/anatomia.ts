@@ -1,6 +1,5 @@
 import { z } from "zod";
 import type { RawData } from "../../types";
-import { TIPOS_NEGOCIO_V2 } from "../../ai/schema";
 import { citar, type Evidence } from "../evidence";
 import { SeccionVaciaError } from "../errors";
 import { runSection, type SectionDeps } from "../llm";
@@ -446,59 +445,5 @@ export async function generarAnatomia(raw: RawData, reg: Reg, deps: SectionDeps)
     canales,
     afirmaciones: resolverAfirmaciones(ia.afirmaciones, reg),
     modeloEstado: calcularModeloEstado(ia.modeloEstado, lineas, canales, reg),
-  };
-}
-
-// ---------- Adaptador temporal para las secciones v3 (las sustituyen las Tareas 3-7) ----------
-
-export const TIPOS_NEGOCIO_V3 = [...TIPOS_NEGOCIO_V2, "organizacion_social", "negocio_local"] as const;
-export type TipoNegocioV3 = (typeof TIPOS_NEGOCIO_V3)[number];
-
-export interface AdnLinea {
-  nombre: string;
-  queOfrece: string[];
-  publico: string;
-  comoSeContrata: string;
-  ingresos: string;
-  evidencias: Evidence[];
-}
-/** Forma v3 que aún espera el DNA Score (puente hasta la Tarea 6). */
-export interface Adn {
-  queEs: AdnBloque | null;
-  propuestaValor: AdnBloque | null;
-  tipoNegocio: TipoNegocioV3;
-  lineas: AdnLinea[];
-  comoFunciona: AdnBloque | null;
-  modeloEstado: ModeloEstado;
-  canales: AdnCanal[];
-  afirmaciones: AdnBloque[];
-}
-
-const TIPO_NEGOCIO_DESDE_TIPOLOGIA: Record<Tipologia, TipoNegocioV3> = {
-  saas: "saas",
-  ecommerce: "ecommerce",
-  marketplace: "marketplace",
-  servicio_profesional: "servicios",
-  contenido: "contenido_ads",
-  freemium: "saas",
-  app: "app",
-  organizacion_social: "organizacion_social",
-  negocio_local: "negocio_local",
-  web_informativa: "otro",
-};
-
-const bloqueDe = (c: CampoIdentidad): AdnBloque | null =>
-  c.declara ?? (c.interpretamos ? { texto: c.interpretamos.texto, evidencias: c.interpretamos.evidencias } : null);
-
-export function adnDesdeAnatomia(a: Anatomia): Adn {
-  return {
-    queEs: bloqueDe(a.identidad.producto) ?? a.fraseResumen,
-    propuestaValor: bloqueDe(a.identidad.beneficio) ?? bloqueDe(a.identidad.argumento),
-    tipoNegocio: TIPO_NEGOCIO_DESDE_TIPOLOGIA[a.tipologias[0]?.tipo ?? "web_informativa"],
-    lineas: a.lineas.map((l) => ({ ...l, ingresos: "" })),
-    comoFunciona: a.fraseResumen,
-    modeloEstado: a.modeloEstado,
-    canales: a.canales,
-    afirmaciones: a.afirmaciones,
   };
 }
