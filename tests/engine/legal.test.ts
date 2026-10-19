@@ -126,7 +126,51 @@ describe("extractLegal", () => {
     expect(run("Sede social: nuestras oficinas centrales")).toBeNull();
     expect(run("Dirección: Calle Mayor 1, Madrid")).toBe("Calle Mayor 1, Madrid");
     expect(run("Sede social: Polígono Norte 3, 08001 Barcelona")).toBe("Polígono Norte 3, 08001 Barcelona");
-    expect(run("Domicilio social: en nuestras oficinas")).toBe("nuestras oficinas");
+    expect(run("Domicilio social: en nuestras oficinas")).toBeNull();
+  });
+
+  it("dirección: 'domicilio' sin calle ni código postal no es una dirección (caso real: semanales)", () => {
+    const run = (t: string) => extractLegal(home, null, new Map([[HOME, `<p>${t}</p>`]])).direccion;
+    expect(run("Ofrecemos atención a domicilio y apoyo semanales")).toBeNull();
+    expect(run("Domicilio: Rambla del Poblenou 3, 08005 Barcelona")).toBe("Rambla del Poblenou 3, 08005 Barcelona");
+  });
+
+  it("dirección: máximo 140 caracteres", () => {
+    const larga = "Calle Mayor 1, " + "x".repeat(200);
+    const d = extractLegal(home, null, new Map([[HOME, `<p>Domicilio: ${larga}</p>`]])).direccion;
+    expect(d === null || d.length <= 140).toBe(true);
+  });
+
+  it("enlaces legales en catalán (texto y ruta)", () => {
+    const h = `<a href="/ca/avis-legal/">Avís legal</a><a href="/ca/politica-de-privacitat/">Política de privacitat</a><a href="/ca/termes-i-condicions/">Termes i condicions</a>`;
+    const l = extractLegal(home, null, new Map([[HOME, h]]));
+    expect(l.avisoLegal).toBe("https://facturo.example/ca/avis-legal/");
+    expect(l.privacidad).toBe("https://facturo.example/ca/politica-de-privacitat/");
+    expect(l.condiciones).toBe("https://facturo.example/ca/termes-i-condicions/");
+    const t = `<a href="/p/1">Avís legal</a><a href="/p/2">Privacitat</a><a href="/p/3">Condicions d'ús</a>`;
+    const l2 = extractLegal(home, null, new Map([[HOME, t]]));
+    expect(l2).toMatchObject({ avisoLegal: "https://facturo.example/p/1", privacidad: "https://facturo.example/p/2", condiciones: "https://facturo.example/p/3" });
+  });
+
+  it("razón social: una entidad mencionada de pasada en una página normal no cuenta", () => {
+    const pasada = "<main><p>Colaboramos con Fundació Tutelar en el acompañamiento de personas mayores.</p></main>";
+    const l = extractLegal(home, null, new Map([[HOME, pasada], ["https://facturo.example/serveis", pasada]]));
+    expect(l.razonSocial).toBeNull();
+  });
+
+  it("razón social: vale cerca de una etiqueta (CIF, razón social, titular) en cualquier página", () => {
+    const l = extractLegal(home, null, new Map([[HOME, "<main><p>Raó social: Fundació Tutelar Ejemplo, con sede en Barcelona.</p></main>"]]));
+    expect(l.razonSocial).toBe("Fundació Tutelar Ejemplo");
+  });
+
+  it("razón social: vale en una página legal aunque no haya etiqueta", () => {
+    const l = extractLegal(home, null, new Map([[HOME, "<p>Hola</p>"], ["https://facturo.example/avis-legal/", "<p>Aquest web pertany a Associació Veïnal Nord.</p>"]]));
+    expect(l.razonSocial).toBe("Associació Veïnal Nord");
+  });
+
+  it("razón social: vale en el pie de página", () => {
+    const l = extractLegal(home, null, new Map([[HOME, "<main><p>Hola</p></main><footer><p>© Cooperativa Ejemplo, S.Coop.</p></footer>"]]));
+    expect(l.razonSocial).toBe("Cooperativa Ejemplo, S.Coop.");
   });
 
   it("teléfono: 'hotel' e 'Intel' no son etiquetas", () => {

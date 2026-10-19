@@ -47,19 +47,19 @@ const BLOCK_TAGS = "a, p, li, div, br, h1, h2, h3, h4, h5, h6, td, th, tr, secti
 const LINK_RULES: { field: "avisoLegal" | "privacidad" | "cookies" | "condiciones"; text: RegExp; path: RegExp }[] = [
   {
     field: "avisoLegal",
-    text: /aviso\s*legal|legal\s*notice|informaci[oó]n\s*legal|nota\s*legal|impressum/i,
-    path: /aviso[-_]?legal|legal[-_]?notice|\/legal(?:\/|$|\.)|impressum|imprint/i,
+    text: /aviso\s*legal|av[ií]s\s*legal|legal\s*notice|informaci[oó]n\s*legal|nota\s*legal|impressum/i,
+    path: /aviso[-_]?legal|avis[-_]?legal|legal[-_]?notice|\/legal(?:\/|$|\.)|impressum|imprint/i,
   },
   {
     field: "privacidad",
-    text: /privacidad|privacy|protecci[oó]n\s*de\s*datos|privacitat|rgpd|gdpr/i,
-    path: /privacidad|privacy|proteccion[-_]?de[-_]?datos|privacitat|rgpd|gdpr/i,
+    text: /privacidad|privacy|protecci[oó]n\s*de\s*datos|pol[ií]tica\s*de\s*privacitat|privacitat|protecci[oó]\s*de\s*dades|rgpd|gdpr/i,
+    path: /privacidad|privacy|proteccion[-_]?de[-_]?datos|politica[-_]?de[-_]?privacitat|privacitat|proteccio[-_]?de[-_]?dades|rgpd|gdpr/i,
   },
   { field: "cookies", text: /cookies?|galletas/i, path: /cookie/i },
   {
     field: "condiciones",
-    text: /condiciones|t[eé]rminos|\bterms\b|\btos\b|condicions/i,
-    path: /condiciones|terminos|terms|\btos\b|condicions/i,
+    text: /condiciones|t[eé]rminos|termes|\bterms\b|\btos\b|condicions/i,
+    path: /condiciones|terminos|termes|terms|\btos\b|condicions/i,
   },
 ];
 
@@ -73,15 +73,17 @@ const ENTITY_RE = new RegExp(
 );
 const CIF_LABEL_RE =
   /(?<![A-Za-z])(?:C\.?I\.?F\.?|N\.?I\.?F\.?|N\.?I\.?E\.?|VAT)[ \t:.\-/]*(?:ES[ \t-]?)?([A-Za-z]?[ .-]?\d(?:[ .-]?\d){6,7}[ .-]?[A-Za-z0-9])/gi;
-// "domicilio" basta; "sede social" y "dirección" solo cuentan si lo que sigue parece una dirección
+// Lo que sigue a "domicilio", "sede social" o "dirección" solo cuenta si parece una dirección
 // (calle/avenida/plaza… o código postal de 5 dígitos): evita "dirección de correo electrónico".
 const ADDRESS_RE =
   /(domicilio(?:\s+social)?|sede\s+social|direcci[oó]n)[ \t]*:?[ \t]*(?:es[ \t]+)?(?:en[ \t]+)?([^\n]{8,140}?)(?=[ \t][-–·|][ \t]|\.[ \t\n]|\.?\s*$|[ \t](?:CIF|NIF|Tel|Email|E-mail|Correo)\b)/gim;
-const STREET_RE = /^(?:calle|c\/|avda|avenida|plaza|pl\.|carrer|passeig)(?![\p{L}])|(?<!\d)\d{5}(?!\d)/iu;
+const STREET_RE = /(?<![\p{L}])(?:calle|c\/|avda\.?|avenida|plaza|pl\.|carrer|passeig|paseo|rambla|ronda|camino|travessera|pol[ií]gono)(?![\p{L}])|(?<!\d)\d{5}(?!\d)/iu;
+const MAX_DIRECCION = 140;
 function findAddress(text: string): string | null {
   for (const m of text.matchAll(ADDRESS_RE)) {
-    const trigger = m[1].toLowerCase();
-    if (trigger.startsWith("domicilio") || STREET_RE.test(m[2].trim())) return m[2].trim();
+    // Siempre hace falta un patrón de calle o un código postal de 5 dígitos, también tras "domicilio".
+    const addr = m[2].trim().slice(0, MAX_DIRECCION).trim();
+    if (STREET_RE.test(addr)) return addr;
   }
   return null;
 }
@@ -93,6 +95,8 @@ interface Doc {
   url: string;
   $: cheerio.CheerioAPI | null;
   text: string;
+  /** Texto del pie de página (si el HTML lo tiene). */
+  footer: string;
 }
 
 function docText($: cheerio.CheerioAPI): string {
@@ -101,7 +105,7 @@ function docText($: cheerio.CheerioAPI): string {
   return $("body").text().replace(/[ \t\r\f\v]+/g, " ").replace(/ ?\n[ \n]*/g, "\n").trim();
 }
 
-const LEGAL_URL_RE = /aviso[-_]?legal|legal|privacidad|privacy|terms|condiciones|cookies/i;
+const LEGAL_URL_RE = /aviso[-_]?legal|avis[-_]?legal|legal|privacidad|privacitat|privacy|terms|termes|condiciones|condicions|cookies/i;
 const pathOf = (url: string) => {
   try {
     return new URL(url).pathname;
@@ -109,6 +113,30 @@ const pathOf = (url: string) => {
     return url;
   }
 };
+
+const RAZON_LABEL_RE = /(?<![A-Za-z])(?:C\.?I\.?F\.?|N\.?I\.?F\.?|N\.?I\.?E\.?|raz[oó]n\s+social|ra[oó]\s+social|titular)(?![\p{L}])/iu;
+const LABEL_WINDOW = 200;
+const asGlobal = (re: RegExp) => new RegExp(re.source, re.flags.includes("g") ? re.flags : re.flags + "g");
+const COMPANY_G = asGlobal(COMPANY_RE);
+const ENTITY_G = asGlobal(ENTITY_RE);
+
+/**
+ * Una razón social solo se acepta si la página es legal, el nombre está en el pie de página
+ * o aparece a menos de ~200 caracteres de una etiqueta (CIF/NIF, razón social, titular).
+ * Una entidad nombrada de pasada ("colaboramos con Fundació X") no identifica al negocio.
+ */
+function findRazonSocial(d: Doc): string | null {
+  const legalPage = LEGAL_URL_RE.test(pathOf(d.url));
+  for (const re of [COMPANY_G, ENTITY_G]) {
+    for (const m of d.text.matchAll(re)) {
+      const name = m[1].replace(/[ \t]+/g, " ").trim();
+      const i = m.index ?? 0;
+      const near = d.text.slice(Math.max(0, i - LABEL_WINDOW), i + m[0].length + LABEL_WINDOW);
+      if (legalPage || RAZON_LABEL_RE.test(near) || d.footer.includes(name)) return name;
+    }
+  }
+  return null;
+}
 
 /** Identidad legal declarada en la web: enlaces legales, CIF válido, razón social, contacto. Pura. */
 export function extractLegal(home: SiteData | null, paginas: PageDoc[] | null, htmlByUrl: Map<string, string>): LegalData {
@@ -146,12 +174,13 @@ export function extractLegal(home: SiteData | null, paginas: PageDoc[] | null, h
     if (!isOwn(url)) continue;
     seen.add(url);
     const $ = cheerio.load(html);
-    docs.push({ url, $, text: docText($) });
+    const text = docText($);
+    docs.push({ url, $, text, footer: $("footer").text().replace(/\s+/g, " ").trim() });
   }
   const plain = (url: string, text: string) => {
     if (seen.has(url) || !text.trim()) return;
     seen.add(url);
-    docs.push({ url, $: null, text });
+    docs.push({ url, $: null, text, footer: "" });
   };
   for (const p of home?.pages ?? []) plain(p.url, p.text);
   for (const p of paginas ?? []) plain(p.url, p.extractos.map((e) => e.cita).join("\n"));
@@ -206,8 +235,8 @@ export function extractLegal(home: SiteData | null, paginas: PageDoc[] | null, h
   // Razón social, dirección y contactos en texto.
   for (const d of ordered) {
     if (!out.razonSocial) {
-      const m = d.text.match(COMPANY_RE) ?? d.text.match(ENTITY_RE);
-      if (m) set("razonSocial", m[1].replace(/[ \t]+/g, " ").trim(), d.url);
+      const name = findRazonSocial(d);
+      if (name) set("razonSocial", name, d.url);
     }
     if (!out.direccion) {
       const addr = findAddress(d.text);
