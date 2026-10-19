@@ -8,6 +8,8 @@ import { fetchPageSpeed } from "./sources/pagespeed";
 import { fetchRdap } from "./sources/rdap";
 import { fetchWayback } from "./sources/wayback";
 import { fetchSitemap } from "./sources/sitemap";
+import { fetchPages, selectPages } from "./sources/pages";
+import { extractLegal } from "./sources/legal";
 import { probePaths } from "./sources/paths";
 import { fetchJobs, jobCandidates } from "./sources/jobs";
 import { fetchAppStore } from "./sources/appstore";
@@ -15,7 +17,7 @@ import { fetchWikidata } from "./sources/wikidata";
 import { fetchDns } from "./sources/dns";
 import { fetchHackerNews } from "./sources/hackernews";
 import { radarRank, validRank } from "./anchors";
-import { resolveDomains } from "./redirect";
+import { registrableDomain, resolveDomains } from "./redirect";
 
 export class InsufficientDataError extends Error {
   constructor(message = "No hemos podido reunir datos suficientes sobre esta web.") {
@@ -39,6 +41,10 @@ export interface CollectDeps {
 export type StepReporter = (step: string) => void | Promise<void>;
 
 const DEFAULT_DEADLINE_MS = 40_000;
+/** Tope de la lectura en profundidad: lo que no llegue se descarta, el resto sigue dentro del plazo total. */
+const PAGES_TIMEOUT_MS = 25_000;
+/** Tope de HTML crudo guardado (transitorio) para extraer la identidad legal. */
+const MAX_HTML_PAGES = 20;
 
 const defaultSleep = (ms: number) =>
   new Promise<void>((resolve) => {
@@ -69,8 +75,15 @@ export async function collect(
   const notApplicable = <T>(): Promise<Outcome<T>> => Promise.resolve({ status: "no_aplica" });
 
   // Lo que no depende de la URL final arranca ya.
-  const site = run(fetchSite(input.url, deps.getPage));
-  const pagespeed = run(fetchPageSpeed(input.url, deps.fetcher, deps.pagespeedKey));
+  // HTML crudo de la home y las páginas leídas, solo en memoria: alimenta extractLegal y no se guarda.
+  const htmlByUrl = new Map<string, string>();
+  const recordingGetPage: PageGetter = async (url) => {
+    const page = await deps.getPage(url);
+    if (page.status < 400 && htmlByUrl.size < MAX_HTML_PAGES && /<[a-z]/i.test(page.text)) htmlByUrl.set(page.url || url, page.text);
+    return page;
+  };
+  const site = run(fetchSite(input.url, recordingGetPage));
+  const pagespeed = run(fetchPageSpeed(input.url, deps.fetcher, now, deps.pagespeedKey));
   const wayback = run(fetchWayback(input.domain, deps.fetcher, now));
 
   await onStep("Leyendo la web…");
@@ -90,20 +103,58 @@ export async function collect(
   const baseUrl = ownSite?.finalUrl ?? input.url;
 
   await onStep("Analizando tráfico y presencia…");
-  const [trancoR, radarR, rdapR, dnsR, hnR, sitemapR, rutasR, empleoR, appR, wikiR, pagespeedR, waybackR] = await Promise.all([
+  // El sitemap de la página final sería el de la plataforma.
+  const sitemapP = foreign ? notApplicable<never>() : run(fetchSitemap(baseUrl, deps.getPage, now));
+  // La lectura en profundidad usa las URLs candidatas del sitemap, pero no espera al resto de fuentes.
+  const paginasP = ownSite
+    ? sitemapP.then((sm) =>
+        run(
+          (async () => {
+            const docs = await fetchPages(selectPages(ownSite, sm.status === "ok" ? sm.value : null), recordingGetPage, {
+              timeoutMs: PAGES_TIMEOUT_MS,
+            });
+            if (docs.length === 0) throw new Error("No se pudo leer ninguna página");
+            return docs;
+          })(),
+        ),
+      )
+    : notApplicable<never>();
+  // Identidad legal: tras la lectura en profundidad; si el aviso legal no se leyó, se pide una página más.
+  const legalP = ownSite
+    ? paginasP.then((pg) =>
+        run(
+          (async () => {
+            const docs = pg.status === "ok" ? pg.value : null;
+            let legal = extractLegal(ownSite, docs, htmlByUrl);
+            const aviso = legal.avisoLegal;
+            if (aviso && !htmlByUrl.has(aviso) && !legal.cif && registrableDomain(new URL(aviso).hostname) === registrableDomain(new URL(ownSite.finalUrl).hostname)) {
+              try {
+                await recordingGetPage(aviso);
+                legal = extractLegal(ownSite, docs, htmlByUrl);
+              } catch {
+                // sin aviso legal legible: nos quedamos con lo de la home
+              }
+            }
+            return legal;
+          })(),
+        ),
+      )
+    : notApplicable<never>();
+  const [trancoR, radarR, rdapR, dnsR, hnR, sitemapR, rutasR, empleoR, appR, wikiR, pagespeedR, waybackR, paginasR, legalR] = await Promise.all([
     run(fetchTranco(rootDomain, deps.fetcher)),
     deps.radarToken ? run(fetchRadar(rootDomain, deps.fetcher, deps.radarToken)) : notApplicable<never>(),
     run(fetchRdap(rootDomain, deps.fetcher)),
     run(fetchDns(rootDomain, deps.fetcher)),
     run(fetchHackerNews(rootDomain, deps.fetcher, now)),
-    // El sitemap de la página final sería el de la plataforma.
-    foreign ? notApplicable<never>() : run(fetchSitemap(baseUrl, deps.getPage, now)),
+    sitemapP,
     run(probePaths(baseUrl, deps.getPage)),
     run(fetchJobs(jobCandidates(ownSite, rootDomain), deps.fetcher)),
     run(fetchAppStore({ appIds: ownSite?.appStoreIds ?? [], companyName, domains }, deps.fetcher)),
     run(fetchWikidata({ companyName, domains }, deps.fetcher)),
     pagespeed,
     wayback,
+    paginasP,
+    legalP,
   ]);
 
   const fuentes = {} as Record<CollectedSource, SourceStatus>;
@@ -114,6 +165,7 @@ export async function collect(
 
   const pageRead = take(siteR, "web", "tecnologias");
   const raw: RawData = {
+    version: 3,
     url: input.url,
     domain: input.domain,
     rootDomain,
@@ -135,6 +187,8 @@ export async function collect(
     wikidata: take(wikiR, "wikidata"),
     dns: take(dnsR, "dns"),
     hackernews: take(hnR, "hackernews"),
+    paginas: take(paginasR, "paginas"),
+    legal: take(legalR, "legal"),
     fuentes,
     unavailable: [],
   };
@@ -145,6 +199,8 @@ export async function collect(
     fuentes.pagespeed = "no_aplica";
     fuentes.tecnologias = "no_aplica";
   }
+  // Sin ninguna puntuación (p. ej. cuota agotada): se conserva el error pero la fuente cuenta como caída.
+  if (raw.pagespeed?.error && raw.pagespeed.mobile === null && raw.pagespeed.desktop === null) fuentes.pagespeed = "fallo";
   raw.unavailable = (Object.keys(fuentes) as CollectedSource[]).filter((k) => fuentes[k] === "fallo");
 
   const hasTraffic = validRank(raw.tranco?.rank) !== null || radarRank(raw.radar) !== null;

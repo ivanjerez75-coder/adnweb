@@ -16,7 +16,7 @@ describe("presence", () => {
   });
 });
 
-const sitemap = (sections: ("blog" | "precios" | "empleo")[], complete = true) => ({ urlCount: 100, sections, languages: [], lastModified: null, recentBlogPosts: 0, complete });
+const sitemap = (sections: ("blog" | "precios" | "empleo")[], complete = true) => ({ urlCount: 100, sections, languages: [], lastModified: null, recentBlogPosts: 0, complete, candidatas: [] as string[] });
 
 describe("computeFacts", () => {
   it("caso Notion: la home no enlaza el blog pero el sitemap sí → blog = si", () => {

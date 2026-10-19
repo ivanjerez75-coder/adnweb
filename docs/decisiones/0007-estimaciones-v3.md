@@ -1,0 +1,14 @@
+# 0007 — Métricas v3.1: registros etiquetados, sin cifras inventadas
+
+- **Fecha:** 2026-10-18 (sustituye a la versión de estimaciones de v3).
+- **Decisión:** cada cifra del informe es un registro `Metrica` calculado por código (no por la IA), con su tipo (`observado` / `estimado` / `hipotetico`), fuente, metodología, confianza con su motivo, limitaciones, supuestos y estado (`disponible` / `insuficiente` / `error` / `no_aplica`). Una métrica sin datos no se omite: aparece con su estado. Código en `lib/engine/v3/estimates.ts`.
+- **Visitas mensuales:** siempre `insuficiente`, valor nulo, "No hay datos fiables disponibles". Ninguna fuente gratuita mide visitas, y un ranking nunca se convierte en visitas (se elimina la tabla ranking → visitas de la decisión 0003 para el informe v3).
+- **Popularidad:** el puesto en Tranco, la franja de Cloudflare Radar y los datos de usuarios reales de Chrome (CrUX, vía PageSpeed) son `observado` con confianza alta *para lo que miden*; sus limitaciones dicen lo que no miden ("No mide visitas").
+- **PageSpeed:** móvil, escritorio, accesibilidad, SEO técnico y buenas prácticas, `observado`, alta. Si PageSpeed falla (cuota, sin clave), esas métricas salen con estado `error` y el motivo; el informe no falla.
+- **Ingresos publicados:** solo si Wikidata los da, con importe, moneda y año originales. Confianza por antigüedad: alta hasta 2 años, media hasta 5, baja después o sin año. Si no hay dato: `insuficiente`, "No estimable". No se usan ni empleados ni conversiones.
+- **Escenario hipotético de ingresos:** solo si la web publica un precio verificable. Clientes (100, 500 y 1.000) × mediana del precio mensual publicado. Los precios anuales se dividen entre 12; los de periodicidad desconocida se tratan como mensuales y se declara el supuesto "periodicidad desconocida: se trata como mensual"; los pagos únicos se excluyen. Tipo `hipotetico`, confianza baja, siempre con el texto "Escenario ilustrativo: no son los ingresos de la empresa".
+- **Valoración:** siempre `no_aplica`, "No estimable con los datos disponibles" (haría falta ingresos, márgenes, crecimiento y comparables). Se eliminan los múltiplos por tipo de negocio.
+- **Precios publicados:** cada uno con importe, moneda original, periodicidad (si consta: "/mes", "al mes", "/mo", "month", "/año", "anual", "year"), plan (si consta), URL y texto. Un precio anunciado no es un ingreso medio por cliente.
+- **Evidencias:** el registro de evidencias gana `dato:cif`, `dato:razon_social`, `dato:aviso_legal`, `dato:privacidad`, `dato:cookies`, `dato:contacto`, `dato:jsonld_org`, `dato:pagespeed`, `dato:crux` y `dato:precio:<n>`, cada uno solo si existe su valor.
+- **Por qué:** una cifra sin fuente ni método no se puede defender; un informe más pequeño con pruebas defendibles vale más que uno completo con cifras inventadas.
+- **Pendiente:** el escenario usa un tipo de cambio fijo para USD y GBP (`FX_TO_EUR`); el plan de cada precio aún no se detecta.

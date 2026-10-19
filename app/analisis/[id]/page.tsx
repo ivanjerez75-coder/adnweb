@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { repoDelUsuario } from "@/lib/server/auth/usuario";
 import { Progreso } from "./progreso";
+import { Secciones } from "./secciones";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -13,6 +14,21 @@ async function Contenido({ params }: { params: Promise<{ id: string }> }) {
   const a = await repo.obtener(id);
   if (!a) notFound();
 
+  if (a.version === 3 && a.estado !== "error") {
+    return (
+      <main>
+        <h1>{a.dominio}</h1>
+        <Secciones
+          id={a.id}
+          createdAt={a.createdAt}
+          inicial={{ estado: a.estado, pasoActual: a.pasoActual, secciones: a.secciones }}
+        />
+        <p>
+          <Link href="/dashboard">Volver al panel</Link>
+        </p>
+      </main>
+    );
+  }
   if (a.estado === "procesando") {
     return (
       <main>
@@ -32,19 +48,13 @@ async function Contenido({ params }: { params: Promise<{ id: string }> }) {
       </main>
     );
   }
+  // Informe antiguo (version 2).
   const informe = a.informe;
   return (
     <main>
       <h1>{a.dominio}</h1>
-      {informe ? (
-        <>
-          <p>{informe.resumen.queHace}</p>
-          <p>Puntuación: {informe.veredicto.puntuacion}</p>
-          <pre>{JSON.stringify(informe, null, 2)}</pre>
-        </>
-      ) : (
-        <p>El informe no está disponible.</p>
-      )}
+      <p>Informe de una versión anterior</p>
+      {informe ? <p>{informe.resumen.queHace}</p> : <p>El informe no está disponible.</p>}
       <p>
         <Link href="/dashboard">Volver al panel</Link>
       </p>

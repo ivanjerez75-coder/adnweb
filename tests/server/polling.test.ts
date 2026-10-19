@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decidirSondeo, siguienteSondeo } from "@/lib/server/analyses/polling";
+import { decidirSondeo, siguienteSondeo } from "@/lib/shared/polling";
 
 describe("siguienteSondeo", () => {
   it("2000 ms en los primeros 30 intentos", () => {

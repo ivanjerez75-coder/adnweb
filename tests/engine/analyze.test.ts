@@ -4,7 +4,7 @@ import { buildReport, clampIngresos } from "../../lib/engine/report";
 import { InvalidUrlError } from "../../lib/engine/url";
 import { fakeFetcher, fakeGetPage, NOW } from "./fake-network";
 import { validAiOutput } from "./ai-fixture";
-import { makeRaw, makeSite } from "./raw-fixture";
+import { makeRaw, makeSite, ps } from "./raw-fixture";
 import type { JsonModel } from "../../lib/engine/ai/providers";
 
 const fakeModel: JsonModel = { name: "fake", generate: async () => JSON.stringify(validAiOutput) };
@@ -12,7 +12,7 @@ const fakeModel: JsonModel = { name: "fake", generate: async () => JSON.stringif
 describe("buildReport", () => {
   const raw = makeRaw({
     site: makeSite({ hasAppLinks: false }),
-    pagespeed: { mobile: 30, desktop: 90 },
+    pagespeed: ps(30, 90),
     tranco: { rank: 60000, trend: "baja" },
   });
 

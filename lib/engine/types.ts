@@ -17,7 +17,9 @@ export type SourceId =
   | "appstore"
   | "wikidata"
   | "dns"
-  | "hackernews";
+  | "hackernews"
+  | "paginas"
+  | "legal";
 
 export type SignalPolarity = "positiva" | "negativa";
 
@@ -81,6 +83,18 @@ export interface SiteData {
   companyName: string | null;
   jobBoards: JobBoardRef[];
   appStoreIds: string[];
+  /** Datos de la organización declarados en JSON-LD (schema.org). null si no hay ninguno. */
+  jsonLdOrg: JsonLdOrg | null;
+  /** Enlaces del menú de la portada, en orden (las páginas que la propia web considera clave). */
+  navLinks: string[];
+}
+
+export interface JsonLdOrg {
+  name?: string;
+  legalName?: string;
+  address?: string;
+  foundingDate?: string;
+  sameAs?: string[];
 }
 
 export type Trend = "sube" | "estable" | "baja";
@@ -100,6 +114,34 @@ export interface RadarData {
 export interface PageSpeedData {
   mobile: number | null;
   desktop: number | null;
+  accesibilidad: number | null;
+  buenasPracticas: number | null;
+  seo: number | null;
+  /** Datos reales de usuarios de Chrome (CrUX). null si Google no tiene datos suficientes. */
+  campo: {
+    fuente: "url" | "origen";
+    lcpMs: number | null;
+    inpMs: number | null;
+    cls: number | null;
+    categoria: "FAST" | "AVERAGE" | "SLOW" | null;
+  } | null;
+  obtenidoEn: string;
+  error?: string;
+}
+
+/** Identidad legal que las webs españolas deben publicar (aviso legal, CIF, razón social…). */
+export interface LegalData {
+  avisoLegal: string | null;
+  privacidad: string | null;
+  cookies: string | null;
+  condiciones: string | null;
+  cif: string | null;
+  razonSocial: string | null;
+  email: string | null;
+  telefono: string | null;
+  direccion: string | null;
+  /** Campo → URL donde se encontró. */
+  fuentes: Record<string, string>;
 }
 
 export interface RdapData {
@@ -114,7 +156,25 @@ export interface WaybackData {
 
 export type CollectedSource = Exclude<SourceId, "mercado">;
 
+/** Pasaje literal de una página (≤ 200 caracteres), citable por id: "p3-e2". */
+export interface Extract {
+  id: string;
+  cita: string;
+}
+
+/** Página propia leída en profundidad. Ids "p1"…"p15". */
+export interface PageDoc {
+  id: string;
+  url: string;
+  titulo: string;
+  /** true si la página tiene meta description no vacía. */
+  tieneDescripcion: boolean;
+  extractos: Extract[];
+}
+
 export interface RawData {
+  /** Versión del esquema de datos recogidos. */
+  version: 3;
   url: string;
   domain: string;
   /**
@@ -146,6 +206,9 @@ export interface RawData {
   wikidata: WikidataData | null;
   dns: DnsData | null;
   hackernews: HackerNewsData | null;
+  /** Páginas propias leídas en profundidad. null si no aplica o no se pudo. */
+  paginas: PageDoc[] | null;
+  legal: LegalData | null;
   fuentes: Record<CollectedSource, SourceStatus>;
   /** Fuentes con estado "fallo". */
   unavailable: CollectedSource[];
@@ -184,6 +247,8 @@ export interface SitemapData {
    * un tope) y tiene URLs. Si es false, urlCount es un mínimo y una sección ausente no prueba nada.
    */
   complete: boolean;
+  /** Hasta 100 URLs del dominio propio, con las secciones de negocio primero. */
+  candidatas: string[];
 }
 
 export interface PathProbeData {

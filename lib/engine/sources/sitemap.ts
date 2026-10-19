@@ -1,12 +1,14 @@
 import type { FetchedPage, PageGetter } from "../safe-fetch";
 import type { SitemapData, SitemapSection } from "../types";
-import { sectionOf } from "./sections";
+import { isPriorityPath, sectionOf } from "./sections";
+import { registrableDomain } from "../redirect";
 
 const MAX_SITEMAP_FILES = 4; // raíz + 3 hijos
 const MAX_TOTAL_BYTES = 5_000_000;
 const MAX_URLS = 50_000;
 /** El PageGetter corta las respuestas en 2 MB: un archivo de ese tamaño puede venir incompleto. */
 const POSSIBLY_TRUNCATED_CHARS = 1_999_000;
+const MAX_CANDIDATES = 100;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const SECTIONS: SitemapSection[] = ["blog", "ayuda", "precios", "empleo", "docs"];
@@ -125,7 +127,10 @@ export function sitemapsFromRobots(robots: string, origin: string): string[] {
  * Resume las URLs leídas. `complete` indica que se leyó el sitemap entero (sin archivos
  * pendientes, fallidos, .gz ni cortados por un tope); solo entonces una ausencia prueba algo.
  */
-export function summarizeSitemap(urls: SitemapUrl[], now: Date, complete = true): SitemapData {
+export function summarizeSitemap(urls: SitemapUrl[], now: Date, complete = true, ownRoot?: string): SitemapData {
+  const priority: string[] = [];
+  const rest: string[] = [];
+  const seenUrls = new Set<string>();
   const sections = new Set<SitemapSection>();
   const languages = new Set<string>();
   let latest = 0;
@@ -134,7 +139,15 @@ export function summarizeSitemap(urls: SitemapUrl[], now: Date, complete = true)
   for (const u of urls) {
     let path: string;
     try {
-      path = new URL(u.loc).pathname;
+      const parsed = new URL(u.loc);
+      path = parsed.pathname;
+      parsed.hash = "";
+      const href = parsed.toString();
+      const own = !ownRoot || registrableDomain(parsed.hostname) === ownRoot;
+      if ((parsed.protocol === "http:" || parsed.protocol === "https:") && own && !seenUrls.has(href)) {
+        seenUrls.add(href);
+        (isPriorityPath(path) ? priority : rest).push(href);
+      }
     } catch {
       continue;
     }
@@ -164,6 +177,7 @@ export function summarizeSitemap(urls: SitemapUrl[], now: Date, complete = true)
     lastModified: latest ? new Date(latest).toISOString().slice(0, 10) : null,
     recentBlogPosts,
     complete: complete && urls.length > 0,
+    candidatas: [...priority, ...rest].slice(0, MAX_CANDIDATES),
   };
 }
 
@@ -245,5 +259,5 @@ export async function fetchSitemap(siteUrl: string, get: PageGetter, now: Date):
     if (requests > 0 && failures === requests) throw new Error("No se pudo leer el sitemap");
     return null;
   }
-  return summarizeSitemap(urls, now, complete);
+  return summarizeSitemap(urls, now, complete, registrableDomain(new URL(siteUrl).hostname));
 }

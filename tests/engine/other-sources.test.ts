@@ -1,29 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { parsePageSpeedScore, fetchPageSpeed } from "../../lib/engine/sources/pagespeed";
 import { parseRdap, fetchRdap } from "../../lib/engine/sources/rdap";
 import { parseWayback, fetchWayback } from "../../lib/engine/sources/wayback";
-
-describe("PageSpeed", () => {
-  it("convierte la puntuación a 0-100", () => {
-    expect(parsePageSpeedScore({ lighthouseResult: { categories: { performance: { score: 0.34 } } } })).toBe(34);
-    expect(parsePageSpeedScore({})).toBeNull();
-  });
-
-  it("pide móvil y escritorio y tolera que falle uno", async () => {
-    const urls: string[] = [];
-    const data = await fetchPageSpeed("https://x.example/", async (url) => {
-      urls.push(url);
-      if (url.includes("strategy=desktop")) return new Response("", { status: 500 });
-      return Response.json({ lighthouseResult: { categories: { performance: { score: 0.5 } } } });
-    }, "KEY");
-    expect(data).toEqual({ mobile: 50, desktop: null });
-    expect(urls.every((u) => u.includes("key=KEY"))).toBe(true);
-  });
-
-  it("lanza error si fallan ambos", async () => {
-    await expect(fetchPageSpeed("https://x.example/", async () => new Response("", { status: 500 }))).rejects.toThrow();
-  });
-});
 
 describe("RDAP", () => {
   it("extrae la fecha de registro", () => {

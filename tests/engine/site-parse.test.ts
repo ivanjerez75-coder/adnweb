@@ -296,3 +296,37 @@ describe("buildSiteData — datos de empresa", () => {
     expect(site.appStoreIds).toEqual(["1", "2"]);
   });
 });
+
+describe("JSON-LD Organization", () => {
+  const ld = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        name: "Acme",
+        legalName: "Acme Soluciones S.L.",
+        foundingDate: "2012-05-01",
+        address: { "@type": "PostalAddress", streetAddress: "Calle Mayor 1", postalCode: "28013", addressLocality: "Madrid", addressCountry: "ES" },
+        sameAs: ["https://twitter.com/acme", "https://www.linkedin.com/company/acme"],
+      },
+    ],
+  };
+  const html = `<html><head><title>Acme</title><script type="application/ld+json">${JSON.stringify(ld)}</script></head><body></body></html>`;
+
+  it("extrae nombre legal, dirección, fundación y sameAs", () => {
+    const site = buildSiteData("https://acme.example/", [parsePage(html, "https://acme.example/")], []);
+    expect(site.jsonLdOrg).toEqual({
+      name: "Acme",
+      legalName: "Acme Soluciones S.L.",
+      address: "Calle Mayor 1, 28013, Madrid, ES",
+      foundingDate: "2012-05-01",
+      sameAs: ["https://twitter.com/acme", "https://www.linkedin.com/company/acme"],
+    });
+  });
+
+  it("acepta la dirección como texto y es null sin Organization", () => {
+    const text = `<script type="application/ld+json">{"@type":"Organization","address":"Gran Vía 5, Madrid"}</script>`;
+    expect(buildSiteData("https://a.example/", [parsePage(text, "https://a.example/")], []).jsonLdOrg).toEqual({ address: "Gran Vía 5, Madrid" });
+    expect(buildSiteData("https://a.example/", [parsePage("<html></html>", "https://a.example/")], []).jsonLdOrg).toBeNull();
+  });
+});

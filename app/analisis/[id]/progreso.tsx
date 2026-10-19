@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { decidirSondeo, siguienteSondeo } from "@/lib/server/analyses/polling";
+import { decidirSondeo, siguienteSondeo } from "@/lib/shared/polling";
 
 export function Progreso({ id }: { id: string }) {
   const router = useRouter();

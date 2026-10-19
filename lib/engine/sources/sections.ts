@@ -1,6 +1,12 @@
 /** Segmento de idioma que puede preceder a la sección: "es", "en-us". */
 const LANG_PREFIX_RE = /^[a-z]{2}(-[a-z]{2})?$/;
 
+/** Prefijo de idioma de una ruta ("/es/precios" → "es"), o null si no lo tiene. */
+export function langPrefixOf(pathname: string): string | null {
+  const first = pathname.toLowerCase().split("/").filter(Boolean)[0] ?? "";
+  return LANG_PREFIX_RE.test(first) ? first : null;
+}
+
 export const SECTION_WORDS = {
   blog: ["blog", "blogs", "noticias", "news", "articulos", "recursos"],
   ayuda: ["help", "ayuda", "support", "soporte", "faq"],
@@ -37,6 +43,46 @@ export function sectionOf(pathname: string): { section: SectionName; rest: strin
     }
   }
   return null;
+}
+
+/** Secciones de negocio que merece la pena leer en profundidad (primer segmento, o el segundo tras un idioma). */
+const PRIORITY_WORDS: readonly string[] = [
+  // es / en
+  "servicios", "services", "productos", "products", "soluciones", "solutions", "empresas", "about",
+  "about-us", "nosotros", "sobre-nosotros", "quienes-somos", "precios", "pricing", "planes", "casos",
+  "clientes", "customers", "contacto", "contact", "empleo", "careers",
+  // ca
+  "serveis", "productes", "solucions", "empreses", "qui-som", "nosaltres", "sobre-nosaltres", "preus",
+  "contacte", "ocupacio", "treballa-amb-nosaltres",
+  // fr / pt / it / de
+  "produits", "entreprises", "a-propos", "qui-sommes-nous", "tarifs", "servicos", "produtos", "solucoes",
+  "sobre", "precos", "contato", "servizi", "prodotti", "soluzioni", "chi-siamo", "prezzi", "contatti",
+  "leistungen", "produkte", "losungen", "ueber-uns", "uber-uns", "preise", "kontakt",
+];
+/** Palabras que, dentro de un slug corto ("serveis-per-a-empreses"), marcan una página de negocio. */
+const PRIORITY_TOKENS: readonly string[] = [
+  "servicios", "services", "serveis", "servizi", "servicos", "productos", "products", "productes", "produits",
+  "soluciones", "solutions", "solucions", "empresas", "empreses", "entreprises", "precios", "preus", "pricing",
+];
+const MAX_TOKENS_SLUG = 4;
+
+const sinAcentos = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+export function isPriorityPath(pathname: string): boolean {
+  let ruta = pathname;
+  try {
+    ruta = decodeURIComponent(pathname);
+  } catch {
+    // ruta mal codificada: se usa tal cual
+  }
+  const segments = sinAcentos(ruta.toLowerCase()).split("/").filter(Boolean);
+  const candidates = LANG_PREFIX_RE.test(segments[0] ?? "") ? [0, 1] : [0];
+  return candidates.some((i) => {
+    const segment = segments[i] ?? "";
+    if (PRIORITY_WORDS.includes(segment)) return true;
+    const tokens = segment.split("-");
+    return tokens.length <= MAX_TOKENS_SLUG && tokens.some((t) => PRIORITY_TOKENS.includes(t));
+  });
 }
 
 export const isSectionPath = (pathname: string, section: SectionName): boolean => sectionOf(pathname)?.section === section;

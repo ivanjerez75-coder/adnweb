@@ -3,10 +3,10 @@ import { createHandlers, type HandlerDeps } from "@/lib/server/analyses/handlers
 import { MissingEnvError } from "@/lib/supabase/env";
 import { createFakeRepos } from "./fake-repo";
 import { fakeFetcher, fakeGetPage, NOW } from "../engine/fake-network";
-import { validAiOutput } from "../engine/ai-fixture";
+import { fakeV3Model, rawV3, v3RunOpts } from "./v3-fakes";
 import type { JsonModel } from "@/lib/engine/ai/providers";
 
-const okModel: JsonModel = { name: "fake", generate: async () => JSON.stringify(validAiOutput) };
+const okModel: JsonModel = fakeV3Model();
 
 function setup(opts: { sesion?: boolean } = {}) {
   const repos = createFakeRepos({ now: () => NOW });
@@ -17,6 +17,8 @@ function setup(opts: { sesion?: boolean } = {}) {
     fetcher: fakeFetcher(),
     now: () => NOW,
     models: [okModel],
+    searchModels: [okModel],
+    runOpts: v3RunOpts,
   }));
   const handlers = createHandlers({
     user: async () => (opts.sesion === false ? null : { userId: "u1", repo: repos.user }),
@@ -39,7 +41,7 @@ describe("dependencias perezosas y servicio sin configurar", () => {
     return createHandlers({
       user: async () => ({ userId: "u1", repo: user }),
       worker: () => worker,
-      engine: () => ({ getPage: fakeGetPage, fetcher: fakeFetcher(), now: () => NOW, models: [okModel] }),
+      engine: () => ({ getPage: fakeGetPage, fetcher: fakeFetcher(), now: () => NOW, models: [okModel], searchModels: [okModel], runOpts: v3RunOpts }),
       schedule: () => {},
       now: () => NOW,
       ...over,
@@ -171,13 +173,21 @@ describe("crear", () => {
 
   it("202, programa 1 tarea y al ejecutarla queda listo", async () => {
     const { handlers, tareas, state } = setup();
+    state.insertarAnalisis({
+      userId: "u2",
+      dominio: "facturo.example",
+      estado: "listo",
+      datosBrutos: rawV3,
+      createdAt: new Date(NOW.getTime() - 3_600_000),
+    });
     const res = await handlers.crear(post({ url: "facturo.example" }));
     expect(res.status).toBe(202);
     const { id } = await res.json();
-    expect(state.analisis[0].id).toBe(id);
+    const mio = state.analisis.find((x) => x.id === id)!;
     expect(tareas).toHaveLength(1);
     await tareas[0]();
-    expect(state.analisis[0].estado).toBe("listo");
+    expect(mio.estado).toBe("listo");
+    expect(mio.version).toBe(3);
   });
 
   it("un análisis colgado de 4 min no bloquea: 202, el viejo pasa a error y se devuelve el crédito", async () => {
@@ -230,6 +240,26 @@ describe("estado", () => {
       pasoActual: "Leyendo la web…",
       error: null,
       informe: null,
+      version: 2,
+      secciones: {},
+    });
+  });
+
+  it("200 incluye version y secciones de un análisis v3", async () => {
+    const { handlers, state } = setup();
+    const a = state.insertarAnalisis({
+      userId: "u1",
+      dominio: "z.example",
+      estado: "listo",
+      version: 3,
+      secciones: { adn: { estado: "lista", contenido: { queEs: "x" } }, saber: { estado: "error", contenido: null } },
+    });
+    const body = await (await handlers.estado(a.id)).json();
+    expect(body.version).toBe(3);
+    expect(body.informe).toBeNull();
+    expect(body.secciones).toEqual({
+      adn: { estado: "lista", contenido: { queEs: "x" } },
+      saber: { estado: "error", contenido: null },
     });
   });
 

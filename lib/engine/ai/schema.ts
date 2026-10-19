@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const TIPOS_NEGOCIO_V2 = ["saas", "ecommerce", "marketplace", "contenido_ads", "servicios", "app", "otro"] as const;
+
 const confidence = z.enum(["baja", "media", "alta"]);
 const claim = z.object({ texto: z.string(), senales: z.array(z.string()).default([]) });
 const subscore = z.object({ valor: z.number().min(0).max(100), senales: z.array(z.string()) });
@@ -8,7 +10,7 @@ export const aiOutputSchema = z.object({
   resumen: z.object({
     queHace: z.string(),
     paraQuien: z.string(),
-    tipoNegocio: z.enum(["saas", "ecommerce", "marketplace", "contenido_ads", "servicios", "app", "otro"]),
+    tipoNegocio: z.enum(TIPOS_NEGOCIO_V2),
     comoGanaDinero: z.string(),
     precios: z.array(z.string()),
   }),
