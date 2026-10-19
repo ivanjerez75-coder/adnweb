@@ -229,15 +229,61 @@ describe("calcularScore: indicadores", () => {
     expect(con(5_000_000)).toBe(5);
   });
 
-  it("confianza: sin raw.legal no se evalúan los 4 indicadores legales; con legal vacío valen 0 evaluados", () => {
+  const LEGALES = ["aviso_legal", "privacidad", "identidad_legal", "contacto"];
+  const legalVacio = () => legalCompleto({ avisoLegal: null, privacidad: null, cif: null, razonSocial: null, email: null, telefono: null });
+
+  it("confianza: sin raw.legal no se evalúan los 4 indicadores legales", () => {
     const sin = score(vacio());
-    const claves = ["aviso_legal", "privacidad", "identidad_legal", "contacto"];
-    for (const c of claves) expect(ind(sin, "confianza", c).evaluado).toBe(false);
-    const vacioLegal = score(vacio({ legal: legalCompleto({ avisoLegal: null, privacidad: null, cif: null, razonSocial: null, email: null, telefono: null }) }));
-    for (const c of claves) {
-      expect(ind(vacioLegal, "confianza", c).evaluado).toBe(true);
-      expect(ind(vacioLegal, "confianza", c).puntos).toBe(0);
+    for (const c of LEGALES) expect(ind(sin, "confianza", c).evaluado).toBe(false);
+  });
+
+  it("confianza: con la home ilegible (web con JavaScript) los 4 indicadores legales no se evalúan", () => {
+    const s = score(makeRaw({ site: makeSite({ textLength: 200 }), legal: legalVacio() }));
+    for (const c of LEGALES) {
+      expect(ind(s, "confianza", c).evaluado, c).toBe(false);
+      expect(ind(s, "confianza", c).aplica, c).toBe(true);
     }
+    // Sin web leída tampoco se afirma que falten.
+    const sinWeb = score(vacio({ legal: legalVacio() }));
+    for (const c of LEGALES) expect(ind(sinWeb, "confianza", c).evaluado, c).toBe(false);
+    // Con la home legible, lo que falta sí puntúa 0.
+    const leida = score(makeRaw({ site: makeSite({ textLength: 4000 }), legal: legalVacio() }));
+    for (const c of LEGALES) {
+      expect(ind(leida, "confianza", c).evaluado, c).toBe(true);
+      expect(ind(leida, "confianza", c).puntos, c).toBe(0);
+    }
+  });
+
+  it("confianza: en una web no española el aviso legal y el CIF no aplican; privacidad y contacto sí", () => {
+    const raw = makeRaw({
+      url: "https://tally.so/",
+      domain: "tally.so",
+      rootDomain: "tally.so",
+      site: makeSite({ finalUrl: "https://tally.so/", languages: ["en"], textLength: 22000 }),
+      legal: legalCompleto({ avisoLegal: null, cif: null, razonSocial: null, telefono: null }),
+    });
+    const s = score(raw);
+    for (const c of ["aviso_legal", "identidad_legal"]) {
+      const i = ind(s, "confianza", c);
+      expect(i.aplica, c).toBe(false);
+      expect(i.evaluado, c).toBe(false);
+      expect(i.puntos, c).toBe(0);
+      expect(i.motivo, c).toBe("Requisito legal español: no aplica a esta web");
+    }
+    expect(ind(s, "confianza", "privacidad").aplica).toBe(true);
+    expect(ind(s, "confianza", "privacidad").puntos).toBe(15);
+    expect(ind(s, "confianza", "contacto").aplica).toBe(true);
+  });
+
+  it("confianza: una web es española por idioma es/ca o por dominio .es/.cat", () => {
+    const aplica = (over: Partial<RawData>, languages: string[]) =>
+      ind(score(makeRaw({ ...over, site: makeSite({ languages, textLength: 4000 }), legal: legalVacio() })), "confianza", "aviso_legal").aplica;
+    expect(aplica({}, ["ca"])).toBe(true);
+    expect(aplica({}, ["en", "es"])).toBe(true);
+    expect(aplica({}, ["es-ES"])).toBe(true);
+    expect(aplica({ domain: "tienda.es", rootDomain: "tienda.es" }, ["en"])).toBe(true);
+    expect(aplica({ domain: "casal.cat", rootDomain: "casal.cat" }, ["en"])).toBe(true);
+    expect(aplica({}, ["en"])).toBe(false);
   });
 
   it("confianza: adjunta las evidencias dato:* correspondientes", () => {

@@ -78,10 +78,16 @@ Si PageSpeed falló (`raw.pagespeed.error`) las métricas salen en estado `error
 
 | Clave | Regla | Puntos |
 |---|---|---|
-| `aviso_legal` | `raw.legal.avisoLegal`: 15, si no 0. Sin análisis legal (`raw.legal` null): no evaluado | 15 |
+| `aviso_legal` | `raw.legal.avisoLegal`: 15, si no 0. Sin análisis legal (`raw.legal` null): no evaluado. Solo webs españolas | 15 |
 | `privacidad` | `raw.legal.privacidad`: 15, si no 0 | 15 |
-| `identidad_legal` | CIF y razón social: 15; solo uno: 8; ninguno: 0 | 15 |
+| `identidad_legal` | CIF y razón social: 15; solo uno: 8; ninguno: 0. Solo webs españolas | 15 |
 | `contacto` | Correo, teléfono o dirección: ≥ 2 vías 15; 1 vía 8; ninguna 0 | 15 |
+
+Reglas comunes de los cuatro indicadores legales (informe v3.1, casos teb.org y tally.so):
+
+- **Home ilegible.** Lo encontrado puntúa siempre. Una ausencia solo vale 0 si la home es legible (`legible()`: ≥ 1.500 caracteres, como el resto de dimensiones). En una web con JavaScript, o sin web leída, lo que falta queda no evaluado.
+- **Web no española.** El aviso legal y el CIF/razón social son requisitos legales españoles. Una web es española si algún idioma (de la web o del sitemap) es `es` o `ca`, o si su dominio termina en `.es` o `.cat`. Si no lo es, los dos indicadores salen con `aplica: false` y el motivo "Requisito legal español: no aplica a esta web". La privacidad y el contacto aplican siempre. Si no se conoce ningún idioma porque no se leyó la web, no se descarta que sea española.
+- **Privacidad en catalán.** Los patrones reconocen "privadesa" (texto y ruta `politica-de-privadesa`), "protecció de dades" y "protección de datos".
 | `testimonios` | `site.hasTestimonials` o check `muestraCasos = si` en la revisión: 10. Si no y web legible: 0 | 10 |
 | `dominio_antiguo` | Registro RDAP frente a `collectedAt`: ≥ 5 años 15; ≥ 2 años 8; menos 0. No indica la edad de la empresa | 15 |
 | `email_corporativo` | `raw.dns.emailProvider` distinto de "Ninguno": 15, si no 0. Sin DNS: no evaluado | 15 |

@@ -312,33 +312,59 @@ function adquisicion(raw: RawData, facts: Facts, metricas: Metrica[], reg: Reg):
 
 // ---------- Confianza y transparencia ----------
 
+export const MOTIVO_NO_ES = "Requisito legal español: no aplica a esta web";
+const MOTIVO_ILEGIBLE_LEGAL = "Se leyó poco texto de la web (posible web con JavaScript): no se puede afirmar que falte.";
+
+/**
+ * Web española: algún idioma es/ca (también es-ES, ca-ES…) o dominio .es/.cat.
+ * Sin idiomas conocidos (no se leyó la web) no se puede descartar: se trata como española.
+ */
+export function esWebEspanola(raw: RawData): boolean {
+  const dominio = (raw.rootDomain || raw.domain || "").toLowerCase();
+  if (/\.(?:es|cat)$/.test(dominio)) return true;
+  const idiomas = [...(raw.site?.languages ?? []), ...(raw.sitemap?.languages ?? [])].map((l) => l.toLowerCase().split(/[-_]/)[0]);
+  if (idiomas.length === 0) return !raw.site;
+  return idiomas.includes("es") || idiomas.includes("ca");
+}
+
 function confianza(raw: RawData, revision: Revision | null, reg: Reg): Indicador[] {
   const lg = raw.legal;
+  const leida = legible(raw);
+  const espanola = esWebEspanola(raw);
   const sinLegal = (clave: string, nombre: string, max: number) => sinDato(clave, nombre, max, "No se analizaron las páginas legales.");
+  // Lo encontrado puntúa siempre; lo que falta solo puntúa 0 si la home se leyó bien (igual que el resto de dimensiones).
+  const falta = (clave: string, nombre: string, max: number, motivo: string) =>
+    leida ? ind(clave, nombre, 0, max, motivo) : sinDato(clave, nombre, max, MOTIVO_ILEGIBLE_LEGAL);
+  const soloEs = (clave: string, nombre: string, max: number, i: () => Indicador): Indicador =>
+    espanola ? i() : { clave, nombre, aplica: false, evaluado: false, puntos: 0, maximo: max, motivo: MOTIVO_NO_ES, evidencias: [] };
   const out: Indicador[] = [];
 
   out.push(
-    !lg
-      ? sinLegal("aviso_legal", "Aviso legal", 15)
-      : lg.avisoLegal
-        ? ind("aviso_legal", "Aviso legal", 15, 15, "Publica un aviso legal.", ev(reg, ["dato:aviso_legal"]))
-        : ind("aviso_legal", "Aviso legal", 0, 15, "No se encontró un aviso legal."),
+    soloEs("aviso_legal", "Aviso legal", 15, () =>
+      !lg
+        ? sinLegal("aviso_legal", "Aviso legal", 15)
+        : lg.avisoLegal
+          ? ind("aviso_legal", "Aviso legal", 15, 15, "Publica un aviso legal.", ev(reg, ["dato:aviso_legal"]))
+          : falta("aviso_legal", "Aviso legal", 15, "No se encontró un aviso legal."),
+    ),
   );
   out.push(
     !lg
       ? sinLegal("privacidad", "Política de privacidad", 15)
       : lg.privacidad
         ? ind("privacidad", "Política de privacidad", 15, 15, "Publica una política de privacidad.", ev(reg, ["dato:privacidad"]))
-        : ind("privacidad", "Política de privacidad", 0, 15, "No se encontró una política de privacidad."),
+        : falta("privacidad", "Política de privacidad", 15, "No se encontró una política de privacidad."),
   );
   out.push(
-    !lg
-      ? sinLegal("identidad_legal", "CIF y razón social", 15)
-      : lg.cif && lg.razonSocial
-        ? ind("identidad_legal", "CIF y razón social", 15, 15, "Publica CIF y razón social.", ev(reg, ["dato:cif", "dato:razon_social"]))
-        : lg.cif || lg.razonSocial
-          ? ind("identidad_legal", "CIF y razón social", 8, 15, lg.cif ? "Publica el CIF pero no la razón social." : "Publica la razón social pero no el CIF.", ev(reg, ["dato:cif", "dato:razon_social"]))
-          : ind("identidad_legal", "CIF y razón social", 0, 15, "No se encontró CIF ni razón social."),
+    soloEs("identidad_legal", "CIF y razón social", 15, () =>
+      !lg
+        ? sinLegal("identidad_legal", "CIF y razón social", 15)
+        : lg.cif && lg.razonSocial
+          ? ind("identidad_legal", "CIF y razón social", 15, 15, "Publica CIF y razón social.", ev(reg, ["dato:cif", "dato:razon_social"]))
+          : lg.cif || lg.razonSocial
+            ? ind("identidad_legal", "CIF y razón social", 8, 15, lg.cif ? "Publica el CIF pero no la razón social." : "Publica la razón social pero no el CIF.", ev(reg, ["dato:cif", "dato:razon_social"]))
+            : falta("identidad_legal", "CIF y razón social", 15, "No se encontró CIF ni razón social."),
+    ),
   );
   if (!lg) out.push(sinLegal("contacto", "Contacto visible", 15));
   else {
@@ -348,7 +374,7 @@ function confianza(raw: RawData, revision: Revision | null, reg: Reg): Indicador
         ? ind("contacto", "Contacto visible", 15, 15, `Publica ${n} vías de contacto (correo, teléfono o dirección).`, ev(reg, ["dato:contacto"]))
         : n === 1
           ? ind("contacto", "Contacto visible", 8, 15, "Publica una sola vía de contacto.", ev(reg, ["dato:contacto"]))
-          : ind("contacto", "Contacto visible", 0, 15, "No se encontró ningún dato de contacto."),
+          : falta("contacto", "Contacto visible", 15, "No se encontró ningún dato de contacto."),
     );
   }
 

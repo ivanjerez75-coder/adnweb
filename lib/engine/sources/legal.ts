@@ -52,8 +52,8 @@ const LINK_RULES: { field: "avisoLegal" | "privacidad" | "cookies" | "condicione
   },
   {
     field: "privacidad",
-    text: /privacidad|privacy|protecci[oó]n\s*de\s*datos|pol[ií]tica\s*de\s*privacitat|privacitat|protecci[oó]\s*de\s*dades|rgpd|gdpr/i,
-    path: /privacidad|privacy|proteccion[-_]?de[-_]?datos|politica[-_]?de[-_]?privacitat|privacitat|proteccio[-_]?de[-_]?dades|rgpd|gdpr/i,
+    text: /privacidad|privacy|protecci[oó]n\s*de\s*datos|pol[ií]tica\s*de\s*privacitat|privacitat|privadesa|protecci[oó]\s*de\s*dades|rgpd|gdpr/i,
+    path: /privacidad|privacy|proteccion[-_]?de[-_]?datos|politica[-_]?de[-_]?privacitat|privacitat|privadesa|proteccio[-_]?de[-_]?dades|rgpd|gdpr/i,
   },
   { field: "cookies", text: /cookies?|galletas/i, path: /cookie/i },
   {
@@ -105,7 +105,7 @@ function docText($: cheerio.CheerioAPI): string {
   return $("body").text().replace(/[ \t\r\f\v]+/g, " ").replace(/ ?\n[ \n]*/g, "\n").trim();
 }
 
-const LEGAL_URL_RE = /aviso[-_]?legal|avis[-_]?legal|legal|privacidad|privacitat|privacy|terms|termes|condiciones|condicions|cookies/i;
+const LEGAL_URL_RE = /aviso[-_]?legal|avis[-_]?legal|legal|privacidad|privacitat|privadesa|privacy|terms|termes|condiciones|condicions|cookies/i;
 const pathOf = (url: string) => {
   try {
     return new URL(url).pathname;

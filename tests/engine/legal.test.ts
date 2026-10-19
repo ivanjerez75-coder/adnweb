@@ -152,6 +152,18 @@ describe("extractLegal", () => {
     expect(l2).toMatchObject({ avisoLegal: "https://facturo.example/p/1", privacidad: "https://facturo.example/p/2", condiciones: "https://facturo.example/p/3" });
   });
 
+  it("privacidad en catalán 'privadesa' (caso real TEB) y 'protecció de dades' / 'protección de datos'", () => {
+    const teb = `<footer><a href="/avis-legal/">Avís legal</a><a href="/politica-de-privadesa/">Política de privadesa</a></footer>`;
+    expect(extractLegal(home, null, new Map([[HOME, teb]])).privacidad).toBe("https://facturo.example/politica-de-privadesa/");
+    const soloRuta = `<a href="/politica-de-privadesa/">Més info</a>`;
+    expect(extractLegal(home, null, new Map([[HOME, soloRuta]])).privacidad).toBe("https://facturo.example/politica-de-privadesa/");
+    const soloTexto = `<a href="/p/9">Privadesa</a>`;
+    expect(extractLegal(home, null, new Map([[HOME, soloTexto]])).privacidad).toBe("https://facturo.example/p/9");
+    for (const t of ["Protecció de dades", "Protección de datos"]) {
+      expect(extractLegal(home, null, new Map([[HOME, `<a href="/p/8">${t}</a>`]])).privacidad, t).toBe("https://facturo.example/p/8");
+    }
+  });
+
   it("razón social: una entidad mencionada de pasada en una página normal no cuenta", () => {
     const pasada = "<main><p>Colaboramos con Fundació Tutelar en el acompañamiento de personas mayores.</p></main>";
     const l = extractLegal(home, null, new Map([[HOME, pasada], ["https://facturo.example/serveis", pasada]]));
