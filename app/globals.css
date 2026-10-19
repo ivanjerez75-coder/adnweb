@@ -63,3 +63,26 @@ body {
     radial-gradient(closest-side, rgb(158 230 207 / 0.95), transparent) 100% 50% / 55% 160% no-repeat;
   filter: blur(22px);
 }
+
+/* "Ver origen": resalta un momento el hallazgo o la fila de la comparación a la que se salta. */
+@keyframes resaltado-origen {
+  0%,
+  60% {
+    box-shadow: 0 0 0 3px rgb(15 118 110 / 0.55);
+    background-color: var(--color-teal-claro);
+  }
+  100% {
+    box-shadow: 0 0 0 3px rgb(15 118 110 / 0);
+  }
+}
+
+.resaltado {
+  animation: resaltado-origen 1.8s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .resaltado {
+    animation: none;
+    box-shadow: 0 0 0 3px rgb(15 118 110 / 0.55);
+  }
+}

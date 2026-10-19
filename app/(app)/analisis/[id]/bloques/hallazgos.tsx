@@ -6,6 +6,7 @@ import { Etiqueta } from "@/components/ui/Etiqueta";
 import { t, type Clave } from "@/lib/i18n";
 import {
   anclaHallazgo,
+  arr,
   FILTROS,
   filtrarHallazgos,
   tarjetasHallazgos,
@@ -76,7 +77,7 @@ function Fila({ titulo, children }: { titulo: Clave; children: React.ReactNode }
 }
 
 /** La tarjeta estándar: título + estado, hallazgo, evidencia, por qué importa y qué hacer. */
-function Tarjeta({ h }: { h: TarjetaHallazgo }) {
+function Tarjeta({ h, nombreDe }: { h: TarjetaHallazgo; nombreDe: (id: string) => string }) {
   const g = GRUPO[h.tipo];
   const mostrarTexto = h.texto && h.texto !== h.titulo;
   return (
@@ -97,7 +98,7 @@ function Tarjeta({ h }: { h: TarjetaHallazgo }) {
           <p className="text-sm text-suave">
             {h.frenteA && (
               <>
-                {t("informe.diagnostico.frenteA")}: {h.frenteA}
+                {t("informe.diagnostico.frenteA")}: {nombreDe(h.frenteA)}
               </>
             )}
             {h.frenteA && h.paraQuien && " · "}
@@ -138,16 +139,21 @@ function Tarjeta({ h }: { h: TarjetaHallazgo }) {
 export function BloqueHallazgos({
   diagnostico,
   plan,
+  competencia,
   filtro,
   onFiltro,
 }: {
   diagnostico: unknown;
+  competencia?: unknown;
   plan: unknown;
   filtro: Filtro;
   onFiltro: (f: Filtro) => void;
 }) {
   const d = (diagnostico ?? {}) as Partial<Diagnostico>;
   const tarjetas = tarjetasHallazgos(filtrarHallazgos(d, filtro), (plan ?? null) as Partial<Plan> | null);
+  // "Frente a" puede ser el id de un competidor ("c1"): se muestra su nombre.
+  const competidores = arr<{ id?: string; nombre?: string }>((competencia as { competidores?: unknown } | null)?.competidores);
+  const nombreDe = (id: string) => competidores.find((k) => k && k.id === id)?.nombre ?? id;
   const total = tarjetasHallazgos(filtrarHallazgos(d, "todo"), null).length;
   return (
     <>
@@ -163,7 +169,7 @@ export function BloqueHallazgos({
               <Subtitulo>{t(GRUPO[tipo].titulo)}</Subtitulo>
               <div className="mt-3 grid gap-3 lg:grid-cols-2">
                 {delGrupo.map((h) => (
-                  <Tarjeta key={h.id} h={h} />
+                  <Tarjeta key={h.id} h={h} nombreDe={nombreDe} />
                 ))}
               </div>
             </section>

@@ -178,20 +178,21 @@ describe("bloque 1: el negocio", () => {
     expect(esNegocioHibrido([{ certeza: "alta" }, { certeza: "baja" }])).toBe(false);
     expect(esNegocioHibrido(undefined)).toBe(false);
   });
-  it("hechos: primero lo que declara la empresa, si no lo que interpreta ADNweb", () => {
+  it("hechos: primero la lectura de ADNweb, si no lo que declara la empresa; con las citas de lo declarado", () => {
     const h = hechosNegocio({
       identidad: {
-        producto: { declara: { texto: "Soluciones", evidencias: [pag("p1")] }, interpretamos: null },
+        producto: { declara: { texto: "Solucions", evidencias: [pag("p1")] }, interpretamos: { texto: "Soluciones de empleo", evidencias: [pag("p2")], clase: "inferencia" } },
         paraQuien: { declara: null, interpretamos: { texto: "Empresas", evidencias: [], clase: "inferencia" } },
         beneficio: { declara: null, interpretamos: null },
         diferenciacion: { declara: { texto: "60 años", evidencias: [] }, interpretamos: null },
       } as never,
     });
     expect(h.map((x) => [x.clave, x.texto, x.clase])).toEqual([
-      ["queOfrece", "Soluciones", "observado"],
+      ["queOfrece", "Soluciones de empleo", "inferencia"],
       ["paraQuien", "Empresas", "inferencia"],
       ["propuesta", "60 años", "observado"],
     ]);
+    expect(h[0].evidencias.map((e) => e.id)).toEqual(["p2", "p1"]);
     expect(hechosNegocio(null).every((x) => x.texto === null)).toBe(true);
   });
 });

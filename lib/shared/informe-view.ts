@@ -209,13 +209,21 @@ export interface HechoNegocio {
   evidencias: Evidence[];
 }
 
-/** Un campo de identidad: primero lo que la empresa declara; si no, lo que interpreta ADNweb. */
+/**
+ * Un campo de identidad para leer de un vistazo: la lectura de ADNweb (en español, aunque la web esté
+ * en otro idioma) con su clase; si no hay, lo que declara la empresa. Las pruebas incluyen siempre
+ * las citas literales de lo declarado.
+ */
 function campoIdentidad(c: Partial<CampoIdentidad> | null | undefined): Omit<HechoNegocio, "clave"> {
-  if (c?.declara && texto(c.declara.texto)) return { texto: c.declara.texto, clase: "observado", evidencias: arr<Evidence>(c.declara.evidencias) };
-  if (c?.interpretamos && texto(c.interpretamos.texto)) {
-    const clase: ClaseDato = etiquetaClase(c.interpretamos.clase) ? c.interpretamos.clase : "inferencia";
-    return { texto: c.interpretamos.texto, clase, evidencias: arr<Evidence>(c.interpretamos.evidencias) };
+  const declara = c?.declara && texto(c.declara.texto) ? c.declara : null;
+  const interpreta = c?.interpretamos && texto(c.interpretamos.texto) ? c.interpretamos : null;
+  const pruebas = [...arr<Evidence>(interpreta?.evidencias), ...arr<Evidence>(declara?.evidencias)];
+  const evidencias = pruebas.filter((e, i) => e && pruebas.findIndex((x) => x?.id === e.id) === i);
+  if (interpreta) {
+    const clase: ClaseDato = etiquetaClase(interpreta.clase) ? interpreta.clase : "inferencia";
+    return { texto: interpreta.texto, clase, evidencias };
   }
+  if (declara) return { texto: declara.texto, clase: "observado", evidencias };
   return { texto: null, clase: null, evidencias: [] };
 }
 

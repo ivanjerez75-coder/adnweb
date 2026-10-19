@@ -198,6 +198,8 @@ function Escenario({ hipoteticas, escenario }: { hipoteticas: Metrica[]; escenar
       {hipoteticas.map((m) => (
         <div key={m.clave} className="mt-2 text-sm text-suave">
           <p>{m.metodologia}</p>
+          {/* El aviso del escenario ya va arriba: no se repite. */}
+          <ListaTextos items={arr<string>(m.limitaciones).filter((l) => l !== t("informe.anatomia.escenarioAviso"))} />
           <ListaTextos items={arr<string>(m.supuestos)} />
         </div>
       ))}
