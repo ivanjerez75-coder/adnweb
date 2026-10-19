@@ -32,6 +32,16 @@ describe("Secciones (render)", () => {
     expect(html).toContain("Qué falta comprobar:");
   });
 
+  it("el plan agrupa las acciones y muestra su origen; un plan incompleto no rompe la vista", () => {
+    const a = { id: "a1", origen: "o1", tarea: "Preguntar a clientes", porQue: "Valida", recursos: [], indicador: "Respuestas", criterio: { continuar: "Si interesa", modificar: "", descartar: "Si no" } };
+    const html = render({ plan: { estado: "lista", contenido: { comprobar: [a], experimentar: [], medir: [] } } });
+    expect(html).toContain("Comprobar");
+    expect(html).not.toContain("Experimentar");
+    expect(html).toContain("(sale de o1)");
+    expect(html).toContain("Descartar si: Si no");
+    expect(() => render({ plan: { estado: "lista", contenido: { medir: "x" } } })).not.toThrow();
+  });
+
   it("la anatomía separa lo que la empresa declara de lo que ADNweb interpreta", () => {
     const anatomia = {
       nombre: "Facturo",

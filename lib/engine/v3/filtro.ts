@@ -3,10 +3,13 @@
  * respalda ningún dato. Nunca se aplica a los extractos literales de página (Evidence).
  */
 /** Importes y porcentajes: en un texto descriptivo pueden ser legítimos ("desde 29 €/mes", "100 % ecológico"). */
-const IMPORTES_Y_PORCENTAJES: RegExp[] = [
+const IMPORTES: RegExp[] = [
   // Importes: "2 M€", "500 €", "3 millones EUR", "$20", "€ 9".
   /\d[\d.,]*\s*(?:k|m|mil|millones?|mill\.?)?\s*(?:€|\$|eur\b|euros?\b|usd\b|d[oó]lares\b)/i,
   /(?:€|\$|\beur|\busd)\s*\d/i,
+];
+const IMPORTES_Y_PORCENTAJES: RegExp[] = [
+  ...IMPORTES,
   // Porcentajes.
   /\d+(?:[.,]\d+)?\s?%/,
 ];
@@ -24,6 +27,11 @@ const CIFRAS: RegExp[] = [
 const PROMESAS: RegExp[] = [
   /ventas\s+perdidas|tasa\s+de\s+conversi[oó]n|tasa\s+de\s+abandono|abandono\s+del?\s+carrito|\bchurn\b|aumentar[aá]\s+las\s+ventas|impulsar[aá]\s+las\s+ventas|atraer[aá]\s+(?:m[aá]s|mayor\s+volumen)/i,
 ];
+
+/** ¿Hay un importe ("500 €", "$20", "3 millones EUR")? Lo usa el plan, que nunca lleva presupuestos. */
+export function contieneImporte(texto: string): boolean {
+  return IMPORTES.some((re) => re.test(texto ?? ""));
+}
 
 export interface OpcionesFiltro {
   /**

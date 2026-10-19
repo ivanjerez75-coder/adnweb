@@ -21,6 +21,7 @@ const ORDEN: [ClaveSeccion, string][] = [
   ["competencia", "Competencia y posicionamiento"],
   ["diagnostico", "Diagnóstico estratégico"],
   ["oportunidades", "Oportunidades de negocio"],
+  ["plan", "Plan de acción"],
 ];
 
 const ESTADOS = ["pendiente", "lista", "error"];

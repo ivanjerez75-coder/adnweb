@@ -10,6 +10,7 @@ import type { AfirmacionCompetidor, Competencia, CompetidorV4, FilaMatriz, GanaP
 import type { Debilidad, Diagnostico, Fortaleza, Friccion, Riesgo } from "@/lib/engine/v3/sections/diagnostico";
 import type { Rendimiento } from "@/lib/engine/v3/sections/rendimiento";
 import type { Oportunidad } from "@/lib/engine/v3/sections/oportunidades";
+import type { Accion, Plan } from "@/lib/engine/v3/sections/plan";
 import { decidirSondeo, siguienteSondeo } from "@/lib/shared/polling";
 import { hayPendientes, ordenSecciones, type SeccionVista } from "@/lib/shared/secciones-view";
 
@@ -638,6 +639,41 @@ function OportunidadesVista({ c }: { c: unknown }) {
   );
 }
 
+const GRUPO_PLAN: [keyof Plan, string][] = [
+  ["comprobar", "Comprobar"],
+  ["experimentar", "Experimentar"],
+  ["medir", "Medir"],
+];
+
+/** Vista mínima (la Tarea 7 la rehace): acciones agrupadas, cada una con su origen. */
+function PlanVista({ c }: { c: unknown }) {
+  const plan = (c ?? {}) as Partial<Plan>;
+  return (
+    <>
+      {GRUPO_PLAN.map(([g, titulo]) =>
+        arr<Accion>(plan[g]).length === 0 ? null : (
+          <section key={g}>
+            <h3>{titulo}</h3>
+            <ul>
+              {arr<Accion>(plan[g]).map((a) => (
+                <li key={a.id}>
+                  <strong>{a.tarea}</strong> <small>(sale de {a.origen})</small>
+                  {a.porQue && <p>Por qué: {a.porQue}</p>}
+                  {arr<string>(a.recursos).length > 0 && <p>Recursos: {arr<string>(a.recursos).join(", ")}</p>}
+                  <p>Indicador: {a.indicador}</p>
+                  {a.criterio?.continuar && <p>Continuar si: {a.criterio.continuar}</p>}
+                  {a.criterio?.modificar && <p>Modificar si: {a.criterio.modificar}</p>}
+                  {a.criterio?.descartar && <p>Descartar si: {a.criterio.descartar}</p>}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ),
+      )}
+    </>
+  );
+}
+
 function Cuerpo({ s }: { s: SeccionVista }) {
   if (s.estado === "pendiente") return <p role="status">Generando…</p>;
   if (s.estado === "error" || s.contenido === null || s.contenido === undefined) {
@@ -656,6 +692,8 @@ function Cuerpo({ s }: { s: SeccionVista }) {
       return <CompetenciaVista c={s.contenido} />;
     case "oportunidades":
       return <OportunidadesVista c={s.contenido} />;
+    case "plan":
+      return <PlanVista c={s.contenido} />;
   }
 }
 

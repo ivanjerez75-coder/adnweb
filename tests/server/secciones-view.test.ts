@@ -7,7 +7,7 @@ const en = (ms: number) => new Date(Date.parse(t0) + ms);
 describe("ordenSecciones", () => {
   it("devuelve el orden y los títulos fijos", () => {
     const r = ordenSecciones({}, t0, en(0));
-    expect(r.map((s) => s.clave)).toEqual(["datos", "anatomia", "rendimiento", "competencia", "diagnostico", "oportunidades"]);
+    expect(r.map((s) => s.clave)).toEqual(["datos", "anatomia", "rendimiento", "competencia", "diagnostico", "oportunidades", "plan"]);
     expect(r.map((s) => s.titulo)).toEqual([
       "Datos y métricas",
       "Anatomía del negocio",
@@ -15,6 +15,7 @@ describe("ordenSecciones", () => {
       "Competencia y posicionamiento",
       "Diagnóstico estratégico",
       "Oportunidades de negocio",
+      "Plan de acción",
     ]);
   });
 
@@ -38,7 +39,7 @@ describe("ordenSecciones", () => {
 
   it("ignora claves desconocidas y estados inválidos", () => {
     const r = ordenSecciones({ raro: { estado: "lista", contenido: 1 }, anatomia: { estado: "x" as never, contenido: 1 } }, t0, en(0));
-    expect(r).toHaveLength(6);
+    expect(r).toHaveLength(7);
     expect(r.find((s) => s.clave === "anatomia")!.estado).toBe("pendiente");
   });
 

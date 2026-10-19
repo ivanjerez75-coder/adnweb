@@ -9,13 +9,14 @@ import { limitarConcurrencia, type RunSectionOpts } from "./llm";
 import { calcularScore, type DnaScore } from "./score";
 import { adnDesdeAnatomia, generarAnatomia } from "./sections/anatomia";
 import { generarOportunidades } from "./sections/oportunidades";
+import { generarPlan } from "./sections/plan";
 import { generarCompetencia } from "./sections/competencia";
 import { generarDiagnostico } from "./sections/diagnostico";
 import { generarRendimiento } from "./sections/rendimiento";
 import { quitarIdsEvidencia } from "./sections/comun";
 
 /** Secciones escritas por la IA: sus textos pueden traer ids de evidencia sueltos ("[p8-e7]"). */
-const SECCIONES_IA: readonly SeccionClave[] = ["anatomia", "rendimiento", "competencia", "diagnostico", "oportunidades"];
+const SECCIONES_IA: readonly SeccionClave[] = ["anatomia", "rendimiento", "competencia", "diagnostico", "oportunidades", "plan"];
 
 const esEvidencia = (v: object): boolean => "id" in v && "tipo" in v && "texto" in v && "fuente" in v;
 
@@ -31,7 +32,7 @@ export function limpiarTextos(v: unknown): unknown {
 }
 
 /** El DNA Score va dentro de rendimiento. */
-export type SeccionClave = "datos" | "anatomia" | "rendimiento" | "competencia" | "diagnostico" | "oportunidades";
+export type SeccionClave = "datos" | "anatomia" | "rendimiento" | "competencia" | "diagnostico" | "oportunidades" | "plan";
 export type EstadoSeccion = "pendiente" | "lista" | "error";
 
 export interface ReportV3 {
@@ -73,6 +74,7 @@ export async function buildReportV3(raw: RawData, deps: ReportV3Deps, onSection:
     competencia: "pendiente",
     diagnostico: "pendiente",
     oportunidades: "pendiente",
+    plan: "pendiente",
   };
 
   /** Registra la sección y avisa. Un fallo de onSection solo se propaga si `propagar` (anatomia). */
@@ -160,9 +162,14 @@ export async function buildReportV3(raw: RawData, deps: ReportV3Deps, onSection:
     const c = await pCompetencia;
     return tarea("oportunidades", async () => generarOportunidades(raw, anatomia, d, c?.competencia ?? null, await pRegTotal, sectionDeps));
   });
+  // Fase 6: plan, tras las oportunidades (si fallan, se apoya solo en debilidades y fricciones).
+  const pPlan = pOportunidades.then(async (o) => {
+    const d = await pDiagnostico;
+    return tarea("plan", () => generarPlan(o ?? [], d, sectionDeps));
+  });
 
   await Promise.all([
-    pOportunidades,
+    pPlan,
     tarea("rendimiento", () => generarRendimiento(raw, metricas, anatomia, pScore, sectionDeps, pDiagnostico.then((d) => d?.fricciones ?? []))),
   ]);
 

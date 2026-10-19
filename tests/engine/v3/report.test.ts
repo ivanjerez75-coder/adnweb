@@ -84,7 +84,7 @@ function deps(m: JsonModel) {
 }
 
 describe("buildReportV3", () => {
-  it("emite datos, anatomia, ... y oportunidades al final; version 3", async () => {
+  it("emite datos, anatomia, ... y plan al final; version 3", async () => {
     const calls: [SeccionClave, string][] = [];
     const r = await buildReportV3(raw, deps(fakeModels()), async (c, _x, e) => {
       calls.push([c, e]);
@@ -94,7 +94,7 @@ describe("buildReportV3", () => {
     expect(r.generadoEn).toBe("2026-10-18T10:00:00.000Z");
     expect(calls[0]).toEqual(["datos", "lista"]);
     expect(calls[1]).toEqual(["anatomia", "lista"]);
-    expect(calls[calls.length - 1][0]).toBe("oportunidades");
+    expect(calls[calls.length - 1][0]).toBe("plan");
     expect(calls.filter(([c]) => c === "datos")).toHaveLength(1);
     expect(Object.values(r.estados).every((e) => e === "lista")).toBe(true);
     expect((r.secciones.competencia as { competidores: unknown }).competidores).toBeInstanceOf(Array);
@@ -128,7 +128,7 @@ describe("buildReportV3", () => {
     const r = await buildReportV3(raw, deps(fakeModels({ competidores: true })), async () => {});
     expect(r.estados.competencia).toBe("error");
     expect(r.secciones.competencia).toBeUndefined();
-    for (const k of ["datos", "anatomia", "rendimiento", "diagnostico", "oportunidades"] as const) {
+    for (const k of ["datos", "anatomia", "rendimiento", "diagnostico", "oportunidades", "plan"] as const) {
       expect(r.estados[k]).toBe("lista");
     }
   });
@@ -169,6 +169,27 @@ describe("buildReportV3", () => {
   it("oportunidades fallida -> error", async () => {
     const r = await buildReportV3(raw, deps(fakeModels({ oportunidades: true })), async () => {});
     expect(r.estados.oportunidades).toBe("error");
+    // El plan se apoya entonces en las debilidades del diagnóstico: su acción de o1 se descarta.
+    expect(r.estados.plan).toBe("error");
+  });
+
+  it("plan va tras oportunidades y enlaza sus ids", async () => {
+    const orden: string[] = [];
+    const prompts: string[] = [];
+    const base = fakeModels();
+    const m: JsonModel = { name: "spy", generate: (p, o) => (prompts.push(p), base.generate(p, o)) };
+    const r = await buildReportV3(raw, deps(m), async (c) => {
+      orden.push(c);
+    });
+    expect(orden.indexOf("oportunidades")).toBeLessThan(orden.indexOf("plan"));
+    expect(prompts.find((p) => p.includes("plan de acción"))).toContain("o1: Mostrar casos");
+    expect((r.secciones.plan as { comprobar: { origen: string }[] }).comprobar[0].origen).toBe("o1");
+  });
+
+  it("plan fallido -> error; el resto sigue lista", async () => {
+    const r = await buildReportV3(raw, deps(fakeModels({ plan: true })), async () => {});
+    expect(r.estados.plan).toBe("error");
+    expect(r.estados.oportunidades).toBe("lista");
   });
 
   it("anatomia fallida rechaza", async () => {
