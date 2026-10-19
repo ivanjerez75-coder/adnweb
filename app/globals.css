@@ -1,26 +1,53 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-grafito: #393939;
+  --color-suave: #6b6b6b;
+  --color-teal: #0f766e;
+  --color-teal-claro: #e6f2f1;
+  --color-fondo: #f5f5f5;
+  --color-superficie: #ffffff;
+  --color-superficie-2: #f3f3f3;
+  --color-borde: #dadada;
+  --color-ambar: #8a5a00;
+  --color-rojo: #9f3a2b;
+  --font-display: var(--font-barlow-condensed), "Arial Narrow", sans-serif;
+  --font-sans: var(--font-barlow), system-ui, sans-serif;
+  --font-cita: var(--font-source-serif), Georgia, serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  color-scheme: light;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-fondo);
+  color: var(--color-grafito);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-teal);
+  outline-offset: 2px;
+}
+
+@keyframes brillo-pildora {
+  0%,
+  100% {
+    box-shadow: 0 6px 28px rgb(15 118 110 / 0.14);
+  }
+  50% {
+    box-shadow: 0 6px 38px rgb(15 118 110 / 0.28);
+  }
+}
+
+.pildora-brillo {
+  animation: brillo-pildora 4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pildora-brillo {
+    animation: none;
+  }
 }
