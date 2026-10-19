@@ -2,7 +2,7 @@ import * as cheerio from "cheerio";
 import type { PageGetter } from "../safe-fetch";
 import type { PageDoc, SiteData, SitemapData } from "../types";
 import { registrableDomain } from "../redirect";
-import { isPriorityPath } from "./sections";
+import { isPriorityPath, isSectionPath } from "./sections";
 
 const MAX_CITA = 200;
 const MIN_CITA = 30;
@@ -79,10 +79,25 @@ export function selectPages(home: SiteData, sitemap: SitemapData | null, max = M
     const url = stripUrl(u);
     return !!url && isPriorityPath(url.pathname);
   };
+  const nav = home.navLinks ?? [];
   push(home.finalUrl);
-  for (const u of [...read, ...candidates]) if (isPriority(u)) push(u);
+  // 1) secciones de negocio reconocidas (menú, páginas leídas y sitemap); 2) el resto del menú
+  // de la portada, que es lo que la propia web considera clave; 3) las páginas ya leídas.
+  for (const u of [...nav, ...read, ...candidates]) if (isPriority(u)) push(u);
+  for (const u of nav) if (isMenuPage(u)) push(u);
   for (const u of read) push(u);
   return out;
+}
+
+/** Página de menú que merece leerse: ruta corta, no es un archivo, ni el blog o una noticia. */
+function isMenuPage(u: string): boolean {
+  const url = stripUrl(u);
+  if (!url || url.pathname === "/") return false;
+  const segments = url.pathname.split("/").filter(Boolean);
+  if (segments.length > 2) return false;
+  if (/\.(pdf|jpe?g|png|gif|svg|webp|zip|docx?|xlsx?)$/i.test(url.pathname)) return false;
+  if (/\/(19|20)\d{2}\//.test(url.pathname)) return false;
+  return !isSectionPath(url.pathname, "blog");
 }
 
 /** Lee las páginas en paralelo y devuelve las que terminan antes de `timeoutMs`; ids p1…pN en orden de URL. */

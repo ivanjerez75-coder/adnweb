@@ -137,3 +137,31 @@ describe("fetchPages", () => {
     expect(docs.map((d) => d.url)).toEqual(["https://a.example/"]);
   });
 });
+
+describe("selectPages con el menú de la portada", () => {
+  it("lee las páginas del menú (en cualquier idioma) antes que las noticias del sitemap", () => {
+    const home = makeSite({
+      finalUrl: "https://teb.example/",
+      pages: [{ url: "https://teb.example/", title: "", description: "", headings: [], text: "" }],
+      navLinks: [
+        "https://teb.example/qui-som/",
+        "https://teb.example/el-que-fem/",
+        "https://teb.example/serveis-per-a-empreses/",
+        "https://teb.example/blog/",
+        "https://teb.example/2024/05/noticia/",
+        "https://teb.example/memoria.pdf",
+        "https://otra.example/socis/",
+      ],
+    });
+    const urls = selectPages(home, sitemap(["https://teb.example/dia-de-la-dona/", "https://teb.example/les-primeres-vacunes/"]));
+    expect(urls.slice(0, 4)).toEqual([
+      "https://teb.example/",
+      "https://teb.example/qui-som",
+      "https://teb.example/serveis-per-a-empreses",
+      "https://teb.example/el-que-fem",
+    ]);
+    expect(urls).not.toContain("https://teb.example/blog");
+    expect(urls).not.toContain("https://teb.example/memoria.pdf");
+    expect(urls).not.toContain("https://teb.example/dia-de-la-dona");
+  });
+});

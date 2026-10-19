@@ -29,6 +29,7 @@ export function makeSite(overrides: Partial<SiteData> = {}): SiteData {
     jobBoards: [],
     appStoreIds: [],
     jsonLdOrg: null,
+    navLinks: [],
     ...overrides,
   };
 }

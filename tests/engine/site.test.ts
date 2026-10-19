@@ -57,3 +57,11 @@ describe("fetchSite", () => {
     expect(site.pages).toHaveLength(1);
   });
 });
+
+describe("navLinks", () => {
+  it("recoge en orden los enlaces del menú y la cabecera", async () => {
+    const { parsePage } = await import("../../lib/engine/sources/site-parse");
+    const html = `<html><body><header><nav><a href="/qui-som">Qui som</a><a href="/serveis">Serveis</a></nav></header><main><a href="/noticia">Noticia</a></main></body></html>`;
+    expect(parsePage(html, "https://teb.example/").navLinks).toEqual(["https://teb.example/qui-som", "https://teb.example/serveis"]);
+  });
+});

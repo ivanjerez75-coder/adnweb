@@ -85,6 +85,8 @@ export interface SiteData {
   appStoreIds: string[];
   /** Datos de la organización declarados en JSON-LD (schema.org). null si no hay ninguno. */
   jsonLdOrg: JsonLdOrg | null;
+  /** Enlaces del menú de la portada, en orden (las páginas que la propia web considera clave). */
+  navLinks: string[];
 }
 
 export interface JsonLdOrg {

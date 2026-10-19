@@ -5,6 +5,8 @@ import { isSectionPath, sectionOf } from "./sections";
 export interface ParsedPage {
   page: SitePage;
   links: string[];
+  /** Enlaces del menú (nav/header), en orden: las páginas que la propia web considera clave. */
+  navLinks: string[];
   lang: string | null;
   hreflangs: string[];
   socialLinks: Record<string, string>;
@@ -216,6 +218,20 @@ export function parsePage(html: string, pageUrl: string): ParsedPage {
     const href = abs.toString();
     if (!links.includes(href)) links.push(href);
   });
+  const navLinks: string[] = [];
+  $(NAV_SELECTOR)
+    .find("a[href]")
+    .each((_, el) => {
+      try {
+        const abs = new URL($(el).attr("href") ?? "", pageUrl);
+        if (abs.protocol !== "http:" && abs.protocol !== "https:") return;
+        abs.hash = "";
+        const href = abs.toString();
+        if (!navLinks.includes(href)) navLinks.push(href);
+      } catch {
+        // href inválido: se ignora
+      }
+    });
   for (const m of html.matchAll(GREENHOUSE_EMBED_RE)) addJobBoard("greenhouse", m[1]);
   for (const s of jsonLd.sameAs) {
     try {
@@ -249,6 +265,7 @@ export function parsePage(html: string, pageUrl: string): ParsedPage {
   return {
     page: { url: pageUrl, title, description, headings, text: text.slice(0, 8000) },
     links,
+    navLinks: navLinks.slice(0, 60),
     lang,
     hreflangs,
     socialLinks,
@@ -265,6 +282,9 @@ export function parsePage(html: string, pageUrl: string): ParsedPage {
     appStoreIds,
   };
 }
+
+/** Zonas de navegación de una página. */
+const NAV_SELECTOR = "nav, header, [role='navigation'], .menu, #menu, .nav, .navbar";
 
 export function pickKeyPages(links: string[], homeUrl: string, max = 5): string[] {
   const homeHost = bareHost(new URL(homeUrl).hostname);
@@ -320,5 +340,6 @@ export function buildSiteData(finalUrl: string, pages: ParsedPage[], technologie
       .filter((j, i, all) => all.findIndex((o) => o.platform === j.platform && o.token === j.token) === i),
     appStoreIds: Array.from(new Set(pages.flatMap((p) => p.appStoreIds))),
     jsonLdOrg: pages.find((p) => p.jsonLdOrg)?.jsonLdOrg ?? null,
+    navLinks: pages[0]?.navLinks ?? [],
   };
 }
