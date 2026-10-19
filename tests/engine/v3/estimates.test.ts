@@ -167,6 +167,21 @@ describe("precios y escenario", () => {
     expect(p[1]).toMatchObject({ importe: 290, periodicidad: "año" });
   });
 
+  it("preciosPublicados: cita la página cuyo texto contiene el precio; si ninguna lo contiene, la URL final (sin página de precios falsa)", () => {
+    const site = makeSite({
+      finalUrl: "https://facturo.example/",
+      pricesFound: ["29 €/mes", "99 €"],
+      pages: [
+        { url: "https://facturo.example/", title: "Inicio", description: "", headings: [], text: "Hola" },
+        { url: "https://facturo.example/pricing", title: "Precios", description: "", headings: [], text: "Plan Pro 29 €/mes" },
+        { url: "https://facturo.example/planes", title: "Planes", description: "", headings: [], text: "Sin cifras aquí" },
+      ],
+    });
+    const p = preciosPublicados(makeRaw({ site }));
+    expect(p[0]).toMatchObject({ texto: "29 €/mes", url: "https://facturo.example/pricing", plan: null });
+    expect(p[1]).toMatchObject({ texto: "99 €", url: "https://facturo.example/", plan: null });
+  });
+
   it("escenarioIngresos: mediana mensual de 29 €/mes y 290 €/año", () => {
     const e = escenarioIngresos(preciosPublicados(rawPrecios(["29 €/mes", "290 €/año"])))!;
     expect(e.map((x) => x.clientes)).toEqual([100, 500, 1000]);

@@ -96,16 +96,14 @@ export function parsearPrecio(texto: string): { importe: number; moneda: string;
   return { importe, moneda, periodicidad };
 }
 
-/** Precios que la web publica, con la URL de la página donde se vieron. */
+/**
+ * Precios que la web publica. Se cita la página cuyo texto contiene el precio; si ninguna lo
+ * contiene, la URL final de la web (nunca una página de precios supuesta). El plan no se conoce: null.
+ */
 export function preciosPublicados(raw: RawData): PrecioPublicado[] {
   const site = raw.site;
   if (!site) return [];
-  const urlDe = (texto: string): string => {
-    const conTexto = site.pages.find((p) => p.text.includes(texto));
-    if (conTexto) return conTexto.url;
-    const precios = site.pages.find((p) => /precio|pricing|planes|plans/i.test(p.url));
-    return (precios ?? site.pages[0])?.url ?? site.finalUrl;
-  };
+  const urlDe = (texto: string): string => site.pages.find((p) => p.text.includes(texto))?.url ?? site.finalUrl;
   const out: PrecioPublicado[] = [];
   for (const texto of site.pricesFound) {
     const p = parsearPrecio(texto);
