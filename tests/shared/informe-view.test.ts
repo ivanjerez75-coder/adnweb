@@ -19,6 +19,7 @@ import {
   trozosFrase,
   valorMetrica,
 } from "@/lib/shared/informe-view";
+import * as mod from "@/lib/shared/informe-view";
 
 const pag = (id: string, texto = "cita literal") => ({ id, tipo: "pagina" as const, texto, url: "https://teb.org/", fuente: "https://teb.org/" });
 
@@ -253,5 +254,39 @@ describe("utilidades", () => {
     expect(t.map((x) => x.texto).join("")).toBe(f);
     expect(t.filter((x) => x.destacado).map((x) => x.texto)).toEqual(["TEB", "servicios de inserción laboral", "contratos y subvenciones"]);
     expect(trozosFrase("Una web sin patrón", null)).toEqual([{ texto: "Una web sin patrón", destacado: false }]);
+  });
+});
+
+describe("loMasImportante y prioridad (task 6b)", () => {
+  it("toma hasta 3 hallazgos del resumen con título y estado, y la oportunidad principal", () => {
+    const r = {
+      hallazgos: [
+        { tipo: "debilidad", id: "d1", titulo: "Web dispersa", texto: "x", estado: "comprobado" },
+        { tipo: "riesgo", id: "r1", texto: "Depende de subvenciones. Más.", estado: "por_comprobar" },
+        { tipo: "raro", id: "z1", titulo: "No" },
+      ],
+      oportunidad: { id: "o1", titulo: "Ordenar la oferta" },
+    };
+    expect(mod.loMasImportante(r)).toEqual({
+      hallazgos: [
+        { id: "d1", tipo: "debilidad", titulo: "Web dispersa", estado: "comprobado" },
+        { id: "r1", tipo: "riesgo", titulo: "Depende de subvenciones.", estado: "por_comprobar" },
+      ],
+      oportunidad: { id: "o1", titulo: "Ordenar la oferta" },
+    });
+    expect(mod.loMasImportante(null)).toEqual({ hallazgos: [], oportunidad: null });
+  });
+
+  it("la tarjeta lleva la prioridad del motor, o null si falta", () => {
+    const d = { ...diagnostico, debilidades: [{ ...diagnostico.debilidades[0], prioridad: "alta" as const }] };
+    const [t] = tarjetasHallazgos(filtrarHallazgos(d, "debilidades"), plan);
+    expect(t.prioridad).toBe("alta");
+    const [f] = tarjetasHallazgos(filtrarHallazgos(diagnostico, "fortalezas"), plan);
+    expect(f.prioridad).toBeNull();
+  });
+
+  it("datosClave del motor: una fuente URL también es el enlace", () => {
+    const [d] = datosClave({ datosClave: [{ clave: "medios_pago", etiqueta: "Medios de pago", valor: "Visa", clase: "observado", fuente: "https://teb.org/" }] }, null);
+    expect(d.fuenteUrl).toBe("https://teb.org/");
   });
 });

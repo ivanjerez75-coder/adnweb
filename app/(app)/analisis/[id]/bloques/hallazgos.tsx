@@ -90,7 +90,10 @@ function Tarjeta({ h, nombreDe }: { h: TarjetaHallazgo; nombreDe: (id: string) =
           </p>
           <h4 className="mt-1 text-[17px] leading-snug font-semibold">{h.titulo}</h4>
         </div>
-        <Etiqueta tono={h.estado === "comprobado" ? "observado" : "hipotesis"}>{t(`informe.tarjeta.${h.estado}`)}</Etiqueta>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {h.prioridad && <span className="text-xs font-semibold text-suave">{t(`informe.tarjeta.prioridad_${h.prioridad}`)}</span>}
+          <Etiqueta tono={h.estado === "comprobado" ? "observado" : "hipotesis"}>{t(`informe.tarjeta.${h.estado}`)}</Etiqueta>
+        </div>
       </header>
       <dl className="mt-3 space-y-2.5">
         {mostrarTexto && <Fila titulo="informe.tarjeta.hallazgo">{h.texto}</Fila>}

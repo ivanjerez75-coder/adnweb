@@ -24,9 +24,11 @@ const nombreDimension = (d: string) => (DIMENSION[d] ? t(DIMENSION[d]) : d);
 
 /** "Desconocido" / "Sin datos" se pintan apagados: nunca se adivina un precio. */
 function Valor({ texto }: { texto: string | undefined }) {
-  const v = typeof texto === "string" && texto.trim() ? texto : t("informe.sinDatos");
-  const apagado = v === "Desconocido" || v === "desconocido" || v === "Sin datos";
-  return apagado ? <span className="text-suave">{v === "desconocido" ? t("informe.desconocido") : v}</span> : <>{v}</>;
+  const v = typeof texto === "string" && texto.trim() ? texto.trim() : "";
+  const k = v.toLowerCase();
+  if (!v || k === t("informe.sinDatos").toLowerCase() || k === "sin_datos") return <span className="text-suave">{t("informe.sinDatos")}</span>;
+  if (k === t("informe.desconocido").toLowerCase()) return <span className="text-suave">{t("informe.desconocido")}</span>;
+  return <>{v}</>;
 }
 
 function Precios({ precios }: { precios: PrecioCompetidor[] | "desconocido" | undefined }) {

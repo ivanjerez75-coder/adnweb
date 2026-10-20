@@ -111,6 +111,8 @@ export interface TarjetaHallazgo {
   porQueImporta: string | null;
   /** Lo que propone el motor, o las tareas del plan que salen de este hallazgo. */
   queHacer: string[];
+  /** Prioridad calculada por el motor (alta, media, baja), o null en informes antiguos. */
+  prioridad: "alta" | "media" | "baja" | null;
   /** Solo fortalezas: frente a qué alternativa y para quién. */
   frenteA?: string;
   paraQuien?: string;
@@ -157,6 +159,7 @@ function tarjeta(
     evidencias: arr<Evidence>(x.evidencias),
     porQueImporta: texto(x.porQueImporta),
     queHacer: propio ? [propio] : delPlan,
+    prioridad: prioridadDe(x),
   };
 }
 
@@ -271,7 +274,8 @@ interface PrecioVista {
 export function datosClave(resumen: unknown, datos: unknown): DatoClave[] {
   const r = (resumen ?? {}) as { datosClave?: unknown; indicadores?: unknown };
   const propios = arr<unknown>(r.datosClave).filter(esDatoClave);
-  if (propios.length > 0) return propios;
+  // El motor da la fuente como nombre o como URL: si es una URL, también es el enlace.
+  if (propios.length > 0) return propios.map((d) => (!d.fuenteUrl && esHttp(d.fuente) ? { ...d, fuenteUrl: d.fuente } : d));
 
   const d = (datos ?? {}) as { metricas?: unknown; precios?: unknown };
   const disponibles = (xs: Metrica[]) => xs.filter((m) => m && m.estado === "disponible" && m.tipo !== "hipotesis");
@@ -425,4 +429,37 @@ export function fechaCorta(iso: string | null | undefined): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/Madrid" });
+}
+
+// ---------- Bloque 1: lo más importante ----------
+
+export interface ResumenDestacado {
+  hallazgos: { id: string; tipo: TipoTarjeta; titulo: string; estado: EstadoTarjeta }[];
+  oportunidad: { id: string; titulo: string } | null;
+}
+
+const TIPOS_TARJETA: readonly TipoTarjeta[] = ["fortaleza", "debilidad", "riesgo", "friccion"];
+
+/** Los hallazgos del resumen (hasta 3, ya filtrados por el motor) y la oportunidad principal. */
+export function loMasImportante(resumen: unknown): ResumenDestacado {
+  const r = (resumen ?? {}) as { hallazgos?: unknown; oportunidad?: unknown };
+  const hallazgos = arr<Record<string, unknown>>(r.hallazgos)
+    .filter((h) => h && typeof h.id === "string" && TIPOS_TARJETA.includes(h.tipo as TipoTarjeta))
+    .slice(0, 3)
+    .map((h) => ({
+      id: h.id as string,
+      tipo: h.tipo as TipoTarjeta,
+      titulo: texto(h.titulo) ?? primeraFrase(typeof h.texto === "string" ? h.texto : ""),
+      estado: (h.estado === "comprobado" ? "comprobado" : "por_comprobar") as EstadoTarjeta,
+    }))
+    .filter((h) => h.titulo);
+  const o = r.oportunidad as { id?: unknown; titulo?: unknown } | null | undefined;
+  const oportunidad = o && typeof o.id === "string" && texto(o.titulo) ? { id: o.id, titulo: texto(o.titulo) as string } : null;
+  return { hallazgos, oportunidad };
+}
+
+/** Prioridad de un hallazgo si el motor la dio. */
+export function prioridadDe(x: unknown): "alta" | "media" | "baja" | null {
+  const p = (x as { prioridad?: unknown } | null)?.prioridad;
+  return p === "alta" || p === "media" || p === "baja" ? p : null;
 }

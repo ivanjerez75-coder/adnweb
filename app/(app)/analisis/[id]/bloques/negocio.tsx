@@ -5,7 +5,7 @@ import type { CoberturaInforme, Resumen } from "@/lib/engine/v3/sections/resumen
 import type { EstadoComponente } from "@/lib/engine/v3/cobertura";
 import { Etiqueta } from "@/components/ui/Etiqueta";
 import { t, type Clave } from "@/lib/i18n";
-import { arr, esNegocioHibrido, hechosNegocio, trozosFrase } from "@/lib/shared/informe-view";
+import { anclaHallazgo, anclaOportunidad, arr, esNegocioHibrido, hechosNegocio, loMasImportante, trozosFrase } from "@/lib/shared/informe-view";
 import { Clase, Desplegable, ListaTextos, Rotulo, Subtitulo, VerPrueba } from "./comun";
 
 const TIPOLOGIA: Record<string, Clave> = {
@@ -80,7 +80,7 @@ function Frase({ bloque, nombre }: { bloque: AdnBloque; nombre?: string }) {
   );
 }
 
-function Tipologias({ tipologias }: { tipologias: TipologiaAnatomia[] }) {
+function Tipologias({ tipologias, hibrido }: { tipologias: TipologiaAnatomia[]; hibrido?: boolean }) {
   if (tipologias.length === 0) return null;
   return (
     <div className="mt-5 flex flex-wrap items-center gap-2">
@@ -90,7 +90,7 @@ function Tipologias({ tipologias }: { tipologias: TipologiaAnatomia[] }) {
           {CERTEZA[x.certeza] && <span className="text-xs text-suave">{t(CERTEZA[x.certeza])}</span>}
         </span>
       ))}
-      {esNegocioHibrido(tipologias) && <Etiqueta tono="observado">{t("informe.negocio.hibrido")}</Etiqueta>}
+      {(hibrido ?? esNegocioHibrido(tipologias)) && <Etiqueta tono="observado">{t("informe.negocio.hibrido")}</Etiqueta>}
     </div>
   );
 }
@@ -383,6 +383,43 @@ function AnatomiaCompleta({ a }: { a: Partial<Anatomia> }) {
 }
 
 /** Bloque 01: qué es el negocio y cómo funciona. */
+const TIPO_HALLAZGO: Record<string, Clave> = {
+  fortaleza: "informe.hallazgo.fortaleza",
+  debilidad: "informe.hallazgo.debilidad",
+  riesgo: "informe.hallazgo.riesgo",
+  friccion: "informe.hallazgo.friccion",
+};
+
+/** Resumen compacto al final del bloque 1: los hallazgos que superan los tres filtros y la oportunidad principal. */
+function LoMasImportante({ resumen }: { resumen: unknown }) {
+  const { hallazgos, oportunidad } = loMasImportante(resumen);
+  if (hallazgos.length === 0 && !oportunidad) return null;
+  return (
+    <section className="mt-6" aria-label={t("informe.negocio.loMasImportante")}>
+      <Rotulo>{t("informe.negocio.loMasImportante")}</Rotulo>
+      <ul className="mt-2 space-y-2">
+        {hallazgos.map((h) => (
+          <li key={h.id} className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold tracking-[0.08em] text-suave uppercase">{t(TIPO_HALLAZGO[h.tipo])}</span>
+            <a href={`#${anclaHallazgo(h.id)}`} className="font-semibold underline-offset-2 hover:underline">
+              {h.titulo}
+            </a>
+            <Etiqueta tono={h.estado === "comprobado" ? "observado" : "hipotesis"}>{t(`informe.tarjeta.${h.estado}`)}</Etiqueta>
+          </li>
+        ))}
+        {oportunidad && (
+          <li className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold tracking-[0.08em] text-suave uppercase">{t("informe.negocio.oportunidadPrincipal")}</span>
+            <a href={`#${anclaOportunidad(oportunidad.id)}`} className="font-semibold underline-offset-2 hover:underline">
+              {oportunidad.titulo}
+            </a>
+          </li>
+        )}
+      </ul>
+    </section>
+  );
+}
+
 export function BloqueNegocio({
   anatomia,
   resumen,
@@ -404,8 +441,9 @@ export function BloqueNegocio({
       <Rotulo>{t("informe.negocio.sintesis")}</Rotulo>
       <div className="mt-2">{frase && <Frase bloque={frase} nombre={r?.nombre ?? a.nombre} />}</div>
       {resumenPendiente && <p className="mt-2 text-sm text-suave">{t("informe.negocio.provisional")}</p>}
-      <Tipologias tipologias={tipologias} />
+      <Tipologias tipologias={tipologias} hibrido={typeof a.hibrido === "boolean" ? a.hibrido : undefined} />
       <Hechos anatomia={a} />
+      <LoMasImportante resumen={r} />
       <Desplegable titulo={t("informe.negocio.detalle")}>
         <AnatomiaCompleta a={a} />
       </Desplegable>

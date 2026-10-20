@@ -195,6 +195,8 @@ export const es = {
     negocio: {
       sintesis: "En 30 segundos",
       hibrido: "Negocio híbrido",
+      loMasImportante: "Lo más importante",
+      oportunidadPrincipal: "Oportunidad principal",
       queOfrece: "Qué ofrece",
       paraQuien: "Para quién",
       comoMonetiza: "Cómo monetiza",
@@ -215,6 +217,9 @@ export const es = {
     tarjeta: {
       comprobado: "Comprobado",
       por_comprobar: "Por comprobar",
+      prioridad_alta: "Prioridad alta",
+      prioridad_media: "Prioridad media",
+      prioridad_baja: "Prioridad baja",
       hallazgo: "Hallazgo",
       evidencia: "Evidencia",
       porQueImporta: "Por qué importa",

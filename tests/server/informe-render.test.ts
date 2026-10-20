@@ -97,6 +97,23 @@ describe("Informe (render)", () => {
     expect(html).toContain("Gestorías");
   });
 
+
+  it("bloque 1: 'Lo más importante' enlaza los hallazgos del resumen y la oportunidad principal (task 6b)", () => {
+    const resumen = {
+      nombre: "Facturo",
+      frase: anatomia.fraseResumen,
+      hallazgos: [{ tipo: "debilidad", id: "d1", titulo: "No muestra casos de clientes", texto: "x", estado: "comprobado", prioridad: "alta", evidencias: [ev] }],
+      oportunidad: { id: "o1", titulo: "Publicar casos de clientes" },
+      datosClave: [{ clave: "medios_pago", etiqueta: "Medios de pago", valor: "Visa, PayPal", clase: "observado", fuente: "https://facturo.example/" }],
+    };
+    const html = render({ anatomia: lista(anatomia), resumen: lista(resumen), datos: lista({ metricas: [], precios: [] }) });
+    expect(html).toContain("Lo más importante");
+    expect(html).toContain('href="#hallazgo-d1"');
+    expect(html).toContain('href="#oportunidad-o1"');
+    expect(html).toContain("Publicar casos de clientes");
+    expect(html).toContain("Medios de pago");
+    expect(html).toContain("Visa, PayPal");
+  });
   it("las citas literales van en serif cursiva con su fuente, sin tocar el texto", () => {
     const html = render({ anatomia: lista(anatomia) });
     expect(html).toContain("«Cita literal de la web»");
