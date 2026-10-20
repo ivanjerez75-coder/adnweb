@@ -10,6 +10,8 @@ export function decidirCallback(input: {
   error?: string | null;
   next?: string | null;
 }): DecisionCallback {
-  if (input.error || !input.code) return { tipo: "error", destino: "/login?error=google" };
+  // Google devuelve error (p. ej. cancelado): error de Google. Sin código: el enlace no sirve.
+  if (input.error) return { tipo: "error", destino: "/login?error=google" };
+  if (!input.code) return { tipo: "error", destino: "/login?error=enlace" };
   return { tipo: "intercambiar", code: input.code, destino: safeNext(input.next) };
 }

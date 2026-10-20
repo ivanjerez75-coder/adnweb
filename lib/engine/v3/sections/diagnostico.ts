@@ -290,6 +290,8 @@ function friccionesDeCodigo(raw: RawData, conPrecios: boolean): SinId<Friccion>[
 const esTipoFriccion = (s: string): s is TipoFriccion => (TIPOS_FRICCION as readonly string[]).includes(s);
 /** Extracto de la web analizada (no de un competidor). */
 const esPaginaPropia = (e: Evidence) => e.tipo === "pagina" && /^p\d/.test(e.id);
+/** Respaldo de la propia web: un extracto p* o un dato dato:* (nunca solo un extracto de competidor). */
+const esRespaldoPropio = (e: Evidence) => esPaginaPropia(e) || e.id.startsWith("dato:");
 const texto = (s: string, descriptivo = false) => limpiar(quitarIdsEvidencia(s ?? ""), { descriptivo });
 
 const MESES = /\b(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|semana|semanas|trimestre|presupuesto de)\b/i;
@@ -355,11 +357,11 @@ export async function generarDiagnostico(
   for (const f of ia.fortalezas) {
     const ev = citar(f.evidencias, regTotal);
     const t = texto(f.texto, true);
-    const frenteA = f.frenteA.trim();
-    if (!ev || !t || !frenteA) continue;
+    const frenteA = texto(f.frenteA, true);
+    if (!ev || !t || !frenteA || !ev.some(esRespaldoPropio)) continue;
     const autoelogio = ev.every((e) => idsAfirmacion.has(e.id));
     const clase = claseDeAfirmacion(ev, { declaradoEnWeb: f.declaradoEnWeb && !autoelogio });
-    candFortalezas.push({ texto: t, frenteA, paraQuien: f.paraQuien.trim(), evidencias: ev, clase, ...formatoDe(f, t, estadoHallazgo("fortaleza", clase, ev)) });
+    candFortalezas.push({ texto: t, frenteA, paraQuien: texto(f.paraQuien, true), evidencias: ev, clase, ...formatoDe(f, t, estadoHallazgo("fortaleza", clase, ev)) });
   }
 
   const candDebilidades: SinId<Debilidad>[] = [];

@@ -11,7 +11,8 @@ function uno(v: string | string[] | undefined): string {
 async function Formulario({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
   // Solo se muestra un mensaje fijo: el parámetro error nunca se pinta tal cual.
-  const errorInicial = uno(sp.error) ? t("auth.errorGoogle") : undefined;
+  const e = uno(sp.error);
+  const errorInicial = e === "enlace" ? t("auth.errorEnlace") : e ? t("auth.errorGoogle") : undefined;
   return <AuthForm next={uno(sp.next)} url={uno(sp.url)} errorInicial={errorInicial} />;
 }
 

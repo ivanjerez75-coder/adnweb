@@ -55,15 +55,28 @@ const respuesta = (over: object = {}) => ({
 });
 
 describe("generarDiagnostico", () => {
-  it("fortalezas: exigen frenteA y evidencia; pueden apoyarse en un competidor; ids secuenciales", async () => {
+  it("fortalezas: exigen frenteA y evidencia propia (p* o dato:*); solo-competidor se descarta; ids secuenciales", async () => {
     const { deps } = fakeModel(respuesta());
     const d = await generarDiagnostico(raw, anatomiaBase(["saas"]), competencia, regTotal, deps);
     expect(d.fortalezas.map((f) => [f.id, f.texto, f.frenteA])).toEqual([
       ["f1", "Explica el producto con claridad", "c1"],
-      ["f2", "Se apoya en un competidor", "Alfa"],
     ]);
     expect(d.fortalezas[0].clase).toBe("observado");
-    expect(d.fortalezas[1].evidencias.map((e) => e.id)).toEqual(["c1-e1"]);
+  });
+
+  it("frenteA y paraQuien pasan el filtro de texto; si frenteA queda vacío, se descarta", async () => {
+    const { deps } = fakeModel(
+      respuesta({
+        fortalezas: [
+          { texto: "Explica el producto con claridad", frenteA: "Alfa", paraQuien: "Tiene pocos clientes y malas ventas perdidas", evidencias: ev },
+          { texto: "Otra fortaleza clara", frenteA: "Tiene pocos clientes y malas ventas perdidas", paraQuien: "x", evidencias: ev },
+        ],
+      }),
+    );
+    const d = await generarDiagnostico(raw, anatomiaBase(["saas"]), competencia, regTotal, deps);
+    expect(d.fortalezas).toHaveLength(1);
+    expect(d.fortalezas[0].frenteA).toBe("Alfa");
+    expect(d.fortalezas[0].paraQuien).toBe(""); // el texto no respaldado se quita
   });
 
   it("una debilidad sin extracto de la propia web se descarta; la que afirma malas ventas también", async () => {

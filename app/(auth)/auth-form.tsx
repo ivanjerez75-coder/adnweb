@@ -48,6 +48,7 @@ export function AuthForm({ next, url, errorInicial }: Props) {
         <p className="mt-3 text-base font-medium text-menta">
           {enCodigo ? t("auth.subtituloCodigo") : t("auth.subtitulo")}
         </p>
+        {enCodigo && <p className="mt-1 text-sm text-white/70">{t("auth.notaEnlace")}</p>}
 
         <form action={formAction} className="mt-7">
           <input type="hidden" name="next" value={next} />

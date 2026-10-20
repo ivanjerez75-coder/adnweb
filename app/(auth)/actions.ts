@@ -6,7 +6,7 @@ import { t } from "@/lib/i18n";
 import { createServerSupabase } from "@/lib/supabase/server";
 import {
   destinoTrasLogin,
-  origenDesdeCabeceras,
+  origenDelSitio,
   validarCodigo,
   validarEmail,
 } from "@/lib/server/auth/validate";
@@ -29,10 +29,10 @@ function esLimite(error: { status?: number; code?: string; message?: string }): 
   );
 }
 
-/** Origen de la web a partir de las cabeceras de la petición (nunca de datos del usuario). */
+/** Origen de la web: NEXT_PUBLIC_SITE_URL; sin ella (desarrollo), las cabeceras. Nunca datos del usuario. */
 async function origenPeticion(): Promise<string | null> {
   const h = await headers();
-  return origenDesdeCabeceras(h.get("x-forwarded-host") ?? h.get("host"), h.get("x-forwarded-proto"));
+  return origenDelSitio(h);
 }
 
 /** Paso 1: envía el código por email (crea la cuenta si no existe). */

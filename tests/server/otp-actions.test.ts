@@ -5,6 +5,7 @@ const sb = vi.hoisted(() => ({
   verifyOtp: vi.fn(),
   signInWithOAuth: vi.fn(),
   host: "localhost:3100" as string | null,
+  fwdHost: null as string | null,
 }));
 
 vi.mock("next/navigation", () => ({
@@ -14,7 +15,8 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("next/headers", () => ({
   headers: async () => ({
-    get: (k: string) => (k === "host" ? sb.host : k === "x-forwarded-proto" ? "http" : null),
+    get: (k: string) =>
+      k === "host" ? sb.host : k === "x-forwarded-host" ? sb.fwdHost : k === "x-forwarded-proto" ? "http" : null,
   }),
 }));
 vi.mock("@/lib/supabase/server", () => ({
@@ -40,6 +42,8 @@ beforeEach(() => {
   sb.verifyOtp.mockReset();
   sb.signInWithOAuth.mockReset();
   sb.host = "localhost:3100";
+  sb.fwdHost = null;
+  vi.unstubAllEnvs();
 });
 
 describe("enviarCodigo", () => {
@@ -56,6 +60,13 @@ describe("enviarCodigo", () => {
       options: { shouldCreateUser: true, emailRedirectTo: "http://localhost:3100/auth/callback?next=%2Fdashboard" },
     });
     expect(r).toEqual({ paso: "codigo", email: "a@b.com" });
+  });
+  it("con NEXT_PUBLIC_SITE_URL, un x-forwarded-host falsificado se ignora", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://adnweb.example");
+    sb.fwdHost = "evil.com";
+    sb.signInWithOtp.mockResolvedValue({ error: null });
+    await enviarCodigo(undefined, form({ email: "a@b.com" }));
+    expect(sb.signInWithOtp.mock.calls[0][0].options.emailRedirectTo).toBe("https://adnweb.example/auth/callback?next=%2Fdashboard");
   });
   it("mapea el límite de envíos a español", async () => {
     sb.signInWithOtp.mockResolvedValue({ error: { status: 429, code: "over_email_send_rate_limit" } });

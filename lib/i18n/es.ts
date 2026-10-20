@@ -66,6 +66,8 @@ export const es = {
     errorLimite: "Has pedido demasiados códigos. Espera unos minutos.",
     errorEnvio: "No hemos podido enviar el código. Inténtalo de nuevo.",
     errorGoogle: "No se pudo iniciar sesión. Vuelve a pedir el enlace o inténtalo de nuevo.",
+    errorEnlace: "El enlace no es válido o ha caducado. Pide uno nuevo y ábrelo en este mismo navegador.",
+    notaEnlace: "Abre el enlace en este mismo navegador.",
     entrar: "Entrar",
     salir: "Cerrar sesión",
   },

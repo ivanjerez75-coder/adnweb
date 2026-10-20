@@ -61,7 +61,7 @@ const PERIODOS: { valor: Periodicidad; re: RegExp }[] = [
   { valor: "unico", re: /pago\s+[úu]nico|one[-\s]?time|una\s+sola\s+vez/i },
 ];
 
-function numero(texto: string): number | null {
+export function numero(texto: string): number | null {
   const m = texto.match(/\d[\d.,\s]*/);
   if (!m) return null;
   let num = m[0].trim().replace(/\s/g, "");

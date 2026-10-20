@@ -8,7 +8,7 @@ import { escapeAngles } from "../../ai/prompt";
 import { resumenAnatomia } from "./comun";
 import { extractPassages, extractPricePassages } from "../../sources/pages";
 import { citar, type Evidence } from "../evidence";
-import { preciosPublicados } from "../estimates";
+import { numero, preciosPublicados } from "../estimates";
 import { runSection, type RunSectionOpts } from "../llm";
 import { bloqueDatosWeb, REGLAS_COMUNES } from "../prompt";
 import { limpiarAfirmacionesNoRespaldadas } from "../filtro";
@@ -302,8 +302,9 @@ interface Leido {
 }
 
 /** Extractos de los competidores dentro del delimitador, escapados. */
-function bloqueCompetidores(leidos: Leido[]): string {
+function bloqueCompetidores(leidos: Leido[], fichas?: string): string {
   const partes: string[] = [];
+  if (fichas) partes.push("Fichas de los competidores:", fichas);
   for (const { c, reg, idsPrecios } of leidos) {
     partes.push(`[${c.id}] ${c.nombre} — ${c.web ?? ""}`);
     let usado = 0;
@@ -334,13 +335,20 @@ ${REGLAS_COMUNES}
 ${bloqueCompetidores(leidos)}`;
 }
 
-const NUMERO = /\d+(?:[.,]\d+)?/g;
+const NUMERO = /\d+(?:[.,]\d+)*/g;
 const GRATIS = /gratis|gratuit|free/i;
 
 /** El precio es literal: sus cifras (o "gratis") aparecen en el extracto citado. */
-function precioRespaldado(texto: string, extracto: string): boolean {
+export function precioRespaldado(texto: string, extracto: string): boolean {
   const nums = texto.match(NUMERO);
-  if (nums) return nums.every((n) => extracto.includes(n));
+  if (nums) {
+    // Números completos (nunca un trozo de otro) y con los separadores normalizados.
+    const enExtracto = new Set((extracto.match(NUMERO) ?? []).map((n) => numero(n)));
+    return nums.every((n) => {
+      const v = numero(n);
+      return v !== null && enExtracto.has(v);
+    });
+  }
   return GRATIS.test(texto) && GRATIS.test(extracto);
 }
 
@@ -403,14 +411,14 @@ const ComparacionIA = z.object({
 });
 
 function resumenFichas(leidos: Leido[]): string {
-  return escapeAngles(
+  return (
     leidos
       .map(({ c }) => {
         const f = c.ficha;
         const precio = !f || f.precios === "desconocido" ? PRECIO_DESCONOCIDO : f.precios.map((p) => p.texto).join(", ");
         return `- ${c.id} ${c.nombre} (${c.tipo}): propuesta: ${f?.propuesta?.texto ?? "?"}; público: ${f?.publico?.texto ?? "?"}; funcionalidades: ${f?.funcionalidades.join(", ") || "?"}; precio: ${precio}`;
       })
-      .join("\n"),
+      .join("\n")
   );
 }
 
@@ -419,9 +427,6 @@ function promptComparacion(raw: RawData, a: Anatomia, leidos: Leido[]): string {
   return `Eres un analista de mercado. Compara el negocio analizado ("analizada") con sus competidores verificados (${leidos.map((l) => l.c.id).join(", ")}).
 
 ${resumenAnatomia(a)}
-
-Fichas de los competidores:
-${resumenFichas(leidos)}
 
 Devuelve SOLO un JSON: { "filas": [ { "quien": ${quienes}, "valores": { "cliente": { "texto": string, "evidencias": string[] }, "propuesta": {…}, "funcionalidades": {…}, "diferenciacion": {…}, "oportunidad": {…} } } ], "ganaPierde": [ { "dimension": "cliente" | "propuesta" | "precio" | "funcionalidades" | "diferenciacion" | "oportunidad", "destaca": ${quienes} o "empate", "evidencias": string[], "porQueImporta": string (por qué le importa al cliente), "aprender": string (qué puede aprender la empresa analizada), "diferenciarse": string (cómo diferenciarse sin copiar) } ] }
 
@@ -433,7 +438,7 @@ ${REGLAS_COMUNES}
 
 ${bloqueDatosWeb(raw)}
 
-${bloqueCompetidores(leidos)}`;
+${bloqueCompetidores(leidos, resumenFichas(leidos))}`;
 }
 
 const ES_COMPETIDOR = /^c\d+-e\d+$/;
@@ -496,9 +501,9 @@ function resolverComparacion(
       dimension,
       destaca: valido ? destacaIA : "sin_datos",
       evidencia: valido ? ev : [],
-      porQueImporta: filtrar(g.porQueImporta),
-      aprender: filtrar(g.aprender),
-      diferenciarse: filtrar(g.diferenciarse),
+      porQueImporta: valido ? filtrar(g.porQueImporta) : "",
+      aprender: valido ? filtrar(g.aprender) : "",
+      diferenciarse: valido ? filtrar(g.diferenciarse) : "",
     });
   }
   return { matriz: { dimensiones: [...DIMENSIONES], filas }, ganaPierde };

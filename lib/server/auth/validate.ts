@@ -20,6 +20,24 @@ export function origenDesdeCabeceras(host: string | null, proto: string | null):
   return `${esquema}://${h}`;
 }
 
+/**
+ * Origen de la web para los retornos de login. Con NEXT_PUBLIC_SITE_URL (origen http/https válido)
+ * se usa tal cual y las cabeceras se ignoran (se pueden falsificar). Sin ella, y solo para
+ * desarrollo, se deduce de las cabeceras de la petición.
+ */
+export function origenDelSitio(h: { get(nombre: string): string | null }): string | null {
+  const configurado = (process.env.NEXT_PUBLIC_SITE_URL ?? "").trim();
+  if (configurado) {
+    try {
+      const u = new URL(configurado);
+      if (u.protocol === "http:" || u.protocol === "https:") return u.origin;
+    } catch {
+      // valor inválido: se trata como si no estuviera
+    }
+  }
+  return origenDesdeCabeceras(h.get("x-forwarded-host") ?? h.get("host"), h.get("x-forwarded-proto"));
+}
+
 /** Destino tras login/registro: `next` seguro, o /dashboard con la url de la landing. */
 export function destinoTrasLogin(next: string | null | undefined, url: string | null | undefined): string {
   const hasNext = typeof next === "string" && next.length > 0;

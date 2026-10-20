@@ -133,6 +133,7 @@ function GanaPierdeFila({ g, nombreDe }: { g: GanaPierde; nombreDe: (q: string) 
           {t("informe.competencia.destaca")}: <span className={g.destaca === "analizada" ? "font-semibold text-teal" : "font-semibold"}>{destaca}</span>
         </span>
       </p>
+      {g.destaca !== "sin_datos" && (
       <dl className="mt-2 grid gap-3 text-[15px] md:grid-cols-3">
         {g.porQueImporta && (
           <div>
@@ -153,7 +154,8 @@ function GanaPierdeFila({ g, nombreDe }: { g: GanaPierde; nombreDe: (q: string) 
           </div>
         )}
       </dl>
-      <VerPrueba evidencias={g.evidencia} />
+      )}
+      {g.destaca !== "sin_datos" && <VerPrueba evidencias={g.evidencia} />}
     </li>
   );
 }

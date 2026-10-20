@@ -4,6 +4,7 @@ import {
   encontrarPaginaPrecios,
   generarCompetencia,
   normalizarTexto,
+  precioRespaldado,
   type CompetenciaDeps,
 } from "../../../lib/engine/v3/sections/competencia";
 import { extractPricePassages } from "../../../lib/engine/sources/pages";
@@ -261,6 +262,8 @@ describe("generarCompetencia", () => {
       ["precio", "sin_datos"], // competidor desconocido
     ]);
     expect(ganaPierde[0].evidencia).toEqual([]);
+    expect([ganaPierde[0].porQueImporta, ganaPierde[0].aprender, ganaPierde[0].diferenciarse]).toEqual(["", "", ""]); // sin evidencia, sin consejo
+    expect(ganaPierde[1].aprender).toBe("Mostrar la contabilidad");
     expect(ganaPierde[1].evidencia.map((e) => e.id)).toEqual(["c1-e2"]);
   });
 
@@ -303,6 +306,27 @@ describe("generarCompetencia", () => {
     const getPage: PageGetter = async (u) => page("https://otro.com/", HOME_ALFA.replace("x", u));
     const r = await generarCompetencia(raw, anatomia, reg, deps({ candidatos, fichas: "FAIL", comparacion: "FAIL" }, { getPage }));
     expect(r.competencia.competidores[0].verificado).toBe(false);
+  });
+});
+
+describe("precioRespaldado", () => {
+  it("compara números completos y normaliza separadores", () => {
+    expect(precioRespaldado("9 €", "Plan 99 €/mes")).toBe(false);
+    expect(precioRespaldado("19 €", "Plan 19 €/mes")).toBe(true);
+    expect(precioRespaldado("1.200 €", "Desde 1.200 € al año")).toBe(true);
+    expect(precioRespaldado("1200 €", "Desde 1.200 € al año")).toBe(true);
+    expect(precioRespaldado("200 €", "Desde 1.200 € al año")).toBe(false);
+  });
+});
+
+describe("prompt de comparación", () => {
+  it("las fichas (nombres y textos de competidores) van dentro del delimitador", async () => {
+    const prompts: string[] = [];
+    await generarCompetencia(raw, anatomia, reg, deps({ candidatos: { competidores: cands }, fichas: { fichas: [] }, comparacion: { filas: [], ganaPierde: [] } }, {}, prompts));
+    const p = prompts.find((x) => x.includes("Compara el negocio"))!;
+    const fuera = p.replace(/<<<DATOS_WEB[\s\S]*?DATOS_WEB>>>/g, "");
+    for (const c of cands) expect(fuera).not.toContain(c.nombre);
+    expect(p).toContain("Fichas de los competidores:");
   });
 });
 

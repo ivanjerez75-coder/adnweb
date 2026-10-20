@@ -23,6 +23,14 @@ Nota: si dejas la plantilla original, el email llevará un enlace en lugar del c
 
 ## 2. Direcciones permitidas (Supabase)
 
+Añade también esta línea a tu archivo `.env.local` (la dirección de tu web; ahora mismo la de tu ordenador). Sin ella, la web deduce la dirección de la petición, algo solo válido mientras pruebas:
+
+```
+NEXT_PUBLIC_SITE_URL=http://localhost:3100
+```
+
+Cuando publiques la web, cámbiala por tu dirección real, por ejemplo `https://tudominio.com`.
+
 1. Ve a **Authentication → URL Configuration**.
 2. En **Site URL** escribe: `http://localhost:3100` (por ahora, mientras pruebas en tu ordenador).
 3. En **Redirect URLs** pulsa **Add URL** y añade: `http://localhost:3100/auth/callback`

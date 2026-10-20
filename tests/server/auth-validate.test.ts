@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   destinoTrasLogin,
+  origenDelSitio,
   origenDesdeCabeceras,
   validarCodigo,
   validarEmail,
@@ -21,6 +22,21 @@ describe("validarCodigo", () => {
   it.each(["12345", "abcdef", "1234567", ""])("rechaza %j", (c) =>
     expect(validarCodigo(c)).not.toBeNull(),
   );
+});
+
+describe("origenDelSitio", () => {
+  const h = (m: Record<string, string>) => ({ get: (k: string) => m[k] ?? null });
+  afterEach(() => vi.unstubAllEnvs());
+  it("con la variable válida la usa y ignora las cabeceras", () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://adnweb.example/");
+    expect(origenDelSitio(h({ "x-forwarded-host": "evil.com", host: "evil.com" }))).toBe("https://adnweb.example");
+  });
+  it("variable inválida o ausente: cae a las cabeceras", () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "javascript:alert(1)");
+    expect(origenDelSitio(h({ host: "localhost:3100" }))).toBe("http://localhost:3100");
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "");
+    expect(origenDelSitio(h({ host: "adnweb.com", "x-forwarded-proto": "https" }))).toBe("https://adnweb.com");
+  });
 });
 
 describe("origenDesdeCabeceras", () => {
