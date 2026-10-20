@@ -5,6 +5,7 @@ import { fakeV3Model, rawV3, v3GetPage, v3RunOpts } from "./v3-fakes";
 import { fakeFetcher, NOW } from "../engine/fake-network";
 import { AiUnavailableError, type JsonModel } from "@/lib/engine/ai/providers";
 import type { PageGetter } from "@/lib/engine/safe-fetch";
+import { WEB_NO_LEGIBLE } from "@/lib/engine/v3/report";
 
 const normalized = { url: "https://facturo.example/", domain: "facturo.example" };
 const badModel: JsonModel = {
@@ -182,6 +183,21 @@ describe("runAnalysis (informe v4)", () => {
     const mine = state.analisis.find((x) => x.id === a.id)!;
     expect(mine.estado).toBe("error");
     expect(mine.creditoDevuelto).toBe(true);
+  });
+
+  it("web ilegible (InsufficientDataError WEB_NO_LEGIBLE): error con ese mensaje y crédito devuelto una sola vez", async () => {
+    const { worker, state, a, deps } = setup([fakeV3Model()]);
+    conCache(state, { ...rawV3, site: null, paginas: [] });
+    const creditos = state.creditos;
+    const refund = vi.spyOn(worker, "devolverCredito");
+    await runAnalysis(a.id, normalized, deps);
+    const mine = state.analisis.find((x) => x.id === a.id)!;
+    expect(mine.estado).toBe("error");
+    expect(mine.error).toBe(WEB_NO_LEGIBLE);
+    expect(mine.errorKind).toBe("datos_insuficientes");
+    expect(refund).toHaveBeenCalledTimes(1);
+    expect(mine.creditoDevuelto).toBe(true);
+    expect(state.creditos).toBe(creditos + 1);
   });
 
   it("nunca lanza aunque fallar y devolverCredito fallen", async () => {

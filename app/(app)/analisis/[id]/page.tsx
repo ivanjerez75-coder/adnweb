@@ -27,7 +27,7 @@ async function Contenido({ params }: { params: Promise<{ id: string }> }) {
   if (!a) notFound();
 
   // Informe v4 o análisis en curso (los análisis nuevos se guardan siempre por secciones v4).
-  if ((a.version === 4 && a.estado !== "error") || a.estado === "procesando") {
+  if (a.version !== 3 && ((a.version === 4 && a.estado !== "error") || a.estado === "procesando")) {
     return (
       <main className={MAIN}>
         <Informe

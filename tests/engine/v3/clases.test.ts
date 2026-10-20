@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { claseDeAfirmacion, aplicaPrecios, tipologiasDesdeTipoNegocio } from "../../../lib/engine/v3/clases";
+import { claseDeAfirmacion, aplicaPrecios } from "../../../lib/engine/v3/clases";
 import type { Evidence } from "../../../lib/engine/v3/evidence";
 
 const pagina: Evidence = { id: "p1-e1", tipo: "pagina", texto: "cita", url: "https://x.example/", fuente: "https://x.example/" };
@@ -39,14 +39,5 @@ describe("aplicaPrecios", () => {
   });
   it("alguna línea no es por presupuesto → true", () => {
     expect(aplicaPrecios(["saas"], [{ comoSeContrata: "Por presupuesto" }, { comoSeContrata: "Suscripción" }])).toBe(true);
-  });
-});
-
-describe("tipologiasDesdeTipoNegocio", () => {
-  it("adapta los nombres antiguos", () => {
-    expect(tipologiasDesdeTipoNegocio("servicios")).toEqual(["servicio_profesional"]);
-    expect(tipologiasDesdeTipoNegocio("contenido_ads")).toEqual(["contenido"]);
-    expect(tipologiasDesdeTipoNegocio("otro")).toEqual(["web_informativa"]);
-    expect(tipologiasDesdeTipoNegocio("saas")).toEqual(["saas"]);
   });
 });

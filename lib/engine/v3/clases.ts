@@ -46,9 +46,3 @@ export function aplicaPrecios(tipologias: Tipologia[], lineas: { comoSeContrata:
   if (lineas.length > 0 && lineas.every((l) => /presupuesto/i.test(l.comoSeContrata))) return false;
   return true;
 }
-
-/** Adapta un tipoNegocio v3 a tipologías. El informe ya las toma de la anatomía; queda para fixtures v3. */
-export function tipologiasDesdeTipoNegocio(tipo: string): Tipologia[] {
-  const mapa: Record<string, Tipologia> = { servicios: "servicio_profesional", contenido_ads: "contenido", otro: "web_informativa" };
-  return [(mapa[tipo] ?? tipo) as Tipologia];
-}

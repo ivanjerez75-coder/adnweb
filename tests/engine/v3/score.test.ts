@@ -1,8 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { tipologiasDesdeTipoNegocio, type Tipologia } from "../../../lib/engine/v3/clases";
+import type { Tipologia } from "../../../lib/engine/v3/clases";
 import { calcularScore, METODOLOGIA_DNA, PESOS_DNA, AVISO_SCORE, type DnaScore, type DimensionClave } from "../../../lib/engine/v3/score";
 import { construirMetricas } from "../../../lib/engine/v3/estimates";
 import { CAMPOS_IDENTIDAD, type AdnBloque, type AdnCanal, type Anatomia, type ModeloEstado } from "../../../lib/engine/v3/sections/anatomia";
+
+/** Adapta el tipoNegocio de los fixtures a tipologías (solo para estos tests). */
+function tipologiasDesdeTipoNegocio(tipo: string): Tipologia[] {
+  const mapa: Record<string, Tipologia> = { servicios: "servicio_profesional", contenido_ads: "contenido", otro: "web_informativa" };
+  return [(mapa[tipo] ?? tipo) as Tipologia];
+}
 
 /** Forma corta de prueba: lo que el DNA Score lee de la anatomía. */
 interface Adn {
