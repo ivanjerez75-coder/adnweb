@@ -20,6 +20,7 @@ function aAnatomia(a: Adn): Anatomia {
   identidad.beneficio = { declara: a.propuestaValor, interpretamos: null };
   return {
     nombre: "Facturo",
+    hibrido: false,
     fraseResumen: { texto: "", evidencias: [] },
     identidad,
     tipologias: tipologiasDesdeTipoNegocio(a.tipoNegocio).map((tipo) => ({ tipo, certeza: "alta", explicacion: "", evidencias: [] })),

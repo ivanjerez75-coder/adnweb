@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Competencia } from "@/lib/engine/v3/sections/competencia";
+import type { Diagnostico } from "@/lib/engine/v3/sections/diagnostico";
 import {
   accionesDeOportunidad,
   datosClave,
@@ -28,7 +29,7 @@ const diagnostico = {
   fricciones: [{ id: "x1", tipo: "precio" as const, texto: "No hay precios", evidencias: [], potencial: true as const }],
   integrado: { texto: "Conclusión." },
   comprobaciones: [],
-};
+} as unknown as Diagnostico;
 
 const competencia: Partial<Competencia> = {
   competidores: [],
@@ -113,7 +114,7 @@ describe("tarjetasHallazgos", () => {
     expect(de("f1").queHacer).toEqual([]);
   });
   it("respeta los campos nuevos si vienen", () => {
-    const d = { ...diagnostico, debilidades: [{ ...diagnostico.debilidades[0], titulo: "Web dispersa", queHacer: "Ordenar el menú", estado: "comprobado" }] };
+    const d = { ...diagnostico, debilidades: [{ ...diagnostico.debilidades[0], titulo: "Web dispersa", queHacer: "Ordenar el menú", estado: "comprobado" as const }] };
     const [t] = tarjetasHallazgos(filtrarHallazgos(d, "debilidades"), plan);
     expect(t).toMatchObject({ titulo: "Web dispersa", queHacer: ["Ordenar el menú"], estado: "comprobado" });
   });

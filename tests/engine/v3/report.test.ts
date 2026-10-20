@@ -63,7 +63,7 @@ function fakeModels(fail: Fail = {}, tracker = { cur: 0, max: 0 }): JsonModel {
           case "dif":
             return JSON.stringify({ diferencias: [] });
           case "diagnostico":
-            return JSON.stringify({ fortalezas: [{ texto: "Claro", frenteA: "Alfa", paraQuien: "pymes", evidencias: ev }], debilidades: [{ texto: "Sin casos", porQueImporta: "Confianza", evidencias: ev }], integrado: "Prioridad: casos." });
+            return JSON.stringify({ fortalezas: [{ texto: "Claro", frenteA: "Alfa", paraQuien: "pymes", evidencias: ev, relevancia: "medio", fiabilidad: "medio", utilidad: "medio" }], debilidades: [{ texto: "Sin casos", porQueImporta: "Confianza", evidencias: ev, relevancia: "alto", fiabilidad: "medio", utilidad: "medio" }], integrado: "Prioridad: casos." });
           case "oportunidades":
             return JSON.stringify({ oportunidades: [{ tipologia: "mejorar", titulo: "Mostrar casos", origen: ["d1"], ficha: { evidencia: { texto: "No hay casos", evidencias: ev }, problema: "Falta confianza", solucion: "Publicar casos", porQuePodria: "Da confianza", faltaComprobar: [] }, estado: "por_validar", criterios: {} }] });
           default:

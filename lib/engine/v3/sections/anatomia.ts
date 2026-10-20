@@ -89,6 +89,8 @@ export interface Anatomia {
   identidad: Record<ClaveIdentidad, CampoIdentidad>;
   /** De 1 a 3; sin evidencia se descartan y, si no queda ninguna, "web_informativa" con certeza baja. */
   tipologias: TipologiaAnatomia[];
+  /** Calculado en código: al menos 2 tipologías con certeza alta o media. */
+  hibrido: boolean;
   lineas: LineaAnatomia[];
   monetizacion: FuenteMonetizacion[];
   cliente: ClienteAnatomia;
@@ -428,17 +430,24 @@ function calcularModeloEstado(propuesto: ModeloEstado, lineas: LineaAnatomia[], 
   return propuesto === "confirmado" && contrataConPagina && (hayPrecio || hayCanal) ? "confirmado" : "probable";
 }
 
+/** Negocio híbrido: al menos dos tipologías con certeza alta o media. */
+export function esHibrido(tipologias: Pick<TipologiaAnatomia, "certeza">[]): boolean {
+  return tipologias.filter((t) => t.certeza === "alta" || t.certeza === "media").length >= 2;
+}
+
 /** Sección 02 del informe v4. Es la única fatal: sin ninguna línea con evidencia, SeccionVaciaError. */
 export async function generarAnatomia(raw: RawData, reg: Reg, deps: SectionDeps): Promise<Anatomia> {
   const ia = await runSection("anatomia", promptAnatomia(raw), AnatomiaIA, deps.models, deps.runOpts);
   const lineas = resolverLineas(ia.lineas, reg);
   if (lineas.length === 0) throw new SeccionVaciaError("anatomia");
   const canales = resolverCanales(ia.canales, raw, reg);
+  const tipologias = resolverTipologias(ia.tipologias, reg);
   return {
     nombre: nombreNegocio(ia.nombre, raw),
     fraseResumen: resolverFraseResumen(ia.fraseResumen, lineas, reg),
     identidad: resolverIdentidad(ia.identidad, reg),
-    tipologias: resolverTipologias(ia.tipologias, reg),
+    tipologias,
+    hibrido: esHibrido(tipologias),
     lineas,
     monetizacion: resolverMonetizacion(ia.monetizacion, canales, reg),
     cliente: resolverCliente(ia.cliente, reg),

@@ -3,7 +3,7 @@ import { contienePlazoOImporte, generarPlan } from "../../../lib/engine/v3/secti
 import type { Oportunidad } from "../../../lib/engine/v3/sections/oportunidades";
 import type { Diagnostico } from "../../../lib/engine/v3/sections/diagnostico";
 import { SeccionVaciaError } from "../../../lib/engine/v3/errors";
-import { fakeModel } from "./fixtures-v4";
+import { fakeModel, FMT } from "./fixtures-v4";
 
 const ev = { id: "p1-e1", tipo: "pagina" as const, texto: "Cita", url: "https://x.example/", fuente: "https://x.example/" };
 const oportunidad: Oportunidad = {
@@ -18,10 +18,10 @@ const oportunidad: Oportunidad = {
   clase: "hipotesis",
 };
 const diagnostico: Diagnostico = {
-  fortalezas: [{ id: "f1", texto: "Claro", frenteA: "Alfa", paraQuien: "pymes", evidencias: [ev], clase: "observado" }],
-  debilidades: [{ id: "d1", texto: "No muestra casos", porQueImporta: "Confianza", evidencias: [ev], clase: "inferencia" }],
-  riesgos: [{ id: "r1", texto: "Un canal", evidencias: [ev], clase: "hipotesis" }],
-  fricciones: [{ id: "x1", tipo: "pasos", texto: "Hay que contactar para todo", evidencias: [ev], potencial: true }],
+  fortalezas: [{ ...FMT, id: "f1", texto: "Claro", frenteA: "Alfa", paraQuien: "pymes", evidencias: [ev], clase: "observado" }],
+  debilidades: [{ ...FMT, id: "d1", texto: "No muestra casos", porQueImporta: "Confianza", evidencias: [ev], clase: "inferencia" }],
+  riesgos: [{ ...FMT, id: "r1", texto: "Un canal", evidencias: [ev], clase: "hipotesis" }],
+  fricciones: [{ ...FMT, id: "x1", tipo: "pasos", texto: "Hay que contactar para todo", evidencias: [ev], potencial: true }],
   integrado: { texto: "" },
   comprobaciones: [],
 };

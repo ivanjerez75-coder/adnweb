@@ -6,7 +6,7 @@ import type { ComponenteCobertura, EstadoComponente } from "../cobertura";
 import type { Metrica, PrecioPublicado } from "../estimates";
 import type { Evidence } from "../evidence";
 import type { Anatomia, AdnBloque, ModeloEstado, TipologiaAnatomia } from "./anatomia";
-import type { Debilidad, Diagnostico, Fortaleza } from "./diagnostico";
+import { ordenarPorPrioridad, superaFiltros, type Debilidad, type Diagnostico, type EstadoHallazgo, type Fortaleza, type FormatoHallazgo } from "./diagnostico";
 import type { Oportunidad, Prioridad } from "./oportunidades";
 
 /** Resumen ejecutivo (sección 01): lo arma el código, sin llamadas de IA ni puntuación global. */
@@ -15,7 +15,10 @@ export interface Hallazgo {
   tipo: TipoHallazgo;
   /** Id del diagnóstico (d*, f*, r*, x*). */
   id: string;
+  titulo: string;
   texto: string;
+  estado: EstadoHallazgo;
+  prioridad: Prioridad;
   evidencias: Evidence[];
 }
 
@@ -32,7 +35,7 @@ export interface Resumen {
   indicadores: Metrica[];
   /** Datos clave según la tipología (bloque 2), solo con fuente verificable. */
   datosClave: DatoClave[];
-  /** Hasta 3: la primera debilidad, la primera fortaleza y el primer riesgo (o fricción). */
+  /** Hasta 3: los que superan los tres filtros (§11.3), con evidencia, de mayor prioridad primero. */
   hallazgos: Hallazgo[];
   /** Una fortaleza y una debilidad más, sin repetir las de los hallazgos cuando hay otra. */
   destacado: { fortaleza?: Fortaleza; debilidad?: Debilidad };
@@ -68,17 +71,30 @@ function elegirIndicadores(metricas: Metrica[]): Metrica[] {
   return out;
 }
 
+export const MAX_HALLAZGOS = 3;
+
+/**
+ * Hallazgos del resumen (§11.3): solo los que superan los tres filtros (todos al menos "medio") y
+ * tienen evidencia, sin repetir texto; los de mayor prioridad primero, como mucho 3.
+ */
 function elegirHallazgos(d: Diagnostico | null): Hallazgo[] {
   if (!d) return [];
+  type Item = FormatoHallazgo & { id: string; texto: string; evidencias: Evidence[]; tipo: TipoHallazgo };
+  const todos: Item[] = [
+    ...d.fortalezas.map((x) => ({ ...x, tipo: "fortaleza" as const })),
+    ...d.debilidades.map((x) => ({ ...x, tipo: "debilidad" as const })),
+    ...d.riesgos.map((x) => ({ ...x, tipo: "riesgo" as const })),
+    ...d.fricciones.map((x) => ({ ...x, tipo: "friccion" as const })),
+  ];
+  const vistos = new Set<string>();
   const out: Hallazgo[] = [];
-  const deb = d.debilidades[0];
-  if (deb) out.push({ tipo: "debilidad", id: deb.id, texto: deb.texto, evidencias: deb.evidencias });
-  const fort = d.fortalezas[0];
-  if (fort) out.push({ tipo: "fortaleza", id: fort.id, texto: fort.texto, evidencias: fort.evidencias });
-  const riesgo = d.riesgos[0];
-  const friccion = d.fricciones[0];
-  if (riesgo) out.push({ tipo: "riesgo", id: riesgo.id, texto: riesgo.texto, evidencias: riesgo.evidencias });
-  else if (friccion) out.push({ tipo: "friccion", id: friccion.id, texto: friccion.texto, evidencias: friccion.evidencias });
+  for (const x of ordenarPorPrioridad(todos.filter((x) => superaFiltros(x) && x.evidencias.length > 0))) {
+    const clave = x.texto.trim().toLowerCase();
+    if (vistos.has(clave)) continue;
+    vistos.add(clave);
+    out.push({ tipo: x.tipo, id: x.id, titulo: x.titulo, texto: x.texto, estado: x.estado, prioridad: x.prioridad, evidencias: x.evidencias });
+    if (out.length === MAX_HALLAZGOS) break;
+  }
   return out;
 }
 

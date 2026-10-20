@@ -5,7 +5,7 @@ import type { Diagnostico } from "../../../lib/engine/v3/sections/diagnostico";
 import type { Oportunidad } from "../../../lib/engine/v3/sections/oportunidades";
 import { construirMetricas, preciosPublicados, type Metrica } from "../../../lib/engine/v3/estimates";
 import { makeRaw } from "../raw-fixture";
-import { anatomiaBase } from "./fixtures-v4";
+import { anatomiaBase, FMT } from "./fixtures-v4";
 
 const anatomia = {
   nombre: "Facturo",
@@ -16,12 +16,12 @@ const anatomia = {
 
 const diag = (over: Partial<Diagnostico> = {}): Diagnostico => ({
   fortalezas: [
-    { id: "f1", texto: "Clara", frenteA: "", paraQuien: "", evidencias: [], clase: "inferencia" },
-    { id: "f2", texto: "Barata", frenteA: "", paraQuien: "", evidencias: [], clase: "inferencia" },
+    { ...FMT, id: "f1", texto: "Clara", frenteA: "", paraQuien: "", evidencias: [], clase: "inferencia" },
+    { ...FMT, id: "f2", texto: "Barata", frenteA: "", paraQuien: "", evidencias: [], clase: "inferencia" },
   ],
-  debilidades: [{ id: "d1", texto: "Sin casos", porQueImporta: "", evidencias: [], clase: "inferencia" }],
+  debilidades: [{ ...FMT, id: "d1", texto: "Sin casos", porQueImporta: "", evidencias: [], clase: "inferencia" }],
   riesgos: [],
-  fricciones: [{ id: "x1", tipo: "precio", texto: "Precio escondido", evidencias: [], potencial: true }],
+  fricciones: [{ ...FMT, id: "x1", tipo: "precio", texto: "Precio escondido", evidencias: [], potencial: true }],
   integrado: { texto: "" },
   comprobaciones: [],
   ...over,
@@ -33,15 +33,28 @@ const cobertura = { competencia: { estado: "fallido", motivo: "x" } } as unknown
 const meta = { dominio: "facturo.example", fecha: "2026-10-19T00:00:00.000Z" };
 
 describe("construirResumen", () => {
-  it("elige los hallazgos por regla: debilidad, fortaleza y riesgo o fricción", () => {
-    const r = construirResumen(anatomia, diag(), [], [], cobertura, meta);
-    expect(r.hallazgos.map((h) => [h.tipo, h.id])).toEqual([
-      ["debilidad", "d1"],
-      ["fortaleza", "f1"],
-      ["friccion", "x1"],
+  it("hallazgos: solo los que superan los tres filtros y tienen evidencia, por prioridad, como mucho 3", () => {
+    const e = [{ id: "p1-e1", tipo: "pagina" as const, texto: "x", fuente: "web" }];
+    const alto = { relevancia: "alto", fiabilidad: "alto", utilidad: "medio", prioridad: "alta" } as const;
+    const d = diag({
+      fortalezas: [
+        { ...FMT, id: "f1", texto: "Clara", frenteA: "", paraQuien: "", evidencias: e, clase: "observado" },
+        { ...FMT, id: "f2", texto: "Bonita", frenteA: "", paraQuien: "", evidencias: e, clase: "observado", relevancia: "bajo", prioridad: "baja" },
+      ],
+      debilidades: [{ ...FMT, ...alto, id: "d1", texto: "Sin casos", evidencias: e, clase: "inferencia" }],
+      riesgos: [
+        { ...FMT, id: "r1", texto: "Dependencia", evidencias: e, clase: "hipotesis" },
+        { ...FMT, id: "r2", texto: "Otro riesgo", evidencias: e, clase: "hipotesis" },
+      ],
+      fricciones: [{ ...FMT, ...alto, id: "x1", tipo: "precio", texto: "Precio escondido", evidencias: [], potencial: true }],
+    });
+    const r = construirResumen(anatomia, d, [], [], cobertura, meta);
+    expect(r.hallazgos.map((h) => [h.tipo, h.id, h.prioridad])).toEqual([
+      ["debilidad", "d1", "alta"],
+      ["fortaleza", "f1", "media"],
+      ["riesgo", "r1", "media"],
     ]);
-    const conRiesgo = construirResumen(anatomia, diag({ riesgos: [{ id: "r1", texto: "Dependencia", evidencias: [], clase: "hipotesis" }] }), [], [], cobertura, meta);
-    expect(conRiesgo.hallazgos[2]).toMatchObject({ tipo: "riesgo", id: "r1" });
+    expect(r.hallazgos[0]).toMatchObject({ titulo: "Título", estado: "por_comprobar" });
   });
 
   it("destacado no repite cuando hay otra; sin diagnóstico no hay hallazgos", () => {

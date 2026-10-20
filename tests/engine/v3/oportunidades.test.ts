@@ -5,7 +5,7 @@ import type { Competencia } from "../../../lib/engine/v3/sections/competencia";
 import { buildEvidence, type Evidence } from "../../../lib/engine/v3/evidence";
 import { SeccionVaciaError } from "../../../lib/engine/v3/errors";
 import { makeRaw } from "../raw-fixture";
-import { anatomiaBase, fakeModel } from "./fixtures-v4";
+import { anatomiaBase, fakeModel, FMT } from "./fixtures-v4";
 
 const raw = makeRaw({
   paginas: [
@@ -26,10 +26,10 @@ const regTotal = new Map([...buildEvidence(raw, []), [c1e1.id, c1e1]]);
 const ev = (id: string) => regTotal.get(id)!;
 
 const diagnostico: Diagnostico = {
-  fortalezas: [{ id: "f1", texto: "Explica bien el producto", frenteA: "Alfa", paraQuien: "autónomos", evidencias: [ev("p1-e1")], clase: "observado" }],
-  debilidades: [{ id: "d1", texto: "No muestra casos de clientes", porQueImporta: "Confianza", evidencias: [ev("p1-e2")], clase: "inferencia" }],
-  riesgos: [{ id: "r1", texto: "Depende de un canal", evidencias: [ev("p1-e1")], clase: "hipotesis" }],
-  fricciones: [{ id: "x1", tipo: "pasos", texto: "Hay que contactar para todo", evidencias: [ev("p1-e2")], potencial: true }],
+  fortalezas: [{ ...FMT, id: "f1", texto: "Explica bien el producto", frenteA: "Alfa", paraQuien: "autónomos", evidencias: [ev("p1-e1")], clase: "observado" }],
+  debilidades: [{ ...FMT, id: "d1", texto: "No muestra casos de clientes", porQueImporta: "Confianza", evidencias: [ev("p1-e2")], clase: "inferencia" }],
+  riesgos: [{ ...FMT, id: "r1", texto: "Depende de un canal", evidencias: [ev("p1-e1")], clase: "hipotesis" }],
+  fricciones: [{ ...FMT, id: "x1", tipo: "pasos", texto: "Hay que contactar para todo", evidencias: [ev("p1-e2")], potencial: true }],
   integrado: { texto: "" },
   comprobaciones: [],
 };

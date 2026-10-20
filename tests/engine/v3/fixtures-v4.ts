@@ -1,6 +1,19 @@
 import type { Anatomia } from "../../../lib/engine/v3/sections/anatomia";
 import type { Tipologia } from "../../../lib/engine/v3/clases";
 import type { JsonModel } from "../../../lib/engine/ai/providers";
+import type { FormatoHallazgo } from "../../../lib/engine/v3/sections/diagnostico";
+
+/** Campos del formato estándar de hallazgo, para fixtures de diagnóstico. */
+export const FMT: FormatoHallazgo = {
+  titulo: "Título",
+  porQueImporta: "",
+  queHacer: "",
+  estado: "por_comprobar",
+  relevancia: "medio",
+  fiabilidad: "medio",
+  utilidad: "medio",
+  prioridad: "media",
+};
 
 const vacio = { declara: null, interpretamos: null };
 
@@ -11,6 +24,7 @@ export function anatomiaBase(tipos: Tipologia[] = ["saas"], over: Partial<Anatom
     fraseResumen: { texto: "Facturación online para pymes", evidencias: [] },
     identidad: { producto: vacio, problema: vacio, paraQuien: vacio, beneficio: vacio, argumento: vacio, diferenciacion: vacio },
     tipologias: tipos.map((tipo) => ({ tipo, certeza: "alta" as const, explicacion: "", evidencias: [] })),
+    hibrido: tipos.length >= 2,
     lineas: [{ nombre: "Facturación", queOfrece: ["Facturas"], publico: "pymes", comoSeContrata: "web", evidencias: [] }],
     monetizacion: [],
     cliente: { explicito: null, necesidades: [], sectores: [], mensaje: null, segmentosAlternativos: [] },

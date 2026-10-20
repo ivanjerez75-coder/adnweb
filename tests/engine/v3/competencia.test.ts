@@ -41,6 +41,7 @@ const anatomia: Anatomia = {
     argumento: { declara: null, interpretamos: null },
     diferenciacion: { declara: null, interpretamos: null },
   },
+  hibrido: false,
   tipologias: [{ tipo: "saas", certeza: "alta", explicacion: "", evidencias: [] }],
   lineas: [{ nombre: "Facturación", queOfrece: ["Facturas"], publico: "pymes", comoSeContrata: "web", evidencias: [] }],
   monetizacion: [],
