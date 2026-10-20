@@ -251,3 +251,19 @@ describe("limpiarTextos", () => {
     });
   });
 });
+
+describe("web ilegible", () => {
+  it("sin páginas leídas falla al instante con InsufficientDataError y sin llamar a la IA", async () => {
+    const { buildReportV4, WEB_NO_LEGIBLE } = await import("../../../lib/engine/v3/report");
+    const { makeRaw } = await import("../raw-fixture");
+    let llamadas = 0;
+    const modelo = { name: "f", generate: async () => { llamadas++; return "{}"; } };
+    const raw = makeRaw({ site: null, paginas: null });
+    const emitidos: string[] = [];
+    await expect(
+      buildReportV4(raw, { models: [modelo], searchModels: [], getPage: async () => { throw new Error("x"); }, now: () => new Date() }, async (c, _x, e) => { emitidos.push(`${c}:${e}`); }),
+    ).rejects.toThrow(WEB_NO_LEGIBLE);
+    expect(llamadas).toBe(0);
+    expect(emitidos).toContain("anatomia:error");
+  });
+});

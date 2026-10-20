@@ -9,7 +9,7 @@ const INESPERADO = "Ha ocurrido un error inesperado. Te hemos devuelto el crédi
 /** Traduce un fallo del motor al mensaje que ve el usuario. */
 export function describirFallo(error: unknown): { mensaje: string; kind: FalloKind } {
   if (error instanceof InsufficientDataError) {
-    return { mensaje: "No hemos podido reunir datos suficientes sobre esta web.", kind: "datos_insuficientes" };
+    return { mensaje: error.message, kind: "datos_insuficientes" };
   }
   if (error instanceof AiUnavailableError) {
     if (error.kind === "quota" || error.kind === "unavailable") {

@@ -139,7 +139,8 @@ export const AnatomiaIA = z.object({
         evidencias: ids,
       }),
     )
-    .min(1)
+    .catch([])
+    // Vacío = la IA no encontró líneas con datos: el código lanza SeccionVaciaError sin reintentar.
     .transform((ls) => ls.slice(0, 6)), // más de 6: se recorta en vez de gastar otro intento de IA
   monetizacion: z
     .array(

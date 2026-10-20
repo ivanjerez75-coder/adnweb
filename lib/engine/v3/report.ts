@@ -16,6 +16,11 @@ import { generarPlan } from "./sections/plan";
 import { generarRendimiento } from "./sections/rendimiento";
 import { construirResumen } from "./sections/resumen";
 import { quitarIdsEvidencia } from "./sections/comun";
+import { InsufficientDataError } from "../collect";
+import { SeccionVaciaError } from "./errors";
+
+export const WEB_NO_LEGIBLE =
+  "No hemos podido leer suficiente contenido de esta web: puede que bloquee el acceso automático o que no responda. Te hemos devuelto el crédito.";
 
 /** Las 9 secciones del informe v4. El DNA Score va dentro de rendimiento. */
 export const SECCIONES_V4 = ["datos", "anatomia", "rendimiento", "competencia", "diagnostico", "oportunidades", "plan", "resumen", "cobertura"] as const;
@@ -114,12 +119,18 @@ export async function buildReportV4(raw: RawData, deps: ReportV4Deps, onSection:
   }
 
   // Fase 2: anatomía. Si falla, todo el informe falla.
+  // Sin ninguna página leída (la web bloquea el acceso automático o no responde) no hay nada que
+  // analizar: se para aquí, sin gastar llamadas de IA, y el worker devuelve el crédito.
+  if (!raw.site || !raw.paginas?.length) {
+    await emitir("anatomia", null, "error");
+    throw new InsufficientDataError(WEB_NO_LEGIBLE);
+  }
   let anatomia;
   try {
     anatomia = await generarAnatomia(raw, reg, sectionDeps);
   } catch (e) {
     await emitir("anatomia", null, "error");
-    throw e;
+    throw e instanceof SeccionVaciaError ? new InsufficientDataError(WEB_NO_LEGIBLE) : e;
   }
   await emitir("anatomia", anatomia, "lista", true);
   const tipologias = anatomia.tipologias.map((t) => t.tipo);
