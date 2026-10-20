@@ -19,7 +19,7 @@ export const rawV3 = makeRaw({
   ],
 });
 
-type Fail = Partial<Record<"adn" | "saber" | "competidores" | "revision" | "aprender" | "cierre", boolean>>;
+type Fail = Partial<Record<"anatomia" | "rendimiento" | "competidores" | "diagnostico" | "oportunidades" | "plan", boolean>>;
 
 const cands = [{ nombre: "Alfa", web: "https://alfa.com", ofrece: "Facturas", terminos: ["facturacion", "presupuestos"] }];
 
@@ -28,42 +28,42 @@ export function fakeV3Model(fail: Fail = {}): JsonModel {
   return {
     name: "fake-v3",
     generate: async (p) => {
-      const sec = p.includes("Explica qué es el negocio")
-        ? "adn"
-        : p.includes("qué NO se puede saber")
-          ? "saber"
+      const sec = p.includes("anatomía del negocio")
+        ? "anatomia"
+        : p.includes("Pule las interpretaciones")
+          ? "rendimiento"
           : p.includes("Encuentra de 3 a 5")
             ? "competidores"
             : p.includes("Compara el negocio")
               ? "dif"
-              : p.includes("revisa la web")
-                ? "revision"
-                : p.includes("puede aprender")
-                  ? "aprender"
-                  : "cierre";
+              : p.includes("diagnóstico estratégico")
+                ? "diagnostico"
+                : p.includes("Convierte el diagnóstico en oportunidades")
+                  ? "oportunidades"
+                  : "plan";
       if (sec !== "dif" && fail[sec]) throw new Error("boom");
       const ev = ["p1-e1", "p1-e2"];
       switch (sec) {
-        case "adn":
+        case "anatomia":
           return JSON.stringify({
-            queEs: { texto: "Facturación", evidencias: ev },
-            propuestaValor: { texto: "Fácil", evidencias: ev },
-            tipoNegocio: "saas",
-            lineas: [{ nombre: "Facturas", queOfrece: ["x"], publico: "pymes", comoSeContrata: "web", ingresos: "suscripción", evidencias: ev }],
-            comoFunciona: { texto: "Online", evidencias: ev },
+            nombre: "Facturo",
+            fraseResumen: { texto: "Facturación online para pymes", evidencias: ev },
+            identidad: { producto: { declara: { texto: "Facturación", evidencias: ev }, interpretamos: null } },
+            tipologias: [{ tipo: "saas", certeza: "alta", explicacion: "Online", evidencias: ev }],
+            lineas: [{ nombre: "Facturas", queOfrece: ["x"], publico: "pymes", comoSeContrata: "web", evidencias: ev }],
           });
-        case "saber":
-          return JSON.stringify({ items: ["Márgenes"] });
+        case "rendimiento":
+          return JSON.stringify({ interpretaciones: {}, noSePuedeSaber: ["Márgenes"] });
         case "competidores":
           return JSON.stringify({ competidores: cands });
         case "dif":
           return JSON.stringify({ diferencias: [] });
-        case "revision":
-          return JSON.stringify({ bien: [{ texto: "Claro", evidencias: ev }], lineas: [], problemas: [] });
-        case "aprender":
-          return JSON.stringify({ items: [{ texto: "Mostrar precio", evidencias: ev }] });
+        case "diagnostico":
+          return JSON.stringify({ fortalezas: [{ texto: "Claro", frenteA: "Alfa", paraQuien: "pymes", evidencias: ev }], debilidades: [{ texto: "Sin casos", porQueImporta: "Confianza", evidencias: ev }], integrado: "Prioridad: casos." });
+        case "oportunidades":
+          return JSON.stringify({ oportunidades: [{ tipologia: "mejorar", titulo: "Mostrar casos", origen: ["d1"], ficha: { evidencia: { texto: "No hay casos", evidencias: ev }, problema: "Falta confianza", solucion: "Publicar casos", porQuePodria: "Da confianza", faltaComprobar: [] }, estado: "por_validar", criterios: {} }] });
         default:
-          return JSON.stringify({ oportunidades: [] });
+          return JSON.stringify({ comprobar: [{ origen: "o1", tarea: "Preguntar a clientes", porQue: "Valida la idea", recursos: [], indicador: "Respuestas", criterio: { continuar: "Si interesa", modificar: "Si dudan", descartar: "Si no" } }], experimentar: [], medir: [] });
       }
     },
   };

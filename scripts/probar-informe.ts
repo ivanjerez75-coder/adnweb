@@ -1,5 +1,5 @@
 /**
- * Prueba real del informe v3 sin base de datos ni cuenta (solo desarrollo).
+ * Prueba real del informe v4 sin base de datos ni cuenta (solo desarrollo).
  * Uso: npm run probar-informe -- https://teb.org [carpeta-salida]
  * Escribe <dominio>.json (datos brutos + secciones) y muestra los tiempos de cada sección.
  */
@@ -9,7 +9,7 @@ import { depsFromEnv } from "../lib/engine/analyze";
 import { collect } from "../lib/engine/collect";
 import { normalizeUrl } from "../lib/engine/url";
 import { searchModelsFromEnv } from "../lib/engine/v3/llm";
-import { buildReportV3 } from "../lib/engine/v3/report";
+import { buildReportV4 } from "../lib/engine/v3/report";
 
 async function main() {
   const [url, salida = "."] = process.argv.slice(2);
@@ -27,7 +27,7 @@ async function main() {
 
   const tiempos: Record<string, string> = {};
   const secciones: Record<string, { estado: string; contenido: unknown }> = {};
-  const informe = await buildReportV3(
+  const informe = await buildReportV4(
     raw,
     { models: deps.models, searchModels, getPage: deps.getPage, now: () => new Date() },
     async (clave, contenido, estado) => {

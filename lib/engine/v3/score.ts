@@ -3,9 +3,10 @@ import type { Facts } from "../facts";
 import { allTechnologies } from "../signals";
 import { radarRank, validRank } from "../anchors";
 import type { Evidence } from "./evidence";
+import { aplicaPrecios, type Tipologia } from "./clases";
 import type { Metrica } from "./estimates";
-import type { Adn } from "./sections/adn";
-import type { Revision } from "./sections/revision";
+import type { AdnBloque, Anatomia, CampoIdentidad } from "./sections/anatomia";
+import type { ComprobacionesWeb } from "./sections/diagnostico";
 
 export const METODOLOGIA_DNA = "dna-score-1.0" as const;
 export const AVISO_SCORE = "Resume indicadores públicos; no es una valoración financiera." as const;
@@ -24,6 +25,8 @@ export const PESOS_DNA: Record<DimensionClave, number> = {
 
 /** Cobertura mínima de una dimensión para ser puntuable (< 50 % = "No puntuable"). */
 export const COBERTURA_MIN_DIMENSION = 0.5;
+/** Indicadores evaluados mínimos para puntuar una dimensión. */
+export const MIN_EVALUADOS_DIMENSION = 2;
 /** Cobertura global mínima (< 60 % = "DNA Score no disponible"). */
 export const COBERTURA_MIN_GLOBAL = 0.6;
 /** Dimensiones puntuables mínimas para dar una puntuación global. */
@@ -95,14 +98,17 @@ function noAplica(clave: string, nombre: string, maximo: number): Indicador {
   return { clave, nombre, aplica: false, evaluado: false, puntos: 0, maximo, motivo: MOTIVO_NO_APLICA, evidencias: [] };
 }
 
-type TipoNegocio = Adn["tipoNegocio"];
-/** Tipos de negocio a los que aplica cada indicador de monetización (el resto siempre aplica). */
-const APLICA_A: Record<string, readonly TipoNegocio[]> = {
-  plan_gratuito: ["saas", "app"],
-  pagos: ["ecommerce", "saas", "marketplace", "app"],
-  pagina_precios: ["saas", "ecommerce", "marketplace", "app"],
+/** Tipologías a las que aplica cada indicador de monetización (el resto siempre aplica). */
+const APLICA_A: Record<string, readonly Tipologia[]> = {
+  plan_gratuito: ["saas", "app", "freemium"],
+  pagos: ["ecommerce", "saas", "marketplace", "app", "freemium"],
 };
-const aplicaA = (clave: string, tipo: TipoNegocio) => APLICA_A[clave]?.includes(tipo) ?? true;
+/** Aplica si aplica a alguna de las tipologías del negocio (puede ser más de una). */
+function aplicaA(clave: string, tipologias: Tipologia[], lineas: Anatomia["lineas"]): boolean {
+  if (clave === "precios_publicados" || clave === "pagina_precios") return aplicaPrecios(tipologias, lineas);
+  const tipos = APLICA_A[clave];
+  return tipos ? tipologias.some((t) => tipos.includes(t)) : true;
+}
 
 function metrica(metricas: Metrica[], clave: string): Metrica | undefined {
   return metricas.find((m) => m.clave === clave);
@@ -120,17 +126,25 @@ const legible = (raw: RawData) => !!raw.site && raw.site.textLength >= TEXTO_LEG
 
 // ---------- Propuesta de valor ----------
 
-function bloque(clave: string, nombre: string, b: Adn["queEs"], raw: RawData, maximo: number): Indicador {
+/** Lo que declara la web; si no, lo que interpreta ADNweb (sin la clase). */
+const bloqueDe = (c: CampoIdentidad): AdnBloque | null =>
+  c.declara ?? (c.interpretamos ? { texto: c.interpretamos.texto, evidencias: c.interpretamos.evidencias } : null);
+/** Qué es: el producto o servicio; si falta, la frase resumen. */
+const queEs = (a: Anatomia): AdnBloque | null => bloqueDe(a.identidad.producto) ?? a.fraseResumen;
+/** Propuesta de valor: el beneficio o, si falta, el argumento principal. */
+const propuestaValor = (a: Anatomia): AdnBloque | null => bloqueDe(a.identidad.beneficio) ?? bloqueDe(a.identidad.argumento);
+
+function bloque(clave: string, nombre: string, b: AdnBloque | null, raw: RawData, maximo: number): Indicador {
   if (!raw.site) return sinDato(clave, nombre, maximo, "No se pudo leer la web, así que no se evalúa.");
   if (b && b.texto.trim() !== "" && b.evidencias.length > 0) return ind(clave, nombre, maximo, maximo, "Se explica y está respaldado por citas de la web.", b.evidencias);
   return ind(clave, nombre, 0, maximo, "La web se leyó pero no se encontró una explicación citable.");
 }
 
-function propuesta(raw: RawData, adn: Adn, revision: Revision | null): Indicador[] {
+function propuesta(raw: RawData, anatomia: Anatomia, comprobaciones: ComprobacionesWeb | null): Indicador[] {
   let si = 0;
   let validos = 0;
   const evCheck: Evidence[][] = [];
-  for (const l of revision?.lineas ?? []) {
+  for (const l of comprobaciones?.lineas ?? []) {
     for (const k of ["propuestaClara", "diceAQuien"] as const) {
       const v = l.checks[k];
       if (v === "no_aplica") continue;
@@ -140,24 +154,24 @@ function propuesta(raw: RawData, adn: Adn, revision: Revision | null): Indicador
     evCheck.push(l.evidenciasChecks);
   }
   const claridad =
-    revision && validos > 0
+    comprobaciones && validos > 0
       ? ind("claridad_web", "La web deja claro qué es y para quién", (30 * si) / validos, 30, `${si} de ${validos} comprobaciones de claridad cumplidas (propuesta clara y a quién se dirige).`, unicas(...evCheck))
       : sinDato("claridad_web", "La web deja claro qué es y para quién", 30, "No hay revisión de la web con comprobaciones aplicables.");
 
-  // El estado del modelo lo calcula el código al generar el adn (confirmado exige respaldo en la web).
-  const evContratacion = unicas(...adn.lineas.filter((l) => l.comoSeContrata.trim() !== "").map((l) => l.evidencias.filter((e) => e.tipo === "pagina")));
+  // El estado del modelo lo calcula el código en la anatomía (confirmado exige respaldo en la web).
+  const evContratacion = unicas(...anatomia.lineas.filter((l) => l.comoSeContrata.trim() !== "").map((l) => l.evidencias.filter((e) => e.tipo === "pagina")));
   const NOMBRE_MODELO = "Se entiende cómo gana dinero";
   const modelo = !raw.site
     ? sinDato("modelo_negocio", NOMBRE_MODELO, 20, "No se pudo leer la web, así que no se evalúa.")
-    : adn.modeloEstado === "confirmado"
+    : anatomia.modeloEstado === "confirmado"
       ? ind("modelo_negocio", NOMBRE_MODELO, 20, 20, "El modelo de negocio está confirmado: se explica cómo se contrata y hay precio o canal visible en la web.", evContratacion)
-      : adn.modeloEstado === "probable"
+      : anatomia.modeloEstado === "probable"
         ? ind("modelo_negocio", NOMBRE_MODELO, 10, 20, "El modelo de negocio se deduce de la web pero no está confirmado.", evContratacion)
         : ind("modelo_negocio", NOMBRE_MODELO, 0, 20, "No se pudo determinar cómo gana dinero el negocio a partir de la web.");
 
   return [
-    bloque("que_es", "Se explica qué es el negocio", adn.queEs, raw, 25),
-    bloque("propuesta_valor", "Se explica la propuesta de valor", adn.propuestaValor, raw, 25),
+    bloque("que_es", "Se explica qué es el negocio", queEs(anatomia), raw, 25),
+    bloque("propuesta_valor", "Se explica la propuesta de valor", propuestaValor(anatomia), raw, 25),
     claridad,
     modelo,
   ];
@@ -165,7 +179,7 @@ function propuesta(raw: RawData, adn: Adn, revision: Revision | null): Indicador
 
 // ---------- Oferta y monetización ----------
 
-function ofertaIndicadores(raw: RawData, facts: Facts, adn: Adn, reg: Reg): Indicador[] {
+function ofertaIndicadores(raw: RawData, facts: Facts, anatomia: Anatomia, reg: Reg): Indicador[] {
   const site = raw.site;
   const fin = legible(raw);
   const out: Indicador[] = [];
@@ -189,8 +203,8 @@ function ofertaIndicadores(raw: RawData, facts: Facts, adn: Adn, reg: Reg): Indi
         : sinDato("pagina_precios", "Página de precios", 15, "No se pudo comprobar si hay página de precios."),
   );
 
-  // Un canal puede venir de un extracto de página o del dato de contacto publicado (respaldo del adn).
-  const canales = adn.canales.filter((c) => c.evidencias.length > 0);
+  // Un canal puede venir de un extracto de página o del dato de contacto publicado (respaldo de la anatomía).
+  const canales = anatomia.canales.filter((c) => c.evidencias.length > 0);
   if (!site) {
     out.push(sinDato("canal_conversion", "Canal de conversión evidenciado", 20, "No se pudo leer la web."));
   } else if (canales.length > 0) {
@@ -226,8 +240,8 @@ function ofertaIndicadores(raw: RawData, facts: Facts, adn: Adn, reg: Reg): Indi
 }
 
 /** Los indicadores que no aplican al tipo de negocio se sustituyen por "no aplica". */
-function oferta(raw: RawData, facts: Facts, adn: Adn, reg: Reg): Indicador[] {
-  return ofertaIndicadores(raw, facts, adn, reg).map((i) => (aplicaA(i.clave, adn.tipoNegocio) ? i : noAplica(i.clave, i.nombre, i.maximo)));
+function oferta(raw: RawData, facts: Facts, anatomia: Anatomia, reg: Reg, tipologias: Tipologia[]): Indicador[] {
+  return ofertaIndicadores(raw, facts, anatomia, reg).map((i) => (aplicaA(i.clave, tipologias, anatomia.lineas) ? i : noAplica(i.clave, i.nombre, i.maximo)));
 }
 
 // ---------- Experiencia y rendimiento ----------
@@ -329,7 +343,7 @@ export function esWebEspanola(raw: RawData): boolean {
   return idiomas.includes("es") || idiomas.includes("ca");
 }
 
-function confianza(raw: RawData, revision: Revision | null, reg: Reg): Indicador[] {
+function confianza(raw: RawData, comprobaciones: ComprobacionesWeb | null, reg: Reg): Indicador[] {
   const lg = raw.legal;
   const leida = legible(raw);
   const espanola = esWebEspanola(raw);
@@ -380,7 +394,7 @@ function confianza(raw: RawData, revision: Revision | null, reg: Reg): Indicador
     );
   }
 
-  const casosSi = revision?.lineas.some((l) => l.checks.muestraCasos === "si") ?? false;
+  const casosSi = comprobaciones?.lineas.some((l) => l.checks.muestraCasos === "si") ?? false;
   if (!raw.site) out.push(sinDato("testimonios", "Testimonios o casos de éxito", 10, "No se pudo leer la web."));
   else if (raw.site.hasTestimonials || casosSi) out.push(ind("testimonios", "Testimonios o casos de éxito", 10, 10, "La web muestra testimonios o casos de éxito."));
   else if (legible(raw)) out.push(ind("testimonios", "Testimonios o casos de éxito", 0, 10, "La web se leyó y no muestra testimonios ni casos."));
@@ -429,7 +443,11 @@ function dimension(clave: DimensionClave, nombre: string, indicadores: Indicador
   const cobertura = aplicables.length === 0 ? 0 : evaluados.length / aplicables.length;
   const maximo = evaluados.reduce((a, i) => a + i.maximo, 0);
   const puntos = evaluados.reduce((a, i) => a + i.puntos, 0);
-  const valor = cobertura >= COBERTURA_MIN_DIMENSION && maximo > 0 ? Math.round((100 * puntos) / maximo) : null;
+  // Con un solo indicador evaluado la nota sería todo o nada: hacen falta al menos 2.
+  const valor =
+    cobertura >= COBERTURA_MIN_DIMENSION && evaluados.length >= MIN_EVALUADOS_DIMENSION && maximo > 0
+      ? Math.round((100 * puntos) / maximo)
+      : null;
   return { clave, nombre, peso: PESOS_DNA[clave], valor, cobertura, indicadores, resumen: resumenDimension(valor, indicadores) };
 }
 
@@ -438,18 +456,19 @@ export function calcularScore(
   raw: RawData,
   facts: Facts,
   signals: Signal[],
-  adn: Adn,
-  revision: Revision | null,
+  tipologias: Tipologia[],
+  anatomia: Anatomia,
+  comprobaciones: ComprobacionesWeb | null,
   metricas: Metrica[],
   reg: Reg = new Map(),
 ): DnaScore {
   void signals; // v1.0 no usa señales: todo sale de datos y métricas.
   const dimensiones: DimensionScore[] = [
-    dimension("propuesta", "Propuesta de valor", propuesta(raw, adn, revision)),
-    dimension("oferta", "Oferta y monetización", oferta(raw, facts, adn, reg)),
+    dimension("propuesta", "Propuesta de valor", propuesta(raw, anatomia, comprobaciones)),
+    dimension("oferta", "Oferta y monetización", oferta(raw, facts, anatomia, reg, tipologias)),
     dimension("experiencia", "Experiencia y rendimiento", experiencia(raw, metricas, reg)),
     dimension("adquisicion", "Adquisición y visibilidad", adquisicion(raw, facts, metricas, reg)),
-    dimension("confianza", "Confianza y transparencia", confianza(raw, revision, reg)),
+    dimension("confianza", "Confianza y transparencia", confianza(raw, comprobaciones, reg)),
   ];
   const coberturaGlobal = dimensiones.reduce((a, d) => a + d.cobertura, 0) / dimensiones.length;
   const puntuables = dimensiones.filter((d): d is DimensionScore & { valor: number } => d.valor !== null);

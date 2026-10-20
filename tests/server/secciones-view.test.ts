@@ -7,16 +7,16 @@ const en = (ms: number) => new Date(Date.parse(t0) + ms);
 describe("ordenSecciones", () => {
   it("devuelve el orden y los títulos fijos", () => {
     const r = ordenSecciones({}, t0, en(0));
-    expect(r.map((s) => s.clave)).toEqual(["datos", "adn", "saber", "score", "revision", "competidores", "aprender", "cierre"]);
+    expect(r.map((s) => s.clave)).toEqual(["resumen", "datos", "anatomia", "rendimiento", "competencia", "diagnostico", "oportunidades", "plan"]);
     expect(r.map((s) => s.titulo)).toEqual([
+      "Resumen ejecutivo",
       "Datos y métricas",
-      "ADN del negocio",
-      "Qué sabemos y qué no",
-      "DNA Score",
-      "Qué hace bien y problemas",
-      "Competidores",
-      "Qué aprender",
-      "Oportunidades",
+      "Anatomía del negocio",
+      "Rendimiento y presencia digital",
+      "Competencia y posicionamiento",
+      "Diagnóstico estratégico",
+      "Oportunidades de negocio",
+      "Plan de acción",
     ]);
   });
 
@@ -25,23 +25,23 @@ describe("ordenSecciones", () => {
   });
 
   it("conserva estado y contenido de las guardadas", () => {
-    const r = ordenSecciones({ saber: { estado: "lista", contenido: ["a"] } }, t0, en(0));
-    expect(r.find((s) => s.clave === "saber")).toMatchObject({ estado: "lista", contenido: ["a"] });
+    const r = ordenSecciones({ rendimiento: { estado: "lista", contenido: ["a"] } }, t0, en(0));
+    expect(r.find((s) => s.clave === "rendimiento")).toMatchObject({ estado: "lista", contenido: ["a"] });
   });
 
   it("pendiente pasados 3 min desde createdAt pasa a error", () => {
-    const secs = { adn: { estado: "pendiente" as const, contenido: null }, saber: { estado: "lista" as const, contenido: [] } };
+    const secs = { anatomia: { estado: "pendiente" as const, contenido: null }, rendimiento: { estado: "lista" as const, contenido: [] } };
     const antes = ordenSecciones(secs, t0, en(TIEMPO_MAX_SECCION_MS - 1));
-    expect(antes.find((s) => s.clave === "adn")!.estado).toBe("pendiente");
+    expect(antes.find((s) => s.clave === "anatomia")!.estado).toBe("pendiente");
     const despues = ordenSecciones(secs, t0, en(TIEMPO_MAX_SECCION_MS + 1));
-    expect(despues.find((s) => s.clave === "adn")!.estado).toBe("error");
-    expect(despues.find((s) => s.clave === "saber")!.estado).toBe("lista");
+    expect(despues.find((s) => s.clave === "anatomia")!.estado).toBe("error");
+    expect(despues.find((s) => s.clave === "rendimiento")!.estado).toBe("lista");
   });
 
   it("ignora claves desconocidas y estados inválidos", () => {
-    const r = ordenSecciones({ raro: { estado: "lista", contenido: 1 }, adn: { estado: "x" as never, contenido: 1 } }, t0, en(0));
+    const r = ordenSecciones({ raro: { estado: "lista", contenido: 1 }, adn: { estado: "lista", contenido: 1 }, anatomia: { estado: "x" as never, contenido: 1 } }, t0, en(0));
     expect(r).toHaveLength(8);
-    expect(r.find((s) => s.clave === "adn")!.estado).toBe("pendiente");
+    expect(r.find((s) => s.clave === "anatomia")!.estado).toBe("pendiente");
   });
 
   it("createdAt inválido no convierte en error", () => {

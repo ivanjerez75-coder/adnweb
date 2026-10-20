@@ -1,26 +1,88 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-grafito: #393939;
+  --color-suave: #6b6b6b;
+  --color-teal: #0f766e;
+  --color-teal-claro: #e6f2f1;
+  --color-fondo: #f5f5f5;
+  --color-superficie: #ffffff;
+  --color-superficie-2: #f3f3f3;
+  --color-borde: #dadada;
+  --color-ambar: #8a5a00;
+  --color-rojo: #9f3a2b;
+  --color-lila: #c9b8f5;
+  --color-menta: #9ee6cf;
+  --font-display: var(--font-barlow-condensed), "Arial Narrow", sans-serif;
+  --font-sans: var(--font-barlow), system-ui, sans-serif;
+  --font-cita: var(--font-source-serif), Georgia, serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  color-scheme: light;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-fondo);
+  color: var(--color-grafito);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-teal);
+  outline-offset: 2px;
+}
+
+@keyframes brillo-pildora {
+  0%,
+  100% {
+    box-shadow: 0 6px 28px rgb(15 118 110 / 0.14);
+  }
+  50% {
+    box-shadow: 0 6px 38px rgb(15 118 110 / 0.28);
+  }
+}
+
+.pildora-brillo {
+  animation: brillo-pildora 4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pildora-brillo {
+    animation: none;
+  }
+}
+
+/* Halo estático y difuso tras la píldora de la landing (teal, lila, menta).
+   La única animación sigue siendo .pildora-brillo. */
+.halo-pildora {
+  background:
+    radial-gradient(closest-side, rgb(201 184 245 / 0.9), transparent) 0% 50% / 55% 160% no-repeat,
+    radial-gradient(closest-side, rgb(15 118 110 / 0.45), transparent) 50% 50% / 60% 160% no-repeat,
+    radial-gradient(closest-side, rgb(158 230 207 / 0.95), transparent) 100% 50% / 55% 160% no-repeat;
+  filter: blur(22px);
+}
+
+/* "Ver origen": resalta un momento el hallazgo o la fila de la comparación a la que se salta. */
+@keyframes resaltado-origen {
+  0%,
+  60% {
+    box-shadow: 0 0 0 3px rgb(15 118 110 / 0.55);
+    background-color: var(--color-teal-claro);
+  }
+  100% {
+    box-shadow: 0 0 0 3px rgb(15 118 110 / 0);
+  }
+}
+
+.resaltado {
+  animation: resaltado-origen 1.8s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .resaltado {
+    animation: none;
+    box-shadow: 0 0 0 3px rgb(15 118 110 / 0.55);
+  }
 }

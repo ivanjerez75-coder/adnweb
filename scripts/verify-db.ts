@@ -230,20 +230,20 @@ async function main() {
       const contenido = { texto: "hola" };
       const ok = await admin.rpc("guardar_seccion", {
         p_id: idL,
-        p_clave: "adn",
+        p_clave: "anatomia",
         p_contenido: contenido,
         p_estado: "lista",
       });
       if (ok.error) throw new Error(ok.error.message);
       const fila = await admin.from("analyses").select("secciones").eq("id", idL).single();
       if (fila.error) throw new Error(fila.error.message);
-      const sec = (fila.data.secciones as Record<string, { estado?: string; contenido?: unknown }>).adn;
-      assert(sec, "falta la clave adn en secciones");
+      const sec = (fila.data.secciones as Record<string, { estado?: string; contenido?: unknown }>).anatomia;
+      assert(sec, "falta la clave anatomia en secciones");
       assert(sec.estado === "lista", `estado = ${sec.estado}`);
       assert(JSON.stringify(sec.contenido) === JSON.stringify(contenido), "contenido distinto");
       const rechazo = await a.client.rpc("guardar_seccion", {
         p_id: idL,
-        p_clave: "adn",
+        p_clave: "anatomia",
         p_contenido: { texto: "malo" },
         p_estado: "lista",
       });
